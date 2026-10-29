@@ -1,0 +1,15 @@
+<section class="health" aria-label="Health">
+  <h2>Health</h2>
+  <div class="health-item{% if not health.last_run or not health.last_run.ok %} is-bad{% endif %}">
+    Practice HR
+    <strong>{% if health.last_run %}{% if health.last_run.ok %}{{ health.last_run.people_seen }} people, {{ health.last_run.finished_at|date:"j M H:i" }}{% else %}failed {{ health.last_run.finished_at|date:"j M H:i" }}{% endif %}{% else %}never read{% endif %}</strong>
+    {% if health.last_run and not health.last_run.ok %}<span>{{ health.last_run.message }}</span>{% endif %}
+    <form method="post" action="{% url 'staff-sync' %}">{% csrf_token %}<button class="btn btn-quiet">Sync now</button></form>
+  </div>
+  <div class="health-item{% if health.needs_setup %} is-warning{% endif %}">Needs hours and allowances<strong>{{ health.needs_setup.count }}</strong>
+    {% for p in health.needs_setup|slice:":5" %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+  <div class="health-item{% if health.not_seen %} is-bad{% endif %}">Not in Practice HR's feed for a day<strong>{{ health.not_seen.count }}</strong>
+    {% for p in health.not_seen|slice:":5" %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+  <div class="health-item{% if health.leaving_soon %} is-warning{% endif %}">Leaving in the next 30 days<strong>{{ health.leaving_soon.count }}</strong>
+    {% for p in health.leaving_soon %}{{ p.name }} ({{ p.end_date|date:"j M" }}){% if not forloop.last %}, {% endif %}{% endfor %}</div>
+</section>
