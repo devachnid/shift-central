@@ -20,6 +20,7 @@
 {% block dialog_links %}
 {% if manages %}
 <div class="dialog-links">
+  {% if is_all_teams %}<a href="{% url 'permissions' person.pk %}" data-dialog>Permissions</a>{% endif %}
   <a href="{% url 'profile-history' person.pk %}" data-dialog>History</a>
 </div>
 {% endif %}
