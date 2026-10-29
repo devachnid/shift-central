@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block title %}You can't open that · AMG Shift Central{% endblock %}
+{# Both blocks: signed-in pages show "content", signed-out ones (and the 500, which has no context) "auth". #}
+{% block content %}{% include "ui/_error.html" with heading="You can't open that" message="Your account doesn't have access to this page." %}{% endblock %}
+{% block auth %}{% include "ui/_error.html" with heading="You can't open that" message="Your account doesn't have access to this page." %}{% endblock %}

@@ -1,0 +1,42 @@
+/* Design tokens. Every colour in components.css comes from here. The brand
+   (docs/requirements/README.md): navy, amber, white, pale grey-blue. The
+   rest are the greys FindMyShift's white pages use, chosen to pass AA on
+   white, and the swatches managers pick tile and name colours from. */
+:root {
+  --navy:        #143D5C;
+  --navy-deep:   #0E2C43;   /* flyouts and the active item */
+  --navy-soft:   #1F527A;   /* hover on the panel */
+  --amber:       #F2A33A;
+  --amber-ink:   #1B1F27;
+  --pale:        #DDE7EE;   /* secondary text on navy */
+  --white:       #FFFFFF;
+
+  --ink:         #1B1F27;
+  --ink-soft:    #454C5A;
+  --muted:       #6B7280;   /* 4.8:1 on white */
+  --ground:      #F5F7F9;   /* the page behind white tables */
+  --surface:     #FFFFFF;
+  --hairline:    #E3E7EC;
+  --field-border:#8A91A0;   /* 3.1:1, WCAG 1.4.11 */
+  --today:       #FFF7E6;   /* today's column, spec 2 */
+
+  --danger:      #A03A24;  --danger-soft: #FDEAE6;
+  --warning:     #855B1B;  --warning-soft: #FCF2E2;
+  --ok:          #23604A;  --ok-soft: #E4F2EC;
+
+  --shadow: rgb(20 61 92 / 18%);
+
+  --font: "Manrope", "Segoe UI", Arial, sans-serif;
+  --fs-xs: 11.5px; --fs-sm: 12.5px; --fs-md: 13.5px; --fs-lg: 15px; --fs-xl: 20px;
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+  --radius: 4px;
+  --sidebar-w: 220px;
+  --sidebar-w-collapsed: 56px;
+  --topbar-h: 48px;
+}
+
+/* The swatches offered for a person's name and a department. The one list:
+   frontend/src/colour-picker.tsx reads this property with getComputedStyle. */
+:root {
+  --swatches: #C94C4C,#D96C8A,#B6568A,#9A4C8A,#7A5EB3,#2F6FB3,#5B8FD6,#3A6E8A,#3A8A8A,#6AA2C2,#2A7F62,#5E9E5E,#8A8A3A,#E0A030,#D98E2C,#8C7B6B,#143D5C,#6B7280;
+}

@@ -1,0 +1,8 @@
+<form method="post" action="{% url 'profile' person.pk %}?tab=notes" data-dialog-form>
+  {% csrf_token %}
+  <div class="field">
+    <label for="id_notes">Notes <span class="field-help">for managers only</span></label>
+    {{ form.notes }}
+  </div>
+  <button class="btn btn-dark">Update profile</button>
+</form>

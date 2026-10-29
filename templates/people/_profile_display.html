@@ -1,0 +1,34 @@
+{% if manages %}
+<form method="post" action="{% url 'profile' person.pk %}?tab=display" data-dialog-form>
+  {% csrf_token %}
+  <div class="field{% if form.job_title.errors %} has-error{% endif %}">
+    <label for="id_job_title">Job title</label>
+    {{ form.job_title }}
+    {% for e in form.job_title.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <div class="field{% if form.name_colour.errors %} has-error{% endif %}">
+    <label id="name_colour-label">Name colour</label>
+    <input type="hidden" name="name_colour" id="id_name_colour" value="{{ form.name_colour.value|default:person.name_colour }}">
+    <div data-component="colour-picker" data-input="id_name_colour" data-label="name_colour-label"></div>
+    {% for e in form.name_colour.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <div class="field{% if form.display_order.errors %} has-error{% endif %}">
+    <label for="id_display_order">Display order</label>
+    {{ form.display_order }}
+    {% for e in form.display_order.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <div class="field"><label><input type="checkbox" name="display_on_rota"{% if form.display_on_rota.value %} checked{% endif %}> Display on rota</label></div>
+  <div class="field"><label><input type="checkbox" name="show_to_other_staff"{% if form.show_to_other_staff.value %} checked{% endif %}> Show to other staff</label></div>
+  <div class="field"><label><input type="checkbox" name="can_see_other_staff"{% if form.can_see_other_staff.value %} checked{% endif %}> Can see other staff</label></div>
+  <button class="btn btn-dark">Update profile</button>
+</form>
+{% else %}
+<dl class="defs">
+  <dt>Job title</dt><dd>{{ person.job_title|default:"—" }}</dd>
+  <dt>Name colour</dt><dd><span class="chip" style="background:{{ person.name_colour }}">{{ person.name_colour }}</span></dd>
+  <dt>Display order</dt><dd>{{ person.display_order }}</dd>
+  <dt>Display on rota</dt><dd>{{ person.display_on_rota|yesno:"Yes,No" }}</dd>
+  <dt>Show to other staff</dt><dd>{{ person.show_to_other_staff|yesno:"Yes,No" }}</dd>
+  <dt>Can see other staff</dt><dd>{{ person.can_see_other_staff|yesno:"Yes,No" }}</dd>
+</dl>
+{% endif %}

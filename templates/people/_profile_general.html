@@ -1,0 +1,8 @@
+<dl class="defs">
+  <dt>Name</dt><dd>{{ person.name }} <span class="field-help">from Practice HR</span></dd>
+  <dt>Email</dt><dd>{{ person.email }}</dd>
+  <dt>Team</dt><dd>{{ person.team.name|default:"—" }}</dd>
+  <dt>Start date</dt><dd>{{ person.start_date|date:"j M Y" }}</dd>
+  {% if person.end_date %}<dt>Finish date</dt><dd>{{ person.end_date|date:"j M Y" }}</dd>{% endif %}
+</dl>
+<p class="field-help">Name, email, team and dates are kept in Practice HR and updated here every fifteen minutes.</p>

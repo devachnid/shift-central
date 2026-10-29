@@ -1,0 +1,27 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}Department{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% if department %}{% url 'department-edit' department.pk %}{% else %}{% url 'department-add' %}{% endif %}" data-dialog-form>
+  {% csrf_token %}
+  <div class="field{% if form.name.errors %} has-error{% endif %}">
+    <label for="id_name">Name</label>
+    <input type="text" name="name" id="id_name" value="{{ form.name.value|default:'' }}" maxlength="60" required>
+    {% for e in form.name.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <div class="field{% if form.colour.errors %} has-error{% endif %}">
+    <label id="colour-label">Colour</label>
+    <input type="hidden" name="colour" id="id_colour" value="{{ form.colour.value|default:'' }}">
+    <div data-component="colour-picker" data-input="id_colour" data-label="colour-label"></div>
+    {% for e in form.colour.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <div class="field{% if form.display_order.errors %} has-error{% endif %}">
+    <label for="id_display_order">Display order</label>
+    {{ form.display_order }}
+    {% for e in form.display_order.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  {% if department %}
+  <div class="field"><label><input type="checkbox" name="archived"{% if form.archived.value %} checked{% endif %}> Archived</label></div>
+  {% endif %}
+  <button class="btn btn-dark">{% if department %}Update department{% else %}Add department{% endif %}</button>
+</form>
+{% endblock %}

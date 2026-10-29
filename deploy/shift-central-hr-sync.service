@@ -1,0 +1,44 @@
+[Unit]
+Description=Read the people feed from Practice HR into Shift Central
+After=network-online.target
+
+[Service]
+Type=oneshot
+# The same user, directories and sandbox as the web service; see
+# gunicorn.service for why each is there.
+User=shift-central
+Group=shift-central
+WorkingDirectory=/srv/shift-central
+StateDirectory=shift-central
+StateDirectoryMode=0700
+UMask=0077
+# PRACTICE_HR_URL and HR_API_TOKEN live in the same environment file as
+# SECRET_KEY, readable only by root. See gunicorn.service for why. Without
+# them hr_sync refuses to run and says so in the journal; a failed run keeps
+# the last good data and shows on the Staff page's Health card.
+EnvironmentFile=/etc/shift-central.env
+ExecStart=/srv/shift-central/.venv/bin/python manage.py hr_sync
+
+# Sandbox: identical in every shift-central unit (tests/test_deploy_units.py).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

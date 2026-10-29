@@ -1,0 +1,6 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}Add staff{% endblock %}
+{% block dialog_body %}
+<p>People come from <strong>Practice HR</strong>. Add the new starter there — <a href="{{ settings_practice_hr_url }}/admin/people/employee/add/" target="_blank" rel="noopener">Employees › Add</a> — and they appear here within fifteen minutes, ready for their hours and allowances.</p>
+<form method="post" action="{% url 'staff-sync' %}">{% csrf_token %}<button class="btn btn-dark">Sync now</button></form>
+{% endblock %}

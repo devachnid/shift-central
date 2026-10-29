@@ -1,0 +1,53 @@
+{% if manages %}
+<form method="post" action="{% url 'profile' person.pk %}?tab=hours" data-dialog-form>
+  {% csrf_token %}
+  {% if person.is_gp %}
+  <p>Hours: sessions, from the GP rota (4 h 10 min each)</p>
+  {% else %}
+  <div class="field{% if form.weekly_hours.errors %} has-error{% endif %}">
+    <label for="id_weekly_hours">Weekly hours</label>
+    {{ form.weekly_hours }}
+    {% for e in form.weekly_hours.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <div class="field{% if form.days_per_week.errors %} has-error{% endif %}">
+    <label for="id_days_per_week">Days per week</label>
+    {{ form.days_per_week }}
+    {% for e in form.days_per_week.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+    {% if person.average_day %}<span class="field-help">Average day: {{ person.average_day }} h</span>{% endif %}
+  </div>
+  {% endif %}
+  {% for annual, bank in form.year_fields %}
+  <div class="field{% if annual.errors %} has-error{% endif %}">
+    <label for="{{ annual.id_for_label }}">{{ annual.label }}</label>
+    {{ annual }}
+    {% for e in annual.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <div class="field{% if bank.errors %} has-error{% endif %}">
+    <label for="{{ bank.id_for_label }}">{{ bank.label }}</label>
+    {{ bank }}
+    {% for e in bank.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  {% endfor %}
+  <div class="field{% if form.note.errors %} has-error{% endif %}">
+    <label for="id_note">{{ form.note.label }}</label>
+    {{ form.note }}
+    <span class="field-help">Needed when changing an allowance that is already set</span>
+    {% for e in form.note.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <button class="btn btn-dark">Update profile</button>
+</form>
+{% else %}
+<dl class="defs">
+  {% if person.is_gp %}
+  <dt>Hours</dt><dd>Sessions, from the GP rota (4 h 10 min each)</dd>
+  {% else %}
+  <dt>Weekly hours</dt><dd>{{ person.weekly_hours|default:"—" }}</dd>
+  <dt>Days per week</dt><dd>{{ person.days_per_week|default:"—" }}</dd>
+  <dt>Average day</dt><dd>{% if person.average_day %}{{ person.average_day }} h{% else %}—{% endif %}</dd>
+  {% endif %}
+  {% for year, allowance in allowance_rows %}
+  <dt>Annual leave allowance {{ year.year }}</dt><dd>{% if allowance %}{{ allowance.annual_hours }} h{% else %}—{% endif %}</dd>
+  <dt>Bank holiday allowance {{ year.year }}</dt><dd>{% if allowance %}{{ allowance.bank_holiday_hours }} h{% else %}—{% endif %}</dd>
+  {% endfor %}
+</dl>
+{% endif %}

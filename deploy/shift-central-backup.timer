@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly Shift Central backup timer
+
+[Timer]
+# Half past two, when nobody is signed in. Persistent runs a copy missed
+# while the VPS was off at the next start.
+OnCalendar=*-*-* 02:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

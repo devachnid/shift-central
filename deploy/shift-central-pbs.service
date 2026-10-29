@@ -1,0 +1,46 @@
+[Unit]
+Description=Push Shift Central's nightly SQLite copy to the Proxmox Backup Server
+After=network-online.target wg-quick@wg0.service
+
+[Service]
+Type=oneshot
+# As the shift-central user, like the backup it follows: the copies are
+# readable by nobody else. The PBS address and certificate fingerprint are in
+# /etc/pbs-backup/shift-central.env. The API token and the encryption key are
+# credentials (root-owned files, handed to this unit only), kept out of the
+# environment because a process's environment is readable by every other
+# process running as shift-central, the web service included. See the
+# README's "Off-site backup" section.
+User=shift-central
+Group=shift-central
+StateDirectory=shift-central
+StateDirectoryMode=0700
+UMask=0077
+EnvironmentFile=/etc/pbs-backup/shift-central.env
+LoadCredential=pbs.token:/etc/pbs-backup/shift-central.token
+LoadCredential=pbs.key:/etc/pbs-backup/shift-central.key
+ExecStart=/srv/shift-central/deploy/pbs-push.sh
+
+# Sandbox: identical in every shift-central unit (tests/test_deploy_units.py).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

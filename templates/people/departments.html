@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Departments · AMG Shift Central{% endblock %}
+{% block topbar_actions %}
+  <a class="topbar-action is-primary" href="{% url 'department-add' %}" data-dialog>Add department +</a>
+{% endblock %}
+{% block content %}
+{% include "people/_department_table.html" with departments=active %}
+{% if archived %}
+<h2>Archived</h2>
+{% include "people/_department_table.html" with departments=archived %}
+{% endif %}
+{% endblock %}
