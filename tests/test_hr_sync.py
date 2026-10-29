@@ -70,6 +70,7 @@ def test_changes_from_hr_are_applied_and_audited_as_practice_hr():
     rows = AuditEntry.objects.filter(object_id=p.pk, model="people.person").exclude(field="created")
     assert {r.field for r in rows} == {"email", "end_date", "team"}
     assert all(r.actor_email == "practice-hr" and r.note == "from Practice HR" for r in rows)
+    assert rows.get(field="end_date").before == ""
 
 
 def test_typed_fields_survive_a_sync():
@@ -105,7 +106,43 @@ def test_an_error_leaves_the_data_untouched_and_records_a_failed_run():
 def test_a_malformed_record_fails_the_run_without_values_in_the_message():
     payload = {"people": [{"id": 1, "first_name": "Sam", "email": "sam@example.org"}]}
     run = hr_sync.sync(FakeClient(payload))
-    assert not run.ok and "sam" not in run.message.lower() and "id 1" in run.message
+    assert not run.ok and "sam" not in run.message.lower()
+    assert "record 1 in the feed" in run.message and "last_name" in run.message
+    assert Person.objects.count() == 0
+
+
+def test_a_bad_id_is_named_but_its_value_is_not_in_the_message():
+    payload = json.loads(FIXTURE.read_text())
+    payload["people"][0]["id"] = "sam@example.org"
+    run = hr_sync.sync(FakeClient(payload))
+    assert not run.ok and "sam@example.org" not in run.message and "id" in run.message
+    assert Person.objects.count() == 0
+
+
+def test_a_boolean_or_fractional_id_is_not_an_employee_id():
+    for bad in (True, 1.9):
+        payload = json.loads(FIXTURE.read_text())
+        payload["people"][0]["id"] = bad
+        run = hr_sync.sync(FakeClient(payload))
+        assert not run.ok and "record 1 in the feed" in run.message and "id" in run.message
+    assert Person.objects.count() == 0
+
+
+def test_a_bad_date_is_named_but_its_value_is_not_in_the_message():
+    payload = json.loads(FIXTURE.read_text())
+    payload["people"][1]["employment"]["start"] = "Sam Patel"
+    run = hr_sync.sync(FakeClient(payload))
+    assert not run.ok and "Sam Patel" not in run.message
+    assert "record 2 in the feed" in run.message and "start" in run.message
+    assert Person.objects.count() == 0
+
+
+def test_a_database_error_is_a_failed_run_not_an_exception():
+    payload = json.loads(FIXTURE.read_text())
+    payload["people"][0]["name"] = None
+    run = hr_sync.sync(FakeClient(payload))
+    assert not run.ok and run.finished_at
+    assert run.message == "unexpected error; see the journal"
     assert Person.objects.count() == 0
 
 
