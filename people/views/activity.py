@@ -18,7 +18,7 @@ def activity(request):
         | Q(model="people.department"))
     person = request.GET.get("person")
     if person:
-        p = people.filter(pk=person).first()
+        p = people.filter(pk=person).first() if person.isdigit() else None
         if p is None:
             entries = entries.none()
         else:

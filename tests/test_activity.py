@@ -33,7 +33,7 @@ def test_filters_by_person_and_field():
     p = make_person(first_name="Nina")
     profiles.update_display(boss_person.user, p, job_title="Nurse", display_order=5)
     body = c.get(f"/activity/?person={p.pk}&field=job_title").content.decode()
-    assert "Nurse" in body and ">5<" not in body
+    assert "Nurse" in body and "display_order" not in body
 
 
 def test_staff_get_403():
@@ -61,3 +61,12 @@ def test_the_activity_page_links_to_the_login_logs_for_all_teams_managers_only()
     link = 'class="topbar-action" href="/activity/logins/"'
     assert link in _client(boss, is_all_teams_manager=True).get("/activity/").content.decode()
     assert 'href="/activity/logins/"' not in _client(lead).get("/activity/").content.decode()
+
+
+def test_a_bad_person_filter_shows_nothing_rather_than_an_error():
+    boss_person = make_person(first_name="Boss")
+    c = _client(boss_person, is_all_teams_manager=True)
+    profiles.update_display(boss_person.user, make_person(first_name="Nina"), job_title="Nurse")
+    response = c.get("/activity/?person=abc")
+    assert response.status_code == 200
+    assert "Nurse" not in response.content.decode()
