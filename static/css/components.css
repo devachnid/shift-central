@@ -2,8 +2,9 @@
 html { font: var(--fs-md)/1.4 var(--font); color: var(--ink); background: var(--ground); }
 body { margin: 0; min-height: 100vh; }
 a { color: var(--navy); }
-/* The `all: unset` controls (collapse toggle, Log out, dialog close) lose the
-   browser's ring, so one visible focus style covers everything. */
+/* One visible focus style for everything. The three `all: unset` controls
+   (collapse toggle, Log out, dialog close) need their own higher-specificity
+   rule below, because `all: unset` resets `outline` too. */
 a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
 /* --- layout: panel left, bar top, page below ---------------------------- */
@@ -40,7 +41,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .topbar-action.is-primary { color: var(--amber-ink); background: var(--amber); padding: 5px 10px; border-radius: var(--radius); font-weight: 700; }
 .topbar-end { margin-left: auto; display: flex; gap: var(--sp-3); align-items: center; color: var(--muted); font-size: var(--fs-sm); }
 .collapse-toggle { all: unset; cursor: pointer; padding: 4px; color: var(--muted); }
-.page { padding: var(--sp-4); overflow-x: auto; }
+.page { padding: var(--sp-4); }
 
 /* --- tables, buttons, fields, chips ----------------------------------- */
 .table { width: 100%; border-collapse: collapse; background: var(--surface); font-size: var(--fs-md); }
@@ -70,6 +71,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .dialog { background: var(--surface); width: min(560px, 94vw); border-radius: 6px; box-shadow: 0 8px 30px var(--shadow); max-height: 88vh; overflow: auto; }
 .dialog-head { background: var(--navy); color: var(--white); padding: 10px var(--sp-4); display: flex; align-items: center; gap: var(--sp-3); font-weight: 700; }
 .dialog-head .close { all: unset; margin-left: auto; cursor: pointer; color: var(--pale); font-size: 18px; line-height: 1; }
+.sidebar-foot button:focus-visible, .dialog-head .close:focus-visible, .collapse-toggle:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 .dialog-body { padding: var(--sp-4); }
 .dialog-links { display: flex; gap: var(--sp-4); padding: 0 var(--sp-4) var(--sp-4); font-size: var(--fs-sm); }
 .tabs { display: flex; border-bottom: 1px solid var(--hairline); margin-bottom: var(--sp-4); }
@@ -99,6 +101,9 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
   .sidebar-foot button { flex-direction: column; gap: 2px; font-size: var(--fs-xs); padding: 6px; width: auto; }
   /* A collapsed state synced from a desktop must not unlabel the bottom bar. */
   .is-collapsed .nav-label { display: block; }
+  /* Scroll a wide table inside the page. Phone-only: an overflow container would
+     stop the sticky table header sticking to the viewport on desktop. */
+  .page { overflow-x: auto; }
   .table th { position: static; } /* the top bar is no longer a fixed 48px here */
   .sidebar-nav { flex-direction: row; justify-content: space-around; padding: 0; }
   .nav-link { flex-direction: column; gap: 2px; font-size: var(--fs-xs); padding: 6px; }
