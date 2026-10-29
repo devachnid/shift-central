@@ -71,5 +71,18 @@ def set_allowance(actor, person, leave_year, annual_hours, bank_holiday_hours, n
     return audit.record(actor, allowance, changes, note=note.strip())
 
 
+NOTES_BEFORE = "(notes)"
+NOTES_AFTER = "(notes changed)"
+
+
 def set_notes(actor, person, notes):
-    return _apply(actor, person, {"notes": notes})
+    """Notes are audited as changed, by whom and when, but never their text.
+    The Activity log is scoped by access.managed_people, which includes a
+    manager's own person, so a lead nurse would otherwise read what was
+    written about her (ACC-04: the person never sees their notes)."""
+    before = person.notes
+    if before == notes:
+        return []
+    person.notes = notes
+    person.save(update_fields=["notes"])
+    return audit.record(actor, person, {"notes": (NOTES_BEFORE if before else "", NOTES_AFTER)})

@@ -118,7 +118,7 @@ box is also ticked, though it can open every page without being linked to a pers
 recorded change to the people a manager manages, newest first, the latest 500: the
 time, who made the change (a person's email, or `practice-hr` for the sync),
 which record, the field, the old and new value and the reason. It shows changes to
-profiles (display fields, hours, notes), to allowances, to manager grants
+profiles (display fields, hours, and that the notes changed, never their text), to allowances, to manager grants
 (`manager_of`), to what the feed changed (including `created` for a new person and a
 new finish date arriving), and to departments. Filter by **Person** and by **Field**
 (the field's name as shown, such as `weekly_hours` or `end_date`; type it exactly).

@@ -86,9 +86,10 @@ Things that surprise people:
 
 Free text for the managers of the person's team. **The person never sees it**, and
 neither do other staff or managers of other teams; the tab does not appear for them.
-Every save is recorded in the history with the old and new text, so what is typed
-here is readable by anyone who can see that person's history. Keep it to what a
-manager needs.
+Every save is recorded in the history and the Activity log as `notes` changed,
+with who and when, but never the text: a manager can see the Activity log for
+their own team, themselves included, and must not read notes written about them
+there. Keep it to what a manager needs.
 
 ## The profile pop-up
 

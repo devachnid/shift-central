@@ -153,6 +153,29 @@ def test_notes_are_managers_only(world):
     assert world["c"]["nurse"].get(f"/staff/{nurse.pk}/profile/?tab=notes").status_code == 403
 
 
+def test_notes_about_a_manager_never_reach_her_through_the_logs(world):
+    """ACC-04: the lead nurse manages her own team, so the Activity log
+    covers her own record; the audit says the notes changed, never what
+    they say."""
+    lead, c = world["lead"], world["c"]["lead"]
+    profiles.set_notes(world["boss"].user, lead, "Struggling since the move")
+    profiles.set_notes(world["boss"].user, lead, "Better after the review")
+    activity = c.get("/activity/").content.decode()
+    assert "notes" in activity and "(notes changed)" in activity
+    assert "Struggling" not in activity and "Better after" not in activity
+    history = c.get(f"/staff/{lead.pk}/history/")
+    assert history.status_code == 403 or "Struggling" not in history.content.decode()
+    assert c.get(f"/staff/{lead.pk}/profile/?tab=notes").status_code == 403
+    assert [(e.before, e.after) for e in AuditEntry.objects.filter(field="notes").order_by("pk")] == [
+        ("", "(notes changed)"), ("(notes)", "(notes changed)")]
+
+
+def test_saving_the_same_notes_writes_no_audit_row(world):
+    profiles.set_notes(world["boss"].user, world["nurse"], "Prefers Tuesdays")
+    assert profiles.set_notes(world["boss"].user, world["nurse"], "Prefers Tuesdays") == []
+    assert AuditEntry.objects.filter(field="notes").count() == 1
+
+
 def test_history_lists_the_persons_audit_entries_for_managers(world):
     nurse = world["nurse"]
     profiles.update_display(world["boss"].user, nurse, job_title="Practice nurse")
