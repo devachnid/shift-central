@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Activity log · AMG Shift Central{% endblock %}
+{% block topbar_actions %}
+  {% if is_all_teams %}<a class="topbar-action" href="{% url 'activity-logins' %}">Log in logs</a>{% endif %}
+{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <label>Person <select name="person">
+    <option value="">Everyone</option>
+    {% for p in people %}<option value="{{ p.pk }}"{% if p.pk|stringformat:"s" == person %} selected{% endif %}>{{ p.name }}</option>{% endfor %}
+  </select></label>
+  <label>Field <input type="text" name="field" value="{{ field }}"></label>
+  <button class="btn btn-quiet" type="submit">Filter</button>
+</form>
+<table class="table">
+  <thead><tr><th>When</th><th>Who</th><th>Record</th><th>Field</th><th>From</th><th>To</th><th>Reason</th></tr></thead>
+  <tbody>
+  {% for entry in entries %}
+  <tr>
+    <td>{{ entry.at|date:"j M Y H:i" }}</td>
+    <td>{{ entry.actor_email }}</td>
+    <td>{{ entry.record }}</td>
+    <td>{{ entry.field }}</td>
+    <td>{{ entry.before }}</td>
+    <td>{{ entry.after }}</td>
+    <td>{{ entry.note }}</td>
+  </tr>
+  {% empty %}<tr><td colspan="7">Nothing has been changed yet.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

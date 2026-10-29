@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Log in logs · AMG Shift Central{% endblock %}
+{% block topbar_actions %}
+  <a class="topbar-action" href="{% url 'activity' %}">Activity log</a>
+{% endblock %}
+{% block content %}
+<table class="table">
+  <thead><tr><th>When</th><th>Who</th><th>Address</th><th>Browser</th></tr></thead>
+  <tbody>
+  {% for event in events %}
+  <tr>
+    <td>{{ event.at|date:"j M Y H:i" }}</td>
+    <td>{{ event.user.email }}</td>
+    <td>{{ event.ip }}</td>
+    <td>{{ event.user_agent }}</td>
+  </tr>
+  {% empty %}<tr><td colspan="4">Nobody has logged in yet.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}
