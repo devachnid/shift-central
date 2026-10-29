@@ -37,8 +37,10 @@ this app.
   on a page titled "You're not yet on the rota" saying who to ask. This usually
   resolves itself: the person has been entered in Practice HR but not yet read in
   (wait fifteen minutes or press *Sync now*), or their Practice HR login is not
-  linked to their employee record, which only Practice HR can fix. Until it
-  resolves, they reach nothing else but sign-out.
+  linked to their employee record, which only Practice HR can fix. The employee id
+  is kept with the login, so once the sync has read the person in, the next page
+  they load (reloading the holding page will do) takes them in without signing in
+  again. Until it resolves, they reach nothing else but sign-out.
 
 ## What each role can see and do
 

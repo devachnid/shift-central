@@ -47,6 +47,12 @@ class User(AbstractUser):
     # HR's `sub`, stored at the first sign-in; later sign-ins match on it.
     oidc_sub = models.CharField(
         "practice account id", max_length=255, blank=True, default="", db_index=True)
+    # HR's `employee_id` claim, set at every sign-in. Kept so a sign-in that
+    # arrives before the sync has sent the person can be bound to them on a
+    # later request (config/middleware.py), not only at the next sign-in.
+    hr_employee_id = models.PositiveIntegerField(
+        "Practice HR employee id", null=True, blank=True,
+        help_text="From Practice HR at each sign-in.")
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []

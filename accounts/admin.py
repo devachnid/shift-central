@@ -8,8 +8,8 @@ from .models import LoginEvent, User
 class UserAdmin(ModelAdmin):
     list_display = ("email", "is_all_teams_manager", "is_superuser", "is_active", "oidc_sub")
     search_fields = ("email",)
-    fields = ("email", "is_active", "is_superuser", "oidc_sub")
-    readonly_fields = ("oidc_sub",)
+    fields = ("email", "is_active", "is_superuser", "oidc_sub", "hr_employee_id")
+    readonly_fields = ("oidc_sub", "hr_employee_id")
 
 
 @admin.register(LoginEvent)

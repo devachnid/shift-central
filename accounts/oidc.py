@@ -8,7 +8,9 @@ cannot move someone into another account (the rota's rule, kept).
 
 Which person they are: HR's `employee_id` names the Person with that
 hr_employee_id (people/models/person.py). It is applied at every sign-in:
-the person is bound to this user and taken from any other.
+the person is bound to this user and taken from any other. The id is also
+kept on the user, so a person the sync sends later is bound on the next
+page load (bind_waiting_person, called by config/middleware.py).
 
 All-teams manager is HR's `admin` claim for this client, set at every
 sign-in; only a JSON true counts."""
@@ -37,7 +39,7 @@ class PracticeAccountBackend(OIDCAuthenticationBackend):
             raise SuspiciousOperation("practice-account sign-in refused: the email belongs "
                                       "to an account this sign-in may not use")
         user = User(email=claims["email"], oidc_sub=str(claims.get("sub") or ""),
-                    is_all_teams_manager=_is_admin(claims))
+                    is_all_teams_manager=_is_admin(claims), hr_employee_id=_employee_id(claims))
         user.set_unusable_password()
         user.save()
         _bind_person(user, claims)
@@ -52,6 +54,9 @@ class PracticeAccountBackend(OIDCAuthenticationBackend):
         if user.is_all_teams_manager != _is_admin(claims):
             user.is_all_teams_manager = _is_admin(claims)
             changed.append("is_all_teams_manager")
+        if user.hr_employee_id != _employee_id(claims):
+            user.hr_employee_id = _employee_id(claims)
+            changed.append("hr_employee_id")
         if changed:
             user.save(update_fields=changed)
         _bind_person(user, claims)
@@ -62,13 +67,22 @@ def _is_admin(claims):
     return claims.get("admin") is True
 
 
+def _employee_id(claims):
+    """HR's employee_id when it is a whole number (a JSON true is not), else None."""
+    value = claims.get("employee_id")
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
+
+
 def _bind_person(user, claims):
     """Person.user follows HR's employee_id. Nothing happens when the claim
     is missing or names nobody here yet; the next hr_sync usually resolves
-    that, and the holding page (accounts/views.py) says so meanwhile."""
+    that, bind_waiting_person binds them on the next page load, and the
+    holding page (accounts/views.py) says so meanwhile."""
     from people.models import Person
-    employee_id = claims.get("employee_id")
-    if not isinstance(employee_id, int):
+    employee_id = _employee_id(claims)
+    if employee_id is None:
         return
     try:
         person = Person.objects.get(hr_employee_id=employee_id)
@@ -79,6 +93,24 @@ def _bind_person(user, claims):
     Person.objects.filter(user=user).exclude(pk=person.pk).update(user=None)
     person.user = user
     person.save(update_fields=["user"])
+
+
+def bind_waiting_person(user):
+    """Bind the person HR's employee id names to a signed-in user who has
+    none, when the sync has since brought them, so the holding page resolves
+    by itself. Only an unbound person is taken here: moving a person from
+    another user is left to a sign-in, which carries HR's fresh claim.
+    Returns the person, or None."""
+    from people.models import Person
+    if user.hr_employee_id is None:
+        return None
+    person = Person.objects.filter(hr_employee_id=user.hr_employee_id, user__isnull=True).first()
+    if person is None:
+        return None
+    person.user = user
+    person.save(update_fields=["user"])
+    user.person = person        # replaces the cached "no person" on this request's user
+    return person
 
 
 def practice_hr_logout_url(request, id_token=None):

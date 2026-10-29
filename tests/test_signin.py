@@ -140,6 +140,30 @@ def test_a_user_whose_person_is_bound_elsewhere_is_moved_not_duplicated(monkeypa
     assert p.user == u
 
 
+def test_the_employee_id_is_kept_on_a_new_user(monkeypatch):
+    u = _sign_in({"sub": "40", "email": "new@example.org", "employee_id": 7}, monkeypatch)
+    u.refresh_from_db()
+    assert u.hr_employee_id == 7
+
+
+def test_the_employee_id_follows_the_claim_at_every_sign_in(monkeypatch):
+    u = User.objects.create_user(email="sam@example.org", oidc_sub="40")
+    for claim, kept in ((7, 7), (8, 8), (None, None), (True, None)):
+        claims = {"sub": "40", "email": "sam@example.org"}
+        if claim is not None:
+            claims["employee_id"] = claim
+        _sign_in(claims, monkeypatch)
+        u.refresh_from_db()
+        assert u.hr_employee_id == kept
+
+
+def test_a_json_true_employee_id_binds_nobody(monkeypatch):
+    p = make_person(hr_employee_id=1)
+    _sign_in({"sub": "40", "email": "sam@example.org", "employee_id": True}, monkeypatch)
+    p.refresh_from_db()
+    assert p.user is None
+
+
 # --- the admin claim -----------------------------------------------------------
 
 def test_the_admin_claim_makes_an_all_teams_manager_both_ways(monkeypatch):
@@ -177,6 +201,54 @@ def test_a_signed_in_user_with_no_person_lands_on_the_holding_page(staff_client)
 
 def test_the_holding_page_is_the_only_page_such_a_user_reaches(staff_client):
     assert staff_client.get("/staff/").status_code == 302
+
+
+def test_the_holding_page_resolves_once_the_sync_brings_the_person(client):
+    """Signed in before HR's record arrived: the next page load after the
+    sync binds the person, with no second sign-in."""
+    user = User.objects.create_user(email="sam@example.org", hr_employee_id=7)
+    client.force_login(user)
+    assert client.get("/staff/")["Location"] == "/accounts/not-on-rota/"
+    person = make_person(hr_employee_id=7, email="sam@example.org")
+    assert client.get("/staff/").status_code == 200
+    person.refresh_from_db()
+    assert person.user == user
+
+
+def test_reloading_the_holding_page_checks_again(client, settings):
+    user = User.objects.create_user(email="sam@example.org", hr_employee_id=7)
+    client.force_login(user)
+    assert client.get("/accounts/not-on-rota/").status_code == 200
+    make_person(hr_employee_id=7)
+    r = client.get("/accounts/not-on-rota/")
+    assert r.status_code == 302 and r["Location"] == settings.LOGIN_REDIRECT_URL
+
+
+def test_the_holding_page_says_it_checks_on_reload(client):
+    client.force_login(User.objects.create_user(email="sam@example.org"))
+    body = client.get("/accounts/not-on-rota/").content.decode()
+    assert "this page checks each time you reload it" in body and "Log out" in body
+
+
+def test_a_person_bound_to_someone_else_is_not_taken_on_a_page_load(client):
+    """Moving a person between accounts is a sign-in's job, on HR's fresh claim."""
+    person = make_person(hr_employee_id=7)
+    other = User.objects.create_user(email="old@example.org")
+    person.user = other
+    person.save()
+    client.force_login(User.objects.create_user(email="sam@example.org", hr_employee_id=7))
+    assert client.get("/staff/")["Location"] == "/accounts/not-on-rota/"
+    person.refresh_from_db()
+    assert person.user == other
+
+
+def test_a_user_with_no_employee_id_costs_no_person_lookup(client):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+    client.force_login(User.objects.create_user(email="sam@example.org"))
+    with CaptureQueriesContext(connection) as queries:
+        client.get("/staff/")
+    assert sum('"people_person"' in q["sql"] for q in queries) == 1, "only the hasattr check"
 
 
 def test_a_user_with_a_person_passes_through(client, db):

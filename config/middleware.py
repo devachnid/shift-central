@@ -70,7 +70,13 @@ class PrivatePagesMiddleware:
 class PersonRequiredMiddleware:
     """A signed-in account with no Person reaches only the holding page,
     the admin and sign-out (spec, section 2). Superusers pass: setup
-    happens before anyone is synced."""
+    happens before anyone is synced.
+
+    Before turning such an account away it looks once for the person HR's
+    employee id names (accounts.oidc.bind_waiting_person), so a sign-in that
+    beat the sync resolves on the next page load, the holding page's own
+    reload included. That costs a query only for an account with no person
+    and an employee id."""
 
     EXEMPT = ("/accounts/", "/admin/", "/oidc/", "/static/")
 
@@ -79,11 +85,11 @@ class PersonRequiredMiddleware:
 
     def __call__(self, request):
         user = request.user
-        if (user.is_authenticated and not user.is_superuser
-                and not request.path.startswith(self.EXEMPT)
-                and not hasattr(user, "person")):
-            from django.shortcuts import redirect
-            return redirect("not_on_rota")
+        if user.is_authenticated and not user.is_superuser and not hasattr(user, "person"):
+            from accounts.oidc import bind_waiting_person
+            if bind_waiting_person(user) is None and not request.path.startswith(self.EXEMPT):
+                from django.shortcuts import redirect
+                return redirect("not_on_rota")
         return self.get_response(request)
 
 
