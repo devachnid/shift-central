@@ -26,7 +26,7 @@ arrives that has not been seen before; it is never created or removed by hand.
 |---|---|
 | **Name** | Practice HR's team name, taken from the person's *first* position. **Do not edit it here.** The sync finds teams by exact name, so a renamed team is simply a new name. See below. |
 | **Display order** | Teams are listed by this number, lowest first, then by name. It sets the order of the Staff list (team, then each person's own display order) and of the Team filter and the Permissions list. New teams start at 100, after any you have numbered lower. |
-| **Active** | Untick it for a team nobody should be filtered by or granted any more. An inactive team drops out of the Staff list's Team filter and the Permissions list. It does **not** hide its people or remove grants already given; the people keep their team and appear in *All teams*. |
+| **Active** | Untick it for a team nobody should be filtered by or granted any more. An inactive team drops out of the Staff list's Team filter and the Permissions list (except, marked "(inactive)", for someone who still holds it). It does **not** hide its people or remove grants already given; the people keep their team and appear in *All teams*. |
 
 **Renaming a team in Practice HR** creates a new team here and moves everyone
 in it across on the next sync. The old team stays, empty, with any manager

@@ -12,7 +12,7 @@
     {% for t in teams %}
     <div>
       <input type="checkbox" name="teams" value="{{ t.pk }}" id="team-{{ t.pk }}"{% if t.pk in granted %} checked{% endif %}>
-      <label for="team-{{ t.pk }}">{{ t.name }}</label>
+      <label for="team-{{ t.pk }}">{{ t.name }}{% if not t.active %} (inactive){% endif %}</label>
     </div>
     {% endfor %}
     <p class="field-help">Manager access lets this person build and change the team's rota and approve its leave.</p>

@@ -88,11 +88,11 @@ Untick to take it away. Saving shows "Saved."
   grant is removed, but the record that it existed and was removed stays in the
   Activity log (field `manager_of`, with the team's name before and after).
 - For someone who is an all-teams manager the dialog reads "all teams, set in
-  Practice HR" and has no ticks. Their access is not editable here; remove their
-  *Admin of shift-central* box in Practice HR.
-- An inactive team is not listed, so a grant for it cannot be changed here. Make the
-  team active again in the admin to revoke it; left alone it is harmless once the
-  team has no one in it.
+  Practice HR" and has no ticks, and a save writes nothing. Their access is not
+  editable here; remove their *Admin of shift-central* box in Practice HR.
+- An inactive team is listed only for someone who still holds it, marked
+  "(inactive)", so saving the dialog keeps the grant unless you untick it; untick
+  it to revoke it. Left alone it is harmless once the team has no one in it.
 - Manager access is what, in later releases, lets someone build the team's rota and
   approve its leave. In this release it governs the profile, the Staff list's
   extra columns and the Activity log.
