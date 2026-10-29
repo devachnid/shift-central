@@ -126,14 +126,16 @@ time, who made the change (a person's email, or `practice-hr` for the sync),
 which record, the field, the old and new value and the reason. It shows changes to
 profiles (display fields, hours, and that the notes changed, never their text), to allowances, to manager grants
 (`manager_of`), to what the feed changed (including `created` for a new person and a
-new finish date arriving), and to departments. Filter by **Person** and by **Field**
-(the field's name as shown, such as `weekly_hours` or `end_date`; type it exactly).
+new finish date arriving), and to departments. An allowance's row names the person
+it belongs to. Filter by **Person**, by **Field** (the field's name as shown, such as
+`weekly_hours` or `end_date`; type it exactly) and by **From** and **To** dates (both
+included; either may be left blank).
 It is the answer to "who changed this, and when did I see that date arrive?".
 
 **Log in logs** (sidebar › Activity logs › Log in logs, `/activity/logins/`,
 all-teams managers only) has one row per sign-in: when, who, the address (the real
 one from Cloudflare, not the tunnel's) and the browser, newest first, the latest
-1,000. If every address reads `127.0.0.1`, the tunnel's address header is not
+1,000. Filter by **Person** (the login's email) and by **From** and **To** dates. If every address reads `127.0.0.1`, the tunnel's address header is not
 arriving and the address column is meaningless; see `TRUSTED_PROXY_IPS` in the
 README.
 

@@ -4,6 +4,15 @@
   <a class="topbar-action" href="{% url 'activity' %}">Activity log</a>
 {% endblock %}
 {% block content %}
+<form class="filters" method="get">
+  <label>Person <select name="person">
+    <option value="">Everyone</option>
+    {% for u in users %}<option value="{{ u.pk }}"{% if u.pk|stringformat:"s" == person %} selected{% endif %}>{{ u.email }}</option>{% endfor %}
+  </select></label>
+  <label>From <input type="date" name="from" value="{{ date_from }}"></label>
+  <label>To <input type="date" name="to" value="{{ date_to }}"></label>
+  <button class="btn btn-quiet" type="submit">Filter</button>
+</form>
 <table class="table">
   <thead><tr><th>When</th><th>Who</th><th>Address</th><th>Browser</th></tr></thead>
   <tbody>

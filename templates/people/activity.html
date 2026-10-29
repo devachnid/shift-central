@@ -10,6 +10,8 @@
     {% for p in people %}<option value="{{ p.pk }}"{% if p.pk|stringformat:"s" == person %} selected{% endif %}>{{ p.name }}</option>{% endfor %}
   </select></label>
   <label>Field <input type="text" name="field" value="{{ field }}"></label>
+  <label>From <input type="date" name="from" value="{{ date_from }}"></label>
+  <label>To <input type="date" name="to" value="{{ date_to }}"></label>
   <button class="btn btn-quiet" type="submit">Filter</button>
 </form>
 <table class="table">
