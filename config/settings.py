@@ -212,5 +212,11 @@ OIDC_OP_USER_ENDPOINT = f"{PRACTICE_HR_URL}/o/userinfo/"
 OIDC_OP_JWKS_ENDPOINT = f"{PRACTICE_HR_URL}/o/.well-known/jwks.json"
 OIDC_USE_PKCE = True
 OIDC_CREATE_USER = True
+# Every sign-in asks Practice HR to check who is at the keyboard. On a shared
+# surgery PC the ten-minute timeout here ends this app's session, but HR's own
+# session (twelve hours, consent skipped) would otherwise sign the next person
+# straight in as the last one. django-oauth-toolkit sends an authenticated
+# prompt=login to its login form, which asks for the password or passkey again.
+OIDC_AUTH_REQUEST_EXTRA_PARAMS = {"prompt": "login"}
 # Kept so signing out can hand it to HR's sign-out as id_token_hint.
 OIDC_STORE_ID_TOKEN = True

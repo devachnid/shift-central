@@ -104,8 +104,12 @@ and the sign-in brings the person back to the page.
 
 **Log out** is the bottom item of the side panel. It signs out of Shift Central and
 then of Practice HR too, so that on a shared PC the next person is asked who they
-are instead of being signed in as the last. Signed-in pages are marked not to be
-kept by the browser, and signing out clears what it kept.
+are instead of being signed in as the last. A session that simply timed out has not
+signed out of Practice HR, so every sign-in also asks Practice HR to check who is
+there (`prompt=login`): Practice HR shows its log-in page even to a browser it
+already knows, and the person types their own password or uses their passkey.
+Signed-in pages are marked not to be kept by the browser, and signing out clears
+what it kept.
 
 The superuser is the exception, as it must be when Practice HR is down: it signs in
 with a password at `/admin/` (the login page offers only the practice account while

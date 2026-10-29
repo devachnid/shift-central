@@ -146,6 +146,18 @@ def test_sync_now_runs_the_sync_and_reports(monkeypatch):
     assert "12 people read from Practice HR" in r.content.decode()
 
 
+def test_a_get_of_sync_now_goes_back_to_the_staff_page():
+    """Signing in again after the session ended mid-POST returns here as a GET."""
+    r = _client(make_person(), is_all_teams_manager=True).get("/staff/sync/")
+    assert r.status_code == 302 and r["Location"] == "/staff/"
+    assert not SyncRun.objects.exists()
+
+
+def test_a_get_of_sync_now_signed_out_goes_to_the_login_page(client):
+    r = client.get("/staff/sync/")
+    assert r.status_code == 302 and r["Location"].startswith("/accounts/login/?next=/staff/sync/")
+
+
 def test_staff_cannot_sync():
     assert _client(make_person()).post("/staff/sync/").status_code == 403
 

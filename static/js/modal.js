@@ -60,7 +60,8 @@
     el.textContent = p.message;
     if (p.signIn) {
       var a = document.createElement("a");
-      a.href = "/accounts/login/";
+      // Back to the page the dialog was opened on, once signed in again.
+      a.href = "/accounts/login/?next=" + encodeURIComponent(location.pathname + location.search);
       a.textContent = "Sign in";
       el.appendChild(document.createTextNode(" "));
       el.appendChild(a);

@@ -30,6 +30,40 @@ def test_the_login_page_offers_only_the_practice_account_when_configured(client,
     assert 'name="password"' not in body
 
 
+def test_the_practice_account_link_carries_the_page_to_return_to(client, oidc_on):
+    body = client.get("/accounts/login/?next=/departments/").content.decode()
+    assert 'href="/oidc/authenticate/?next=%2Fdepartments%2F"' in body
+
+
+def test_without_a_next_the_practice_account_link_is_bare(client, oidc_on):
+    assert 'href="/oidc/authenticate/"' in client.get("/accounts/login/").content.decode()
+
+
+def test_another_sites_next_is_not_carried(client, oidc_on):
+    body = client.get("/accounts/login/?next=https://evil.example/").content.decode()
+    assert "evil.example" not in body
+
+
+def test_every_sign_in_asks_practice_hr_to_check_who_is_there(settings):
+    """A shared PC: HR's own twelve-hour session must not sign the next
+    person in as the last (django-oauth-toolkit sends prompt=login to its
+    login form)."""
+    assert settings.OIDC_AUTH_REQUEST_EXTRA_PARAMS == {"prompt": "login"}
+
+
+def test_the_authorisation_request_says_prompt_login(client, oidc_on, settings):
+    settings.OIDC_OP_AUTHORIZATION_ENDPOINT = "https://hr.example/o/authorize/"
+    r = client.get("/oidc/authenticate/?next=/departments/")
+    assert r.status_code == 302 and parse_qs(urlsplit(r["Location"]).query)["prompt"] == ["login"]
+    assert client.session["oidc_login_next"] == "/departments/"
+
+
+def test_the_dialogs_sign_in_link_returns_to_the_page():
+    from pathlib import Path
+    js = (Path(__file__).parent.parent / "static" / "js" / "modal.js").read_text()
+    assert '"/accounts/login/?next=" + encodeURIComponent(location.pathname + location.search)' in js
+
+
 def test_without_hr_the_superusers_password_form_shows(client, settings):
     settings.PRACTICE_HR_URL = ""
     body = client.get("/accounts/login/").content.decode()
@@ -187,6 +221,19 @@ def test_without_hr_logout_is_unchanged(client, settings, db):
 
 
 # --- sessions ------------------------------------------------------------------------
+
+def test_a_request_at_599_seconds_extends_the_session(client, db, monkeypatch):
+    import datetime
+    from django.utils import timezone
+    from tests.factories import make_user_for
+    client.force_login(make_user_for(make_person()))
+    start = timezone.now()
+    monkeypatch.setattr("django.utils.timezone.now", lambda: start + datetime.timedelta(seconds=599))
+    assert client.get("/staff/").status_code == 200
+    # 1,198 seconds after sign-in, but 599 after the last request.
+    monkeypatch.setattr("django.utils.timezone.now", lambda: start + datetime.timedelta(seconds=1198))
+    assert client.get("/staff/").status_code == 200
+
 
 def test_a_request_after_ten_minutes_is_signed_out(client, db, monkeypatch):
     import datetime

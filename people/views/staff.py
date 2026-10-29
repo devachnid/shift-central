@@ -5,7 +5,6 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_POST
 
 from people.models import Person, Team
 from people.services import access, health, hr_sync
@@ -67,8 +66,12 @@ def staff(request):
 
 @login_required
 @access.manager_required
-@require_POST
 def sync_now(request):
+    """A POST runs the sync. A GET lands here only after signing in again
+    from an expired session (the login page's next), so it goes back to
+    the Staff page rather than answering 405."""
+    if request.method != "POST":
+        return redirect("staff")
     run = hr_sync.sync()
     if run.ok:
         messages.success(request, f"{run.people_seen} people read from Practice HR.")

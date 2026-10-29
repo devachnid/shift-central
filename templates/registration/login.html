@@ -6,7 +6,7 @@
   <h1>Log in</h1>
   {% for error in form.non_field_errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
   {% if settings_practice_hr_url %}
-  <p><a class="btn btn-primary" href="{% url 'oidc_authentication_init' %}">Sign in with the practice account</a></p>
+  <p><a class="btn btn-primary" href="{% url 'oidc_authentication_init' %}{% if next %}?next={{ next|urlencode:'' }}{% endif %}">Sign in with the practice account</a></p>
   {% else %}
   <form method="post" id="login-form">{% csrf_token %}
     <div class="field"><label for="id_username">Email</label>{{ form.username }}</div>
