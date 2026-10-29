@@ -55,6 +55,8 @@ INSTALLED_APPS = [
     "mozilla_django_oidc",
     "accounts",
     "people",
+    "shifts",
+    "messaging",
     "ui",
 ]
 
@@ -194,6 +196,8 @@ LOGGING = {
         "shiftcentral": {"level": "INFO"},
         "accounts": {"level": "INFO"},
         "people": {"level": "INFO"},
+        "shifts": {"level": "INFO"},
+        "messaging": {"level": "INFO"},
     },
 }
 

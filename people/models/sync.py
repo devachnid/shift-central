@@ -9,6 +9,8 @@ class SyncRun(models.Model):
     ok = models.BooleanField(default=False)
     people_seen = models.PositiveIntegerField(default=0)
     message = models.CharField(max_length=300, blank=True, default="")
+    # Which feed: "practice-hr" (people) or "gp-rota" (GP sessions, spec 2).
+    source = models.CharField(max_length=20, default="practice-hr", db_index=True)
 
     class Meta:
         ordering = ["-started_at"]
