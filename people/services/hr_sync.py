@@ -59,7 +59,7 @@ def _parse(record, position):
         raise BadRecord(f"record {position} in the feed: missing or bad start")
     fields["end_date"] = _field(employment, "end", _date, required=False, position=position)
     fields["is_gp"] = record.get("unit") == "sessions"
-    fields["team_name"] = ""
+    fields["team_name"] = None          # no position today: see _apply
     if record.get("positions"):
         fields["team_name"] = _field(record, "positions", _first_team, position=position)
     return employee_id, fields
@@ -74,12 +74,19 @@ def _team(name, cache):
 
 
 def _apply(records, seen_at):
+    """HR's feed gives today's positions, so a starter whose post begins next
+    month has none yet, and nor does someone between posts. A record with no
+    position keeps the person's team; a new person with none starts without
+    one, for an all-teams manager to see on the Staff list meanwhile."""
     teams = {}
     for position, record in enumerate(records, start=1):
         employee_id, fields = _parse(record, position)
-        team = _team(fields.pop("team_name"), teams)
-        fields["team"] = team
+        team_name = fields.pop("team_name")
         person = Person.objects.filter(hr_employee_id=employee_id).first()
+        if team_name is None and person is not None:
+            fields["team"] = person.team
+        else:
+            fields["team"] = _team(team_name, teams)
         if person is None:
             person = Person.objects.create(hr_employee_id=employee_id, last_seen_from_hr=seen_at,
                                            **fields)

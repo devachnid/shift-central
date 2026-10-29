@@ -180,6 +180,27 @@ def test_a_database_error_is_a_failed_run_not_an_exception():
     assert Person.objects.count() == 0
 
 
+def test_a_record_with_no_position_keeps_the_persons_team():
+    """HR sends today's positions: someone between posts, or a starter
+    whose post begins later, has none, and keeps the team they had."""
+    hr_sync.sync(FakeClient())
+    payload = json.loads(FIXTURE.read_text())
+    payload["people"][0]["positions"] = []
+    assert hr_sync.sync(FakeClient(payload)).ok
+    sam = Person.objects.get(hr_employee_id=1)
+    assert sam.team.name == "Reception"
+    assert not AuditEntry.objects.filter(object_id=sam.pk, field="team").exists()
+
+
+def test_a_new_person_with_no_position_starts_without_a_team():
+    payload = json.loads(FIXTURE.read_text())
+    hr_sync.sync(FakeClient(payload))
+    assert Person.objects.get(hr_employee_id=5).team is None
+    payload["people"][4]["positions"] = [{"title": "Nurse", "team": "Nursing"}]
+    hr_sync.sync(FakeClient(payload))
+    assert Person.objects.get(hr_employee_id=5).team.name == "Nursing"
+
+
 def test_a_team_rename_in_hr_makes_a_new_team_and_moves_the_person():
     hr_sync.sync(FakeClient())
     payload = json.loads(FIXTURE.read_text())

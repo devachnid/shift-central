@@ -25,7 +25,12 @@ One request goes to `PRACTICE_HR_URL` + `/api/v1/people` with the bearer token
   A new id creates a person; a known one has its HR fields overwritten: first and
   last name, full name, email, team, start date, finish date and GP.
 - A **team name not seen before creates a team**. A person whose team changed is
-  moved to the new one. A person HR gives no position becomes teamless.
+  moved to the new one. A record with no position keeps the team the person
+  already has: HR's feed gives today's positions, so someone between posts has
+  none. **A starter appears without a team** until HR holds their position (a
+  January starter has none in December); they are on the Staff list's *Starting*
+  view for an all-teams manager, who can set up their hours and allowances
+  meanwhile. Their team arrives with the first sync after their position starts.
 - A person **in the database but missing from the feed is not deleted**. Their
   *last seen* time simply stops advancing, and the Health card lists them once a
   good run has left them out and they have been missing for over a day.
