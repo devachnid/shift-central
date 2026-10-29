@@ -122,9 +122,19 @@ def sync(client=None):
 
 
 def not_seen_recently(now=None):
-    """People the last day's syncs did not include — gone from HR's feed."""
+    """People gone from HR's feed: the last good run left them out, and they
+    have not been in it for over a day.
+
+    Measured against the last successful run, not the clock: a day of
+    failed runs advances nobody's last_seen_from_hr, and judged by the
+    clock alone that would list everyone. With no good run in the last
+    day there is nothing to judge by, so nobody is listed; the Practice HR
+    box on the Health card is red instead."""
     now = now or timezone.now()
-    return Person.objects.filter(last_seen_from_hr__lt=now - NEVER_SEEN_AFTER)
+    good = SyncRun.objects.filter(ok=True, started_at__gte=now - NEVER_SEEN_AFTER).first()
+    if good is None:
+        return Person.objects.none()
+    return Person.objects.filter(last_seen_from_hr__lt=min(good.started_at, now - NEVER_SEEN_AFTER))
 
 
 def last_run():

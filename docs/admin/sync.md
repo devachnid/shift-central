@@ -27,8 +27,8 @@ One request goes to `PRACTICE_HR_URL` + `/api/v1/people` with the bearer token
 - A **team name not seen before creates a team**. A person whose team changed is
   moved to the new one. A person HR gives no position becomes teamless.
 - A person **in the database but missing from the feed is not deleted**. Their
-  *last seen* time simply stops advancing, and the Health card lists them after a
-  day.
+  *last seen* time simply stops advancing, and the Health card lists them once a
+  good run has left them out and they have been missing for over a day.
 - Every field the sync actually changes writes an entry to the
   [Activity log](access.md#the-two-logs) with the actor `practice-hr` and the reason
   "from Practice HR", so you can see when a finish date arrived. A run that changes
@@ -79,25 +79,30 @@ when it worked; "failed 29 Oct 14:30" and the message in red when it did not;
 
 **Needs hours and allowances** is a count and the first five names, each a link
 that opens the profile. It counts current and starting people, **who are not GPs**,
-with **weekly hours or days per week still blank**. A GP is never counted, as they
-have neither.
+with **weekly hours or days per week still blank**, or with **no allowance for
+either the current leave year or the next**. A GP is never counted, as they have
+no hours here.
 
-- *What to do:* open each name and fill in Pay & time off, then the two leave
-  years' allowances. Note that the count goes by hours and days: someone with hours
-  but no allowances **drops off the list**, so keep your own check for the
-  allowances; a person's Pay & time off tab shows a dash for any year not entered.
+- *What to do:* open each name and fill in Pay & time off: the hours, the days and
+  at least one of the two leave years' allowances. A person drops off the list once
+  all three are there; a person's Pay & time off tab shows a dash for any year not
+  entered, so check the other year there.
 - Wrong: ignoring it. A person with no hours cannot be costed for leave once leave
   arrives.
 
-**Not in Practice HR's feed for a day** lists people whose last sighting is more
-than a day old. Only current and starting people are listed (someone who left and
-whom HR has dropped is not news).
+**Not in Practice HR's feed for a day** lists people the last good run left out
+and who have not been in the feed for over a day. It is measured against the last
+run that worked, not the clock, so failed runs do not make everyone look missing;
+with no good run in the last day it lists nobody, and the Practice HR box is red
+instead. Only current and starting people are listed (someone who left and whom HR
+has dropped is not news).
 
 - *What to do:* if it is one or two names, they have been removed or deleted in
   Practice HR, or never should have been there: confirm with the practice manager
   and, if they should not be here, it is the superuser's decision whether to delete
-  them (see [Removing someone](people.md#removing-someone)). If it is **everyone**, the
-  sync has been failing for a day; fix that first.
+  them (see [Removing someone](people.md#removing-someone)). If it is **everyone**,
+  Practice HR's feed itself came back short (a good run that held almost no one);
+  check the count in the Practice HR box and the employees in Practice HR.
 
 **Leaving in the next 30 days** lists current people whose finish date falls
 between today and thirty days away, with the date.

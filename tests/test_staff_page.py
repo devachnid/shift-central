@@ -7,7 +7,7 @@ import pytest
 from django.test import Client
 from django.utils import timezone
 
-from people.models import SyncRun
+from people.models import Allowance, SyncRun
 from tests.factories import make_person, make_team, make_team_manager, make_user_for
 
 pytestmark = pytest.mark.django_db
@@ -76,9 +76,24 @@ def test_staff_cannot_download():
     assert r["Content-Type"].startswith("text/html")
 
 
+@pytest.fixture(autouse=True)
+def years_2026_2027(monkeypatch):
+    """The Health card asks for an allowance this leave year or next; pin
+    the years as tests/test_profile.py does."""
+    from people.services import profiles
+    monkeypatch.setattr(profiles, "leave_years",
+                        lambda today=None: [date(2026, 1, 1), date(2027, 1, 1)])
+
+
+def _set_up(person, year=2026):
+    Allowance.objects.create(person=person, leave_year=date(year, 1, 1),
+                             annual_hours=Decimal("187.5"), bank_holiday_hours=Decimal("60"))
+    return person
+
+
 def test_health_card_figures():
     from people.services import health
-    boss = make_person(weekly_hours=Decimal("37.5"), days_per_week=5)
+    boss = _set_up(make_person(weekly_hours=Decimal("37.5"), days_per_week=5))
     user = make_user_for(boss, is_all_teams_manager=True)
     make_person(first_name="New")                        # no hours yet
     make_person(first_name="Leaving", end_date=timezone.localdate() + timedelta(days=10))
@@ -95,7 +110,7 @@ def test_health_card_figures():
 
 def test_gps_do_not_need_hours():
     from people.services import health
-    boss = make_person(weekly_hours=Decimal("37.5"), days_per_week=5)
+    boss = _set_up(make_person(weekly_hours=Decimal("37.5"), days_per_week=5))
     user = make_user_for(boss, is_all_teams_manager=True)
     make_person(first_name="Doc", is_gp=True)
     assert not health.figures(user)["needs_setup"].exists()
@@ -104,11 +119,21 @@ def test_gps_do_not_need_hours():
 def test_a_team_manager_sees_only_their_teams_figures():
     from people.services import health
     nursing = make_team("Nursing")
-    lead = make_person(team=nursing, weekly_hours=Decimal("30"), days_per_week=4)
+    lead = _set_up(make_person(team=nursing, weekly_hours=Decimal("30"), days_per_week=4))
     make_team_manager(lead, nursing)
     make_person(first_name="Nurse", team=nursing)
     make_person(first_name="Rec")
     assert {p.first_name for p in health.figures(make_user_for(lead))["needs_setup"]} == {"Nurse"}
+
+
+def test_hours_and_days_without_an_allowance_still_need_setting_up():
+    from people.services import health
+    boss = _set_up(make_person(first_name="Boss", weekly_hours=Decimal("37.5"), days_per_week=5))
+    user = make_user_for(boss, is_all_teams_manager=True)
+    make_person(first_name="Hours", weekly_hours=Decimal("22.5"), days_per_week=3)
+    _set_up(make_person(first_name="Next", weekly_hours=Decimal("22.5"), days_per_week=3), year=2027)
+    _set_up(make_person(first_name="Old", weekly_hours=Decimal("22.5"), days_per_week=3), year=2025)
+    assert {p.first_name for p in health.figures(user)["needs_setup"]} == {"Hours", "Old"}
 
 
 def test_sync_now_runs_the_sync_and_reports(monkeypatch):

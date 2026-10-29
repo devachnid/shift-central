@@ -4,11 +4,12 @@ fields overwritten, the typed fields untouched, every change audited."""
 import io
 import json
 import urllib.error
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from django.utils import timezone
 
 from people.models import AuditEntry, Person, SyncRun, Team
 from people.services import hr_sync
@@ -92,8 +93,41 @@ def test_a_person_missing_from_the_feed_is_kept():
     hr_sync.sync(FakeClient(payload))
     p = Person.objects.get(hr_employee_id=1)
     assert p.last_seen_from_hr == first and Person.objects.count() == 6
-    assert p in hr_sync.not_seen_recently(now=first + hr_sync.NEVER_SEEN_AFTER * 2)
-    assert p not in hr_sync.not_seen_recently(now=first)
+
+
+def _a_while_ago(days=3):
+    """Move every sighting and run back, as if the syncs so far had run days ago."""
+    then = timezone.now() - timedelta(days=days)
+    Person.objects.update(last_seen_from_hr=then)
+    SyncRun.objects.update(started_at=then, finished_at=then)
+
+
+def test_a_person_a_good_run_left_out_is_not_seen():
+    hr_sync.sync(FakeClient())
+    _a_while_ago()
+    payload = json.loads(FIXTURE.read_text())
+    del payload["people"][0]
+    hr_sync.sync(FakeClient(payload))
+    assert [p.hr_employee_id for p in hr_sync.not_seen_recently()] == [1]
+
+
+def test_failed_runs_after_a_good_one_list_nobody_as_not_seen():
+    """A day of failures advances nobody's sighting; measured by the clock
+    that was everyone. Measured by the last good run, it is no one."""
+    hr_sync.sync(FakeClient())
+    _a_while_ago(days=1.25)
+    for _ in range(2):
+        assert not hr_sync.sync(FakeClient(error=HRError("Practice HR unreachable"))).ok
+    assert not hr_sync.not_seen_recently().exists()
+
+
+def test_a_person_left_out_an_hour_ago_is_not_yet_not_seen():
+    """The card says "for a day": one run without someone is not news yet."""
+    hr_sync.sync(FakeClient())
+    payload = json.loads(FIXTURE.read_text())
+    del payload["people"][0]
+    hr_sync.sync(FakeClient(payload))
+    assert not hr_sync.not_seen_recently().exists()
 
 
 def test_an_error_leaves_the_data_untouched_and_records_a_failed_run():

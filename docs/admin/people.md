@@ -71,7 +71,7 @@ Editable by the managers of the person's team. A person reads their own.
 |---|---|
 | **Weekly hours** | Contracted hours a week, to two decimal places, 0 to 999.99. Not shown for a GP, who shows "Sessions, from the GP rota". Leave blank and the person stays on the Health card's *Needs hours and allowances* list. |
 | **Days per week** | Whole number, 1 to 7. With weekly hours it gives the **average day** (weekly hours divided by days, to two places), shown beneath the field. This is the day length leave will be costed in, so a wrong figure here becomes wrong leave later. |
-| **Annual leave allowance (hours)** and **Bank holiday allowance (hours)** | The full-year figures in hours, to two places, for **each of two leave years: this year and next**. In this release the leave year is the calendar year, starting 1 January. Stored only; the leave arithmetic that reads them comes in a later release. |
+| **Annual leave allowance (hours)** and **Bank holiday allowance (hours)** | The full-year figures in hours, to two places, for **each of two leave years: this year and next**. In this release the leave year is the calendar year, starting 1 January. Stored only; the leave arithmetic that reads them comes in a later release. With neither year entered, the person stays on the Health card's *Needs hours and allowances* list. |
 | **Reason for the change** | Up to 300 characters. **Required to change an allowance that is already set**, and recorded with the change. Not needed the first time a year's allowances are entered, or when only hours and days change. |
 
 Things that surprise people:
