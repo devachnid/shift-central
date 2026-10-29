@@ -6,4 +6,6 @@ urlpatterns = [
     path("staff/", views.staff, name="staff"),
     path("staff/sync/", views.sync_now, name="staff-sync"),
     path("staff/add/", views.add_staff, name="staff-add"),
+    path("staff/<int:pk>/profile/", views.profile, name="profile"),
+    path("staff/<int:pk>/history/", views.history, name="profile-history"),
 ]

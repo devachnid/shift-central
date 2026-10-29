@@ -11,16 +11,19 @@ from people.models import Person, Team
 from people.services import access, health, hr_sync
 
 
-def _csv(people):
-    """The rows the manager is looking at, as a download."""
+def _csv(people, managed):
+    """The rows the manager is looking at, as a download. Contact details
+    and dates only for the people they manage (ACC-06)."""
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="staff.csv"'
     writer = csv.writer(response)
     writer.writerow(["Name", "Job title", "Team", "Email", "Start date", "Finish date"])
     for p in people:
+        mine = p.pk in managed
         writer.writerow([
-            p.name, p.job_title, p.team.name if p.team else "", p.email,
-            p.start_date.isoformat(), p.end_date.isoformat() if p.end_date else "",
+            p.name, p.job_title, p.team.name if p.team else "", p.email if mine else "",
+            p.start_date.isoformat() if mine else "",
+            p.end_date.isoformat() if mine and p.end_date else "",
         ])
     return response
 
@@ -50,13 +53,14 @@ def staff(request):
     if team:
         people = people.filter(team__name=team)
     people = people.distinct()
+    managed = {p.pk for p in access.managed_people(request.user)} if manager else set()
     if manager and request.GET.get("download"):
-        return _csv(people)
+        return _csv(people, managed)
     return render(request, "people/staff.html", {
         "page_title": "Staff", "people": people, "show": show, "team": team,
         "teams": Team.objects.filter(active=True),
         "health": health.figures(request.user) if manager else None,
-        "managed": {p.pk for p in access.managed_people(request.user)} if manager else set(),
+        "managed": managed,
         "me_pk": me.pk if me is not None else None,
     })
 

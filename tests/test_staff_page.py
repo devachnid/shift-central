@@ -130,3 +130,19 @@ def test_add_staff_points_at_practice_hr(oidc_on):
     body = _client(boss, is_all_teams_manager=True).get("/staff/add/").content.decode()
     assert "Practice HR" in body and 'href="https://hr.example/admin/people/employee/add/"' in body
     assert 'action="/staff/sync/"' in body
+
+
+def test_a_team_manager_sees_contact_details_for_their_own_team_only():
+    nursing = make_team("Nursing")
+    lead = make_person(first_name="Lead", team=nursing)
+    make_team_manager(lead, nursing)
+    nurse = make_person(first_name="Nina", team=nursing)
+    rec = make_person(first_name="Rec", start_date=date(2021, 3, 4))
+    c = _client(lead)
+    table = c.get("/staff/").content.decode().split("<tbody>")[1]
+    assert nurse.email in table
+    assert rec.name in table and rec.email not in table and "4 Mar 2021" not in table
+    csv_text = c.get("/staff/?download=1").content.decode()
+    assert nurse.email in csv_text
+    assert rec.email not in csv_text and "2021-03-04" not in csv_text
+    assert any(line.startswith("Rec Patel,") and line.endswith(",,,") for line in csv_text.splitlines())

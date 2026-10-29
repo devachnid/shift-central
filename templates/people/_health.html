@@ -7,7 +7,7 @@
     <form method="post" action="{% url 'staff-sync' %}">{% csrf_token %}<button class="btn btn-quiet">Sync now</button></form>
   </div>
   <div class="health-item{% if health.needs_setup %} is-warning{% endif %}">Needs hours and allowances<strong>{{ health.needs_setup.count }}</strong>
-    {% for p in health.needs_setup|slice:":5" %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+    {% for p in health.needs_setup|slice:":5" %}<a href="{% url 'profile' p.pk %}" data-dialog>{{ p.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>
   <div class="health-item{% if health.not_seen %} is-bad{% endif %}">Not in Practice HR's feed for a day<strong>{{ health.not_seen.count }}</strong>
     {% for p in health.not_seen|slice:":5" %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
   <div class="health-item{% if health.leaving_soon %} is-warning{% endif %}">Leaving in the next 30 days<strong>{{ health.leaving_soon.count }}</strong>

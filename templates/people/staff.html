@@ -27,10 +27,10 @@
   <tbody>
   {% for p in people %}
   <tr>
-    <td><span class="chip" style="background:{{ p.name_colour }}">{{ p.name }}</span></td>
+    <td>{% if p.pk in managed or p.pk == me_pk %}<a href="{% url 'profile' p.pk %}" data-dialog class="chip" style="background:{{ p.name_colour }}">{{ p.name }}</a>{% else %}<span class="chip" style="background:{{ p.name_colour }}">{{ p.name }}</span>{% endif %}</td>
     <td>{{ p.job_title }}</td>
     <td>{{ p.team.name|default:"—" }}</td>
-    {% if is_manager %}<td>{{ p.email }}</td><td>{{ p.start_date|date:"j M Y" }}</td><td>{{ p.end_date|date:"j M Y"|default:"" }}</td>{% endif %}
+    {% if is_manager %}{% if p.pk in managed %}<td>{{ p.email }}</td><td>{{ p.start_date|date:"j M Y" }}</td><td>{{ p.end_date|date:"j M Y"|default:"" }}</td>{% else %}<td></td><td></td><td></td>{% endif %}{% endif %}
   </tr>
   {% empty %}<tr><td colspan="6">Nobody matches.</td></tr>{% endfor %}
   </tbody>

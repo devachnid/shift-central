@@ -1,0 +1,26 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}{{ title }}{% endblock %}
+{% block dialog_body %}
+<div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+  <span class="avatar" style="background:{{ person.name_colour }}">{{ person.initials }}</span>
+  <div><strong>{{ person.name }}</strong><br><span class="field-help">{{ person.team.name|default:"No team" }}{% if person.job_title %} · {{ person.job_title }}{% endif %}</span></div>
+</div>
+<nav class="tabs">
+  <a class="tab{% if tab == 'general' %} is-active{% endif %}" href="{% url 'profile' person.pk %}?tab=general">General</a>
+  <a class="tab{% if tab == 'display' %} is-active{% endif %}" href="{% url 'profile' person.pk %}?tab=display">Display</a>
+  <a class="tab{% if tab == 'hours' %} is-active{% endif %}" href="{% url 'profile' person.pk %}?tab=hours">Pay &amp; time off</a>
+  {% if manages %}<a class="tab{% if tab == 'notes' %} is-active{% endif %}" href="{% url 'profile' person.pk %}?tab=notes">Notes</a>{% endif %}
+</nav>
+{% if saved %}<div class="flash">Saved.</div>{% endif %}
+{% if tab == "general" %}{% include "people/_profile_general.html" %}
+{% elif tab == "display" %}{% include "people/_profile_display.html" %}
+{% elif tab == "hours" %}{% include "people/_profile_hours.html" %}
+{% elif tab == "notes" %}{% include "people/_profile_notes.html" %}{% endif %}
+{% endblock %}
+{% block dialog_links %}
+{% if manages %}
+<div class="dialog-links">
+  <a href="{% url 'profile-history' person.pk %}" data-dialog>History</a>
+</div>
+{% endif %}
+{% endblock %}
