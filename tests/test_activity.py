@@ -63,10 +63,11 @@ def test_the_activity_page_links_to_the_login_logs_for_all_teams_managers_only()
     assert 'href="/activity/logins/"' not in _client(lead).get("/activity/").content.decode()
 
 
-def test_a_bad_person_filter_shows_nothing_rather_than_an_error():
+@pytest.mark.parametrize("bad", ["abc", "²", "①", "-1"])
+def test_a_bad_person_filter_shows_nothing_rather_than_an_error(bad):
     boss_person = make_person(first_name="Boss")
     c = _client(boss_person, is_all_teams_manager=True)
     profiles.update_display(boss_person.user, make_person(first_name="Nina"), job_title="Nurse")
-    response = c.get("/activity/?person=abc")
+    response = c.get("/activity/", {"person": bad})
     assert response.status_code == 200
     assert "Nurse" not in response.content.decode()

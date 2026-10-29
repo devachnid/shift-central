@@ -18,7 +18,8 @@ def activity(request):
         | Q(model="people.department"))
     person = request.GET.get("person")
     if person:
-        p = people.filter(pk=person).first() if person.isdigit() else None
+        # isdigit() alone admits superscripts and circled digits that int() refuses
+        p = people.filter(pk=person).first() if person.isascii() and person.isdigit() else None
         if p is None:
             entries = entries.none()
         else:
