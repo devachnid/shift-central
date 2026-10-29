@@ -1,0 +1,13 @@
+[Unit]
+Description=Read the people feed from Practice HR every fifteen minutes
+
+[Timer]
+# Every quarter hour, so a starter or a leaving date entered in Practice HR
+# reaches the Staff list within fifteen minutes. The random minute of delay
+# keeps the call from landing on the same second as the box's other timers.
+OnCalendar=*-*-* *:0/15:00
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

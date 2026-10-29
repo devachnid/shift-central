@@ -1,0 +1,11 @@
+[Unit]
+Description=Clear expired Shift Central sessions nightly
+
+[Timer]
+# Sessions last ten minutes from the last request, and every sign-in leaves
+# a row behind, so the table only grows until this runs.
+OnCalendar=*-*-* 03:10:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
