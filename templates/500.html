@@ -1,3 +1,5 @@
 {% extends "base.html" %}
-{% block title %}500 · AMG Shift Central{% endblock %}
-{% block content %}<p>Something went wrong on our side. Please try again in a moment.</p>{% endblock %}
+{% block title %}Something went wrong · AMG Shift Central{% endblock %}
+{# Both blocks: signed-in pages show "content", signed-out ones (and the 500, which has no context) "auth". #}
+{% block content %}{% include "ui/_error.html" with heading="Something went wrong" message="The error has been logged. Try again in a moment." %}{% endblock %}
+{% block auth %}{% include "ui/_error.html" with heading="Something went wrong" message="The error has been logged. Try again in a moment." %}{% endblock %}

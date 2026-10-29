@@ -2,7 +2,7 @@
 {% block title %}Log in · AMG Shift Central{% endblock %}
 {% block auth %}
 <div class="auth-card">
-  <img src="{% static 'img/logo-dark.svg' %}" alt="AMG Shift Central" style="background:#143D5C;border-radius:6px;padding:12px">
+  <img src="{% static 'img/logo-dark.svg' %}" alt="AMG Shift Central">
   <h1>Log in</h1>
   {% for error in form.non_field_errors %}<p class="field-error" role="alert">{{ error }}</p>{% endfor %}
   {% if settings_practice_hr_url %}

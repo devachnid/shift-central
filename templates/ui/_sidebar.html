@@ -4,7 +4,7 @@
   <nav class="sidebar-nav" aria-label="Sections">
     {% for item in nav_items %}
     <div class="nav-item{% if item.active %} is-active{% endif %}" data-nav="{{ item.key }}">
-      <a class="nav-link" href="{{ item.url }}">
+      <a class="nav-link" href="{{ item.url }}" aria-label="{{ item.label }}">
         <svg class="nav-icon" aria-hidden="true"><use href="{% static 'img/icons.svg' %}#{{ item.icon }}"></use></svg>
         <span class="nav-label">{{ item.label }}</span>
       </a>
@@ -16,7 +16,7 @@
   </nav>
   <div class="sidebar-foot">
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}
-      <button type="submit"><svg class="nav-icon" aria-hidden="true"><use href="{% static 'img/icons.svg' %}#logout"></use></svg><span class="nav-label">Log out</span></button>
+      <button type="submit" aria-label="Log out"><svg class="nav-icon" aria-hidden="true"><use href="{% static 'img/icons.svg' %}#logout"></use></svg><span class="nav-label">Log out</span></button>
     </form>
   </div>
 </aside>

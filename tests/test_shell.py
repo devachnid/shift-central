@@ -67,3 +67,33 @@ def test_the_logo_and_brand_colours_are_in_place():
 def test_the_login_page_uses_the_shell_without_the_side_panel(client):
     body = client.get("/accounts/login/").content.decode()
     assert "auth-card" in body and 'class="sidebar"' not in body
+
+
+# --- error pages --------------------------------------------------------------
+
+def test_a_missing_page_says_so_even_signed_out(client):
+    assert "Page not found" in client.get("/no/such/page/").content.decode()
+
+
+def test_the_500_page_renders_without_any_context():
+    from django.template.loader import render_to_string
+    assert "Something went wrong" in render_to_string("500.html")
+
+
+def test_the_403_page_renders_for_a_signed_out_visitor():
+    from django.contrib.auth.models import AnonymousUser
+    from django.template.loader import render_to_string
+    assert "You can't open that" in render_to_string("403.html", {"user": AnonymousUser()})
+
+
+def test_the_403_page_renders_inside_the_shell_when_signed_in():
+    from django.template.loader import render_to_string
+    user = make_user_for(make_person())
+    body = render_to_string("403.html", {"user": user, "nav_items": []})
+    assert "You can't open that" in body and 'class="sidebar"' in body
+
+
+def test_the_sidebar_names_its_links_and_the_dialog_is_labelled():
+    body = _client_for(make_person()).get("/staff/").content.decode()
+    assert 'aria-label="Staff"' in body and 'aria-label="Log out"' in body
+    assert 'aria-labelledby="dialog-title"' in body

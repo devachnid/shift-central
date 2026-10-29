@@ -2,11 +2,17 @@
 html { font: var(--fs-md)/1.4 var(--font); color: var(--ink); background: var(--ground); }
 body { margin: 0; min-height: 100vh; }
 a { color: var(--navy); }
+/* The `all: unset` controls (collapse toggle, Log out, dialog close) lose the
+   browser's ring, so one visible focus style covers everything. */
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
 /* --- layout: panel left, bar top, page below ---------------------------- */
 .app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
 .app.is-collapsed { grid-template-columns: var(--sidebar-w-collapsed) 1fr; }
-.sidebar { background: var(--navy); color: var(--white); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+/* A grid item defaults to min-width:auto, so a wide table would stretch the page
+   instead of scrolling inside it. */
+.app-main { min-width: 0; }
+.sidebar { background: var(--navy); color: var(--white); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; z-index: 15; /* above the top bar (10) so flyouts (20, inside this context) overlap it */ }
 .sidebar-logo { padding: var(--sp-3) var(--sp-4); }
 .sidebar-logo img { width: 100%; max-width: 180px; display: block; }
 .is-collapsed .sidebar-logo img { content: url("../img/icon.svg"); max-width: 32px; }
@@ -34,7 +40,7 @@ a { color: var(--navy); }
 .topbar-action.is-primary { color: var(--amber-ink); background: var(--amber); padding: 5px 10px; border-radius: var(--radius); font-weight: 700; }
 .topbar-end { margin-left: auto; display: flex; gap: var(--sp-3); align-items: center; color: var(--muted); font-size: var(--fs-sm); }
 .collapse-toggle { all: unset; cursor: pointer; padding: 4px; color: var(--muted); }
-.page { padding: var(--sp-4); }
+.page { padding: var(--sp-4); overflow-x: auto; }
 
 /* --- tables, buttons, fields, chips ----------------------------------- */
 .table { width: 100%; border-collapse: collapse; background: var(--surface); font-size: var(--fs-md); }
@@ -81,13 +87,19 @@ a { color: var(--navy); }
 /* --- signed-out pages ------------------------------------------------------ */
 .auth-wrap { min-height: 100vh; display: grid; place-items: center; background: var(--navy); }
 .auth-card { background: var(--surface); padding: var(--sp-6); border-radius: 8px; width: min(420px, 92vw); }
-.auth-card img { width: 220px; display: block; margin: 0 auto var(--sp-5); }
+.auth-card img { width: 220px; display: block; margin: 0 auto var(--sp-5); border-radius: 6px; }
 
 /* --- phone ------------------------------------------------------------------- */
 @media (max-width: 767px) {
   .app, .app.is-collapsed { grid-template-columns: 1fr; }
   .sidebar { position: fixed; bottom: 0; top: auto; height: 56px; width: 100%; flex-direction: row; z-index: 30; }
-  .sidebar-logo, .sidebar-foot, .nav-flyout, .collapse-toggle { display: none; }
+  .sidebar-logo, .nav-flyout, .collapse-toggle { display: none; }
+  /* Log out stays in the bar, laid out like a nav link. */
+  .sidebar-foot { border: 0; padding: 0; }
+  .sidebar-foot button { flex-direction: column; gap: 2px; font-size: var(--fs-xs); padding: 6px; width: auto; }
+  /* A collapsed state synced from a desktop must not unlabel the bottom bar. */
+  .is-collapsed .nav-label { display: block; }
+  .table th { position: static; } /* the top bar is no longer a fixed 48px here */
   .sidebar-nav { flex-direction: row; justify-content: space-around; padding: 0; }
   .nav-link { flex-direction: column; gap: 2px; font-size: var(--fs-xs); padding: 6px; }
   .page { padding-bottom: 72px; }
