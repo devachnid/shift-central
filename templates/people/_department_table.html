@@ -1,0 +1,14 @@
+<table class="table">
+  <thead><tr><th>Name</th><th>Colour</th><th>Order</th><th>Date added</th><th></th></tr></thead>
+  <tbody>
+  {% for d in departments %}
+  <tr>
+    <td><span class="chip" style="background:{{ d.colour }}">{{ d.name }}</span></td>
+    <td>{{ d.colour }}</td>
+    <td>{{ d.display_order }}</td>
+    <td>{{ d.created_at|date:"j M Y" }}</td>
+    <td><a href="{% url 'department-edit' d.pk %}" data-dialog>Edit</a></td>
+  </tr>
+  {% empty %}<tr><td colspan="5">None.</td></tr>{% endfor %}
+  </tbody>
+</table>
