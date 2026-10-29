@@ -19,3 +19,7 @@ in the requirements README.
 
 Design specs and implementation plans will go in `docs/superpowers/specs/`
 and `docs/superpowers/plans/`, as in the rota and HR repositories.
+
+## Develop
+
+The grid and the colour picker are built from `frontend/` with Vite: `cd frontend && npm install && npm run build` writes `static/dist/`, which is committed. Run the build before committing a frontend change; CI fails on a stale bundle. `npm run dev` rebuilds on save.

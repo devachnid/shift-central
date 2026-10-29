@@ -34,7 +34,9 @@
     }
     if (first) { first.focus(); }
   }
-  function show(html) { dialog.innerHTML = html; focusFirst(); }
+  // Islands (the colour picker) inside new dialog HTML mount on this event.
+  function mounted() { document.dispatchEvent(new CustomEvent("shift-central:mounted", { detail: dialog })); }
+  function show(html) { dialog.innerHTML = html; mounted(); focusFirst(); }
 
   var UNREACHABLE = "The server couldn't be reached. Check your connection and try again.";
 
@@ -72,6 +74,7 @@
       + '<button type="button" class="close" data-dialog-close aria-label="Close">\u00d7</button></div>'
       + '<div class="dialog-body"></div></div>';
     dialog.querySelector(".dialog-body").appendChild(flash(p));
+    mounted();
     focusFirst();
   }
 
