@@ -22,9 +22,10 @@ def test_record_writes_one_row_per_changed_field(all_teams_user):
 
 def test_the_sync_writes_as_practice_hr(db):
     p = make_person()
-    audit.record(None, p, {"end_date": ("None", "2026-12-31")}, note=audit.SYNC_NOTE)
+    audit.record(None, p, {"end_date": (None, "2026-12-31")}, note=audit.SYNC_NOTE)
     row = AuditEntry.objects.get()
     assert row.actor is None and row.actor_email == audit.SYNC_ACTOR_EMAIL
+    assert row.before == "" and row.after == "2026-12-31"
     assert row.note == "from Practice HR"
 
 

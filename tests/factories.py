@@ -19,7 +19,8 @@ def make_person(**kw):
     kw.setdefault("last_name", "Patel")
     kw.setdefault("name", f"{kw['first_name']} {kw['last_name']}")
     kw.setdefault("email", f"{kw['first_name'].lower()}.{kw['hr_employee_id']}@example.org")
-    kw.setdefault("team", make_team())
+    if "team" not in kw:
+        kw["team"] = make_team()
     kw.setdefault("start_date", date(2024, 1, 8))
     return Person.objects.create(**kw)
 

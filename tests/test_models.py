@@ -12,7 +12,13 @@ pytestmark = pytest.mark.django_db
 
 def test_average_day_is_weekly_hours_over_days(db):
     p = make_person(weekly_hours=Decimal("30.00"), days_per_week=5)
-    assert p.average_day == Decimal("6")
+    assert p.average_day == Decimal("6.00")
+
+
+def test_average_day_keeps_two_places_for_whole_tens(db):
+    p = make_person(weekly_hours=Decimal("40.00"), days_per_week=4)
+    assert p.average_day == Decimal("10.00")
+    assert str(p.average_day) == "10.00"
 
 
 def test_average_day_is_none_without_hours_or_days(db):

@@ -62,10 +62,11 @@ class Person(models.Model):
 
     @property
     def average_day(self):
-        """Weekly hours over days per week (PAT-05); None until both are set."""
+        """Weekly hours over days per week (PAT-05), to two places as the
+        profile shows it; None until both are set."""
         if self.weekly_hours is None or not self.days_per_week:
             return None
-        return (self.weekly_hours / Decimal(self.days_per_week)).normalize()
+        return (self.weekly_hours / Decimal(self.days_per_week)).quantize(Decimal("0.01"))
 
     def current(self, on=None):
         on = on or timezone.localdate()
