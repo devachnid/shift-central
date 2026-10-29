@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+db.sqlite3
+db.sqlite3-*
+staticfiles/
+backups/
+.superpowers/
+graphify-out/
+.dev_secret_key
+frontend/node_modules/

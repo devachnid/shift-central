@@ -1,0 +1,7 @@
+# CI runs `ruff check` with exactly this configuration. Only pyflakes:
+# undefined names, unused imports and variables — the bug class a test can
+# miss in a branch it never runs. Style is not linted.
+extend-exclude = ["migrations", ".venv", "staticfiles", "frontend", "static/dist"]
+
+[lint]
+select = ["F"]
