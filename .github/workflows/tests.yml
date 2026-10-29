@@ -58,4 +58,5 @@ jobs:
         working-directory: frontend
       - run: npm run build
         working-directory: frontend
-      - run: git diff --exit-code -- static/dist
+      # A new, untracked build file fails too: git diff alone misses it.
+      - run: git diff --exit-code -- static/dist && test -z "$(git status --porcelain -- static/dist)"

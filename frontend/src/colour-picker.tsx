@@ -2,8 +2,13 @@ import { useEffect, useState } from "preact/hooks";
 import "./colour-picker.css";
 
 /** The swatch grid and hex field for a person's name colour and a
- *  department's colour. Writes to the hidden input named by data-input. */
-export function ColourPicker({ input }: { input: string }) {
+ *  department's colour. Writes to the hidden input named by data-input;
+ *  data-label names the field's <label>, which titles the swatch group.
+ *
+ *  The swatches are a group of toggle buttons (aria-pressed), not a
+ *  listbox: each is a plain button that Tab reaches and Enter or Space
+ *  presses, so no arrow-key handling is owed. */
+export function ColourPicker({ input, label }: { input: string; label?: string }) {
   const target = document.getElementById(input) as HTMLInputElement | null;
   const swatches = getComputedStyle(document.documentElement)
     .getPropertyValue("--swatches").split(",").map((s) => s.trim()).filter(Boolean);
@@ -20,9 +25,9 @@ export function ColourPicker({ input }: { input: string }) {
 
   return (
     <div class="colour-picker">
-      <div class="colour-picker-swatches" role="listbox" aria-label="Colour">
+      <div class="colour-picker-swatches" role="group" aria-labelledby={label}>
         {swatches.map((hex) => (
-          <button type="button" role="option" aria-selected={hex.toUpperCase() === value.toUpperCase()}
+          <button type="button" aria-pressed={hex.toUpperCase() === value.toUpperCase()} aria-label={hex}
                   class="colour-picker-swatch" style={{ background: hex }} title={hex}
                   onClick={() => choose(hex)} />
         ))}

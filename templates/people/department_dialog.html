@@ -9,9 +9,9 @@
     {% for e in form.name.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
   </div>
   <div class="field{% if form.colour.errors %} has-error{% endif %}">
-    <label>Colour</label>
+    <label id="colour-label">Colour</label>
     <input type="hidden" name="colour" id="id_colour" value="{{ form.colour.value|default:'' }}">
-    <div data-component="colour-picker" data-input="id_colour"></div>
+    <div data-component="colour-picker" data-input="id_colour" data-label="colour-label"></div>
     {% for e in form.colour.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
   </div>
   <div class="field{% if form.display_order.errors %} has-error{% endif %}">

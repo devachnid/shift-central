@@ -35,8 +35,8 @@
   --topbar-h: 48px;
 }
 
-/* The swatches offered for a person's name and a department (frontend/src/
-   colour-picker.tsx reads the same list from its data attribute). */
+/* The swatches offered for a person's name and a department. The one list:
+   frontend/src/colour-picker.tsx reads this property with getComputedStyle. */
 :root {
   --swatches: #C94C4C,#D96C8A,#B6568A,#9A4C8A,#7A5EB3,#2F6FB3,#5B8FD6,#3A6E8A,#3A8A8A,#6AA2C2,#2A7F62,#5E9E5E,#8A8A3A,#E0A030,#D98E2C,#8C7B6B,#143D5C,#6B7280;
 }
