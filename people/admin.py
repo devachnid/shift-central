@@ -1,7 +1,9 @@
 """The admin shows people's data for setup and repair. Every edit happens
 on the app's own pages, through the services, so it is audited; so here the
 audited models are read-only. Deleting a person who has left HR's feed is
-the one act left to the superuser here."""
+the one act left to the superuser here; their allowances and manager grants
+go with them, so those two admins allow a delete too (Django refuses a
+cascade into a model whose admin refuses it), though never an add or edit."""
 
 from django.contrib import admin
 from unfold.admin import ModelAdmin
@@ -38,6 +40,7 @@ class PersonAdmin(ReadOnlyModelAdmin):
 
 @admin.register(Allowance)
 class AllowanceAdmin(ReadOnlyModelAdmin):
+    deletable = True
     list_display = ("person", "leave_year", "annual_hours", "bank_holiday_hours")
 
 
@@ -48,6 +51,7 @@ class DepartmentAdmin(ReadOnlyModelAdmin):
 
 @admin.register(TeamManager)
 class TeamManagerAdmin(ReadOnlyModelAdmin):
+    deletable = True
     list_display = ("person", "team", "granted_by", "granted_at")
 
 
