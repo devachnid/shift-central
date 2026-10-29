@@ -1,0 +1,201 @@
+"""Who a sign-in is: HR's sub, bound at first sight; the person, bound by
+employee_id; all-teams manager from the admin claim; and the log-in log."""
+
+from urllib.parse import parse_qs, urlsplit
+
+import pytest
+from django.contrib.auth import get_user_model
+from django.core.exceptions import SuspiciousOperation
+
+from accounts.models import LoginEvent
+from accounts.oidc import PracticeAccountBackend
+from tests.factories import make_person
+
+User = get_user_model()
+pytestmark = pytest.mark.django_db
+ONLY_HR = "Sign in with the practice account."
+
+
+def _sign_in(claims, monkeypatch):
+    b = PracticeAccountBackend()
+    monkeypatch.setattr(b, "get_userinfo", lambda *a: claims)
+    return b.get_or_create_user("access", "id", {})
+
+
+# --- the login page ----------------------------------------------------------
+
+def test_the_login_page_offers_only_the_practice_account_when_configured(client, oidc_on):
+    body = client.get("/accounts/login/").content.decode()
+    assert "Sign in with the practice account" in body and "/oidc/authenticate/" in body
+    assert 'name="password"' not in body
+
+
+def test_without_hr_the_superusers_password_form_shows(client, settings):
+    settings.PRACTICE_HR_URL = ""
+    body = client.get("/accounts/login/").content.decode()
+    assert 'id="login-form"' in body and "practice account" not in body
+
+
+def test_with_hr_nobody_uses_a_password(client, oidc_on, superuser):
+    r = client.post("/accounts/login/", {"username": "root@example.org", "password": "pw"})
+    assert r.status_code == 200 and "_auth_user_id" not in client.session
+    assert ONLY_HR in r.content.decode()
+
+
+# --- binding --------------------------------------------------------------------
+
+def test_the_first_sign_in_binds_the_sub(monkeypatch):
+    u = User.objects.create_user(email="tom@example.org")
+    assert _sign_in({"sub": "12", "email": "Tom@Example.org"}, monkeypatch) == u
+    u.refresh_from_db()
+    assert u.oidc_sub == "12"
+
+
+def test_later_sign_ins_match_on_sub_whatever_the_email_says(monkeypatch):
+    u = User.objects.create_user(email="tom@example.org", oidc_sub="12")
+    assert _sign_in({"sub": "12", "email": "tom.h@example.org"}, monkeypatch) == u
+    assert User.objects.count() == 1
+
+
+def test_an_edited_email_cannot_take_over_a_bound_account(monkeypatch):
+    boss = User.objects.create_user(email="boss@example.org", oidc_sub="1")
+    with pytest.raises(SuspiciousOperation):
+        _sign_in({"sub": "99", "email": "boss@example.org"}, monkeypatch)
+    boss.refresh_from_db()
+    assert boss.oidc_sub == "1" and User.objects.count() == 1
+
+
+def test_a_new_person_is_created_bound_to_their_sub_with_no_password(monkeypatch):
+    u = _sign_in({"sub": "40", "email": "new@example.org"}, monkeypatch)
+    assert u.oidc_sub == "40" and not u.has_usable_password() and not u.is_all_teams_manager
+
+
+def test_employee_id_binds_the_person(monkeypatch):
+    p = make_person(hr_employee_id=7, email="sam@example.org")
+    u = _sign_in({"sub": "40", "email": "sam@example.org", "employee_id": 7}, monkeypatch)
+    p.refresh_from_db()
+    assert p.user == u
+
+
+def test_a_changed_employee_id_rebinds_and_unbinds_the_old_person(monkeypatch):
+    old = make_person(hr_employee_id=7)
+    new = make_person(hr_employee_id=8)
+    u = User.objects.create_user(email="sam@example.org", oidc_sub="40")
+    old.user = u
+    old.save()
+    _sign_in({"sub": "40", "email": "sam@example.org", "employee_id": 8}, monkeypatch)
+    old.refresh_from_db()
+    new.refresh_from_db()
+    assert old.user is None and new.user == u
+
+
+def test_an_employee_id_naming_nobody_here_still_signs_in(monkeypatch):
+    u = _sign_in({"sub": "40", "email": "sam@example.org", "employee_id": 999}, monkeypatch)
+    assert u.pk and not hasattr(u, "person")
+
+
+def test_a_user_whose_person_is_bound_elsewhere_is_moved_not_duplicated(monkeypatch):
+    """Two users cannot share a person: a sign-in with that employee_id
+    takes it from the user that had it."""
+    p = make_person(hr_employee_id=7)
+    other = User.objects.create_user(email="old@example.org", oidc_sub="1")
+    p.user = other
+    p.save()
+    u = _sign_in({"sub": "40", "email": "sam@example.org", "employee_id": 7}, monkeypatch)
+    p.refresh_from_db()
+    assert p.user == u
+
+
+# --- the admin claim -----------------------------------------------------------
+
+def test_the_admin_claim_makes_an_all_teams_manager_both_ways(monkeypatch):
+    u = User.objects.create_user(email="tom@example.org", oidc_sub="12")
+    _sign_in({"sub": "12", "email": "tom@example.org", "admin": True}, monkeypatch)
+    u.refresh_from_db()
+    assert u.is_all_teams_manager and not u.is_staff
+    _sign_in({"sub": "12", "email": "tom@example.org", "admin": False}, monkeypatch)
+    u.refresh_from_db()
+    assert not u.is_all_teams_manager
+
+
+@pytest.mark.parametrize("claim", [None, "true", 1])
+def test_only_a_true_claim_makes_a_manager(monkeypatch, claim):
+    assert not _sign_in({"sub": "40", "email": "new@example.org", "admin": claim},
+                        monkeypatch).is_all_teams_manager
+
+
+def test_nothing_is_saved_when_nothing_changed(monkeypatch):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+    User.objects.create_user(email="tom@example.org", oidc_sub="12", is_all_teams_manager=True)
+    with CaptureQueriesContext(connection) as queries:
+        _sign_in({"sub": "12", "email": "tom@example.org", "admin": True}, monkeypatch)
+    assert not [q for q in queries if q["sql"].startswith("UPDATE")]
+
+
+# --- the holding page ----------------------------------------------------------
+
+def test_a_signed_in_user_with_no_person_lands_on_the_holding_page(staff_client):
+    r = staff_client.get("/", follow=True)
+    assert r.redirect_chain[-1][0].startswith("/accounts/not-on-rota/")
+    assert "not yet on the rota" in r.content.decode()
+
+
+def test_the_holding_page_is_the_only_page_such_a_user_reaches(staff_client):
+    assert staff_client.get("/staff/").status_code == 302
+
+
+def test_a_user_with_a_person_passes_through(client, db):
+    p = make_person()
+    from tests.factories import make_user_for
+    client.force_login(make_user_for(p))
+    assert client.get("/staff/").status_code == 200
+
+
+# --- the log-in log -------------------------------------------------------------
+
+def test_every_sign_in_is_logged_with_the_cloudflare_address(client, settings, db):
+    settings.PRACTICE_HR_URL = ""
+    User.objects.create_user(email="sam@example.org", password="a-long-Passw0rd!")
+    client.post("/accounts/login/", {"username": "sam@example.org", "password": "a-long-Passw0rd!"},
+                REMOTE_ADDR="127.0.0.1", HTTP_CF_CONNECTING_IP="203.0.113.10",
+                HTTP_USER_AGENT="x" * 300)
+    e = LoginEvent.objects.get()
+    assert e.user.email == "sam@example.org" and e.ip == "203.0.113.10"
+    assert len(e.user_agent) == 200
+
+
+# --- signing out -----------------------------------------------------------------
+
+def test_logging_out_goes_on_to_hrs_sign_out(client, oidc_on, db):
+    client.force_login(User.objects.create_user(email="sam@example.org"))
+    session = client.session
+    session["oidc_id_token"] = "the.id.token"
+    session.save()
+    r = client.post("/accounts/logout/")
+    url = urlsplit(r["Location"])
+    assert f"{url.scheme}://{url.netloc}{url.path}" == "https://hr.example/o/logout/"
+    assert parse_qs(url.query) == {"post_logout_redirect_uri": ["http://testserver/accounts/login/"],
+                                   "client_id": ["abc"], "id_token_hint": ["the.id.token"]}
+    assert "_auth_user_id" not in client.session and r["Clear-Site-Data"] == '"cache"'
+
+
+def test_without_hr_logout_is_unchanged(client, settings, db):
+    settings.PRACTICE_HR_URL = ""
+    client.force_login(User.objects.create_user(email="sam@example.org"))
+    assert client.post("/accounts/logout/")["Location"] == "/accounts/login/"
+
+
+# --- sessions ------------------------------------------------------------------------
+
+def test_a_request_after_ten_minutes_is_signed_out(client, db, monkeypatch):
+    import datetime
+    from django.utils import timezone
+    from tests.factories import make_user_for
+    client.force_login(make_user_for(make_person()))
+    assert client.get("/staff/").status_code == 200
+    later = timezone.now() + datetime.timedelta(seconds=601)
+    # The db session backend reads expire_date against timezone.now(); the
+    # session was stamped at force_login, 601 seconds ago by this clock.
+    monkeypatch.setattr("django.utils.timezone.now", lambda: later)
+    assert client.get("/staff/").status_code == 302

@@ -67,6 +67,26 @@ class PrivatePagesMiddleware:
         return response
 
 
+class PersonRequiredMiddleware:
+    """A signed-in account with no Person reaches only the holding page,
+    the admin and sign-out (spec, section 2). Superusers pass: setup
+    happens before anyone is synced."""
+
+    EXEMPT = ("/accounts/", "/admin/", "/oidc/", "/static/")
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = request.user
+        if (user.is_authenticated and not user.is_superuser
+                and not request.path.startswith(self.EXEMPT)
+                and not hasattr(user, "person")):
+            from django.shortcuts import redirect
+            return redirect("not_on_rota")
+        return self.get_response(request)
+
+
 # No script runs but the app's own files: nothing inline, no eval, nothing
 # from another origin. Styles may be inline — the session tints are style
 # attributes and {% palette_css %} a <style> block — which lets a style be
