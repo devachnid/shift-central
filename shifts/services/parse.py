@@ -100,9 +100,17 @@ def _department(rest, departments):
 
 
 def _comment(text):
-    """Whitespace collapsed, cut at 200 characters, and the punctuation
-    left at either end of it (from '9-5.' or '9-5, wfh') dropped."""
-    return " ".join(text.split())[:200].strip(" ,.:;")
+    """Whitespace collapsed and cut at 200 characters: a comment line as
+    typed."""
+    return " ".join(text.split())[:200]
+
+
+def _leftover(text):
+    """What is left of a shift line once its parts are taken out, with the
+    punctuation left at either end of it (from '9-5.' or '9-5, wfh')
+    dropped. Only a shift's leftover is tidied: a pure comment such as
+    'OFF.' or '...' keeps what was typed."""
+    return _comment(text).strip(" ,.:;")
 
 
 def line(text, departments):
@@ -124,7 +132,7 @@ def line(text, departments):
         overtime, rest = "paid", PAID.sub(" ", rest, count=1)
     department, rest = _department(rest, departments)
     return {"kind": "shift", "start": times[0], "finish": times[1], "break_minutes": break_minutes,
-            "department": department, "text": _comment(rest), "wfh": wfh, "overtime": overtime}
+            "department": department, "text": _leftover(rest), "wfh": wfh, "overtime": overtime}
 
 
 def cell(text, departments):

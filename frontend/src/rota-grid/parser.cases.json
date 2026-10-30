@@ -36,6 +36,8 @@
     {"line": "12:30-1", "expect": {"kind": "shift", "start": "12:30", "finish": "13:00", "break_minutes": 0, "department": null, "text": "", "wfh": false, "overtime": ""}},
     {"line": "13:00-2", "expect": {"kind": "comment", "text": "13:00-2"}},
     {"line": "1-5pm", "expect": {"kind": "shift", "start": "13:00", "finish": "17:00", "break_minutes": 0, "department": null, "text": "", "wfh": false, "overtime": ""}},
-    {"line": "8-4pm", "expect": {"kind": "shift", "start": "08:00", "finish": "16:00", "break_minutes": 0, "department": null, "text": "", "wfh": false, "overtime": ""}}
+    {"line": "8-4pm", "expect": {"kind": "shift", "start": "08:00", "finish": "16:00", "break_minutes": 0, "department": null, "text": "", "wfh": false, "overtime": ""}},
+    {"line": "...", "expect": {"kind": "comment", "text": "..."}},
+    {"line": "OFF.", "expect": {"kind": "comment", "text": "OFF."}}
   ]
 }
