@@ -152,7 +152,7 @@ open shifts (spec 5), break times, pay.
 day, snapped back to its Monday; `weeks` 1 to 20, default 1; default
 `from` is this week). Filters (section 6) live in the same query string.
 The Rota item is first in the side panel, its flyout: Rota, Who's in
-today (managers), Templates (managers). Reports follows Departments with
+today (managers); the top bar's Templates is the way to templates. Reports follows Departments with
 one child, Hours. The order matches FindMyShift's: Rota, Staff,
 Departments, Reports, Activity logs.
 
@@ -177,7 +177,7 @@ mounting on a resize that crosses it.
       "rows": [{"person": 12, "name": "Nina Patel", "colour": "#C0392B", "job_title": "Receptionist",
                 "team": "Reception", "is_gp": false, "editable": true,
                 "cells": {"2026-10-26": [ {entry}, … ], …},
-                "sessions": {"2026-10-26": [ {"part": "AM", "label": "Surgery", "site": "AG", "note": ""} ]}}, …],
+                "sessions": {"2026-10-26": [ {"part": "AM", "label": "Surgery", "site": "AG"} ]}}, …],
       "departments": [{"id": 3, "name": "Reception PMC", "colour": "#F2A33A"}, …],
       "common": [ {shape}, … ], "recent": [ {shape}, … ],
       "options": {…}, "unnotified": 4, "can_edit": true
@@ -276,7 +276,7 @@ JSON. Each mutation returns `{"cells": {"<person>": {"<day>": [entries]}},
 | `POST paste/` | `{anchor: [person, day], block, mode, row_order: [person…]}` | `entries.paste(user, anchor, block, mode, row_order)` — `mode` replace or add; rows are counted over `row_order`, the grid's row order |
 | `POST clear/` | `{cells}` | `entries.clear(user, cells)` |
 | `POST replace/` | `{cells, find, replace, match_case}` | `entries.replace(user, cells, find, replace, match_case)` — over each item's text line; a changed line is re-parsed; the island sends the window's cells for "whole window" |
-| `POST order/` | `{people: [id…]}` | `people.services.profiles.reorder(user, ids)` — atomic, refuses a non-manager itself; `display_order` set to 10, 20, 30… for the ids sent, audited |
+| `POST order/` | `{people: [id…]}` | `people.services.profiles.reorder(user, ids)` — atomic, refuses a non-manager itself; skips ids the user may not manage (`access.can_manage`, so never themselves); `display_order` set to 10, 20, 30… for the ids kept, in the order sent, audited |
 
 **The one writer** is `shifts/services/entries.py`. Every mutation:
 
@@ -304,10 +304,17 @@ a query per row, and `can_edit` is simply "the viewer is a manager".
 and keeps the existing items' appearance where a parsed item matches an
 old one by position and kind. `paste` writes each block cell at `anchor +
 offset`, skipping offsets that land on a row the viewer may not edit
-(reported in the answer as `skipped: n`) and days outside the window;
+(reported in the answer as `skipped: n`);
 `replace` mode clears the target first, `add` appends. A block cell may
-be `null` (a day the copy did not see, such as a hidden weekday): `paste`
-leaves that target untouched, whereas `[]` still clears it. `move` is copy
+be `null` (a day the copy did not see, such as a hidden weekday, or a cell
+inside the rectangle that was not selected): `paste` leaves that target
+untouched, whereas `[]` still clears it. A block cell may also be a
+string, text pasted from outside the island (one item per line):
+`paste` parses it with `parse.cell(text, unarchived departments)`, as
+`cell/` does typed text. A paste writes by calendar day from the anchor,
+so a block whose span crosses a weekday hidden at the target writes to
+that day too, and may write past the window's last day. Any mutation
+naming more than 2000 cells (cells sent, or a block's cells) is a 400. `move` is copy
 then clear of the source, in that order, inside the transaction.
 
 **Dialogs**, server-rendered under `/rota/…/` and fetched into `#dialog`:
@@ -341,7 +348,9 @@ audit hold and what the notify email prints.
 **Parser** (`shifts/services/parse.py`, mirrored in `parser.ts` for the
 live preview; the server's reading is what is stored; both are tested
 against one shared table, `frontend/src/rota-grid/parser.cases.json`, of
-38 rows). For each line:
+39 rows). Runs of whitespace are collapsed before a line is matched, and
+digits are `[0-9]` in both parsers (Python's `\d` is any Unicode digit,
+JavaScript's ASCII). For each line:
 
 1. `---` (three or more hyphens alone) → separator.
 2. A time range makes a shift. Each side is `H`, `HH`, `H:MM`, `HH:MM`,
@@ -381,15 +390,18 @@ behaviour too; the shift dialog is the exact way.
 relative to the block's top-left: `rows[r][d]` is the item list at row
 offset `r`, day offset `d` (a calendar-day offset, so a copied
 Monday-to-Friday block pastes onto the next Monday; a day the copy did
-not see is `null`). Items carry
+not see, or a cell inside the rectangle that was not selected, is
+`null`). Items carry
 kind, times, break, department id and name, text, overtime, wfh and
-appearance. Held in the island, saved to `localStorage`
-(`shift-central.clipboard`) so it survives a reload, and written to the
-system clipboard as tab-separated text (cells joined by ` / `) so a block
-can be pasted into Excel. A paste whose system clipboard text differs
-from the island's last copy is treated as plain text: each line goes to
-the anchor cell through `cell/`; tab-separated text fills cells rightward
-and lines downward.
+appearance. Held in the island, saved to `sessionStorage`
+(`shift-central.clipboard`) so it survives a reload but not the browser
+closing (practice PCs are shared), and written to the system clipboard
+as tab-separated text (cells joined by ` / `) so a block can be pasted
+into Excel. A paste whose system clipboard text differs from the
+island's last copy is treated as plain text: the island makes a block
+whose cells are strings (tab-separated text fills cells rightward and
+lines downward, ` / ` splits a cell into lines) and posts it to
+`paste/`, where the server parses each one.
 
 **Templates** store the same block. Apply is `paste/` with the stored
 block at the selected cell with the viewer's paste mode.
@@ -443,12 +455,16 @@ what spec 4 reads for the TOIL balance and the payroll report.
 
 **Hours report (REP-01, FMS 54)** at `/reports/hours/?from=&to=`, default
 this week, any range up to a year. Managers see the people they manage
-plus themselves; staff see themselves. One block per person headed
+plus themselves; staff see themselves; either way only people current on
+a day of the range, or with hours in it, are listed. One block per person headed
 "Nina Patel — 5 shifts / 37 h 30 min", a table of Day, Date, Start,
 Finish, Break, Hours, Overtime, with a subtotal row per week when the
 range spans more than one and a total per person. A GP session is a row
 with its part and label, Start and Finish blank, Hours 4 h 10 min. A
-comment is not a row. Download is CSV with the same columns plus Name.
+comment is not a row. Download is CSV with the same columns plus Name;
+a cell starting with `=`, `+`, `-` or `@` is prefixed with `'` so a
+spreadsheet shows it as text (`services/csv_safe.py`, as for the rota's
+CSV).
 `services/hours.py` returns the figures; the view only renders.
 `hours.report` returns `(blocks, start, end)` with the normalised range,
 and the weekly subtotals appear when the range spans more than one Monday
@@ -471,12 +487,13 @@ passes 768 px on most phones and the grid mounts, as FindMyShift's does.
 
 ## 8. Notify staff and messaging
 
-**`messaging.send(person, subject, body)`** writes an `Outbox` row, sends
-with Django's SMTP backend (`EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`,
-`EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL`, already in
-settings; the console backend when `EMAIL_HOST` is empty, `locmem` in
-tests), and records `sent_at` or `error` (the exception's class and a
-short message, never the body). It never raises; it returns the row.
+**`messaging.send(person, subject, body, connection=None)`** writes an
+`Outbox` row, sends with Django's SMTP backend (`EMAIL_HOST`,
+`EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`,
+`DEFAULT_FROM_EMAIL`, already in settings; `locmem` in tests) on the
+connection given, and records `sent_at` or `error` (the exception's class
+name, never the body). When `EMAIL_HOST` is empty there is no console
+fallback: nothing is tried and `error` is "mail not configured". It never raises; it returns the row.
 Plain text only; no attachments; one recipient per message.
 
 **The dialog** (`/rota/notify/`, managers): the people with `DayChange`
@@ -502,7 +519,13 @@ under "Your rota has changed. Here is what is different:" and above
 delete the rows and `audit.record` one entry (`model="shifts.entry"`,
 `field="notified"`, `after` = the count of days, note the person's name);
 if not, leave the rows for next time. Rows are deleted by the pks that
-were mailed, so a change made while sending is not lost. The dialog re-renders with what
+were mailed, so a change made while sending is not lost; a mailed day
+whose text changed again while the mail was built keeps its row, its
+`before` set to the text that was mailed. The batch goes over one SMTP
+connection (`get_connection()` opened once, closed at the end); after
+the first connection-level failure (an `OSError` or `SMTPException`,
+other than a refused recipient, from `open()` or a send) the remaining
+people are marked failed without being tried. The dialog re-renders with what
 went out and what failed, by name.
 
 The **Health card** gains "Unnotified rota changes over a week old: N",
@@ -539,7 +562,8 @@ DEBUG, refuses redirects, ten-second timeout, `GpError` on anything but a
 200 with the expected keys. `services/gp_sync.py`: `sync(client=None,
 now=None)` fetches from eight weeks before today to fifty-two after,
 matches each email to a `Person` with `is_gp` (case-insensitive,
-current or future), replaces the window's `GpSession` rows in one
+current on the sync day or starting after it, never a leaver; when two
+share an email the one current today wins), replaces the window's `GpSession` rows in one
 transaction (delete the window, bulk-create the new), de-duplicating by
 (person, day, part), first wins, and skipping records outside the
 fetched window (both counted), writes a `SyncRun` with `source="gp-rota"`,
@@ -568,17 +592,21 @@ reorder mode, entered by `?reorder=1` from a link in the dialog: the
 name column grows drag handles, dropping posts `order/`, Done leaves the
 mode. Managers only; staff do not see the
 item. "Days to display" hides the unticked weekdays' columns (the data
-still exists; a paste never lands on a hidden day).
+still exists). A paste writes by calendar day, so a block whose span
+crosses a hidden weekday at the target writes to that day too, and may
+write past the window's last day.
 
 **Download** (FMS 13) offers CSV of the window: a row per person (Name,
 Team, then one column per day, a cell's items joined by ` / `), through
-`/rota/download/?…` with the window's query string, and "Printable page".
+`/rota/download/?…` with the window's query string; a cell starting with
+`=`, `+`, `-` or `@` is prefixed with `'` (`services/csv_safe.py`).
 
 **Print** (FMS 11): `@media print` on the grid page hides the side panel
 and top bar, lays the table out landscape at a smaller type size,
 repeats the header row on each page (`thead { display: table-header-group
-}`), keeps tile colours (`print-color-adjust: exact`) and prints the
-window's title and range. The menu's Print calls `window.print()`.
+}`) and keeps tile colours (`print-color-adjust: exact`). Print is the
+browser's print of the page; there is no separate printable page and no
+printed title line.
 
 ## 11. Audit
 
@@ -633,7 +661,8 @@ Python (pytest, the Foundation's fixtures and factories, plus
   filters.
 - `test_shifts_notify.py`: lines built, undone changes skipped, no-email
   people listed, a failed send keeps the rows, the audit row, the
-  Health count.
+  Health count, one connection per batch, the rest of a batch not tried
+  after a relay failure, no mail without `EMAIL_HOST`.
 - `test_shifts_gp_sync.py`: against `tests/fixtures/gp_sessions.json`,
   matching, replacement of the window only, unmatched counts, a failing
   client leaving data untouched, the `SyncRun` source.
@@ -641,7 +670,11 @@ Python (pytest, the Foundation's fixtures and factories, plus
   sessions at 4 h 10 min, weekly subtotals, who sees whom, CSV.
 - `test_shifts_today.py`, `test_shifts_views.py` (dialogs, options,
   download, print page, phone layout), `test_messaging.py` (Outbox row,
-  console backend, an exception recorded, nothing raised).
+  "mail not configured" without `EMAIL_HOST`, the connection passed
+  through, an exception recorded, nothing raised). The suite's
+  `tests/conftest.py` sets `EMAIL_HOST` for every test (the `locmem`
+  backend still catches the mail); a test of the unconfigured case
+  clears it.
 - `tests/e2e/test_grid.py`: Playwright over Django's live server
   (`pytest-playwright`), skipped unless `E2E=1`: sign in with a
   password as a manager the test creates (HR is not configured in tests,
@@ -649,6 +682,9 @@ Python (pytest, the Foundation's fixtures and factories, plus
   copy and paste a block, open the context menu and mark overtime, undo.
   CI runs
   it in the `tests` job after `playwright install --with-deps chromium`.
+  Under `E2E=1` the e2e conftest sets `DJANGO_ALLOW_ASYNC_UNSAFE`
+  (Playwright's sync API keeps an event loop in the test thread, and the
+  test seeds rows through the ORM).
 
 TypeScript (`vitest`, added to `frontend/package.json`; `npm test` in
 CI's `frontend` job): `parser.ts` against the same table as the Python
@@ -668,7 +704,10 @@ required, range validation, published-only, emails, `without_email`.
   `OnCalendar=*:07/15` so it does not coincide with the HR timer.
 - CI: the `tests` job installs Playwright's Chromium and runs the e2e
   test with `E2E=1`; the `frontend` job runs `npm test` before the
-  build check. `requirements.txt` gains `pytest-playwright`.
+  build check. The browser test's packages (`playwright`,
+  `pytest-playwright` and what only they need) are in
+  `requirements-dev.txt`, which the `tests` job installs beside
+  `requirements.txt`; the VPS installs `requirements.txt` only.
 - The admin (superuser) lists `Entry`, `Template`, `DayChange`,
   `GpSession`, `GridOptions`, `Outbox` read-only; `Entry` and `Template`
   deletable for repair.
@@ -716,12 +755,33 @@ they contradict are amended above; this section is the full list, by section.
   person.pk, …)`.
 - A write that leaves a cell's rendered text and appearance unchanged is a
   no-op: no `DayChange`, no rewrite, no audit entry.
-- `profiles.reorder` is atomic and refuses a non-manager itself; `order/`
-  and `paste/` are manager-only at the view.
+- `profiles.reorder` is atomic and refuses a non-manager itself; it skips
+  (does not refuse) ids the actor may not manage, themselves included,
+  numbering only the people kept; `order/` and `paste/` are manager-only
+  at the view.
 - `window.payload` decides `editable` without a query per row; `can_edit`
   is simply "the viewer is a manager".
 - A block cell may be `null` (a day the copy did not see, e.g. a hidden
   weekday): `paste` leaves that target untouched; `[]` still clears.
+- (Final fix wave.) A cell inside the copied rectangle that was not
+  selected is `null` too, so pasting a gapped selection leaves the gaps
+  alone. A paste writes by calendar day: a block whose span crosses a
+  weekday hidden at the target writes to that day, and may write past
+  the window's last day (section 10's "a paste never lands on a hidden
+  day" was wrong).
+- (Final fix wave.) Text pasted from outside the island is not parsed by
+  the island: its block cells are strings (one item per line) posted to
+  `paste/`, and `entries.paste` parses each with `parse.cell(text,
+  unarchived departments)`; section 5's "each line goes to the anchor
+  cell through `cell/`" is replaced by this. The island's `toTSV` writes
+  a string cell as its text, lines joined by ` / `. The TypeScript
+  parser is no longer used by the island at all (there is no live
+  preview today); it stays as the tested mirror for one.
+- (Final fix wave.) A mutation naming more than 2000 cells is a 400; a
+  day outside 2000-01-01..2100-12-31 is a 400 ("that date is out of
+  range") in the API and a 404 or a re-rendered error in the dialogs;
+  pages fall back to today. `move` checks the source rows before working
+  out the targets.
 
 **Section 5 (parser)**
 
@@ -740,8 +800,11 @@ they contradict are amended above; this section is the full list, by section.
   → 08:00–16:00).
 - Leading and trailing ` ,.:;` are stripped only from a shift line's
   leftover text; a pure comment keeps its text as typed.
-- The shared table `frontend/src/rota-grid/parser.cases.json` has 38 rows
+- The shared table `frontend/src/rota-grid/parser.cases.json` has 39 rows
   and both parsers are tested against it.
+- (Final fix wave.) Both parsers collapse runs of whitespace before
+  matching and use `[0-9]` for digits (`"٩-5"` is a comment in both);
+  cell text past 2000 characters is cut, not refused.
 
 **Sections 3 and 10 (island, dialogs)**
 
@@ -771,7 +834,13 @@ they contradict are amended above; this section is the full list, by section.
 - A "changes cancel out" person is listed ticked (greyed) so Send clears
   their rows; only "no email" is disabled; `old_count` counts people with
   at least one real line.
-- Rows are deleted by the pks that were mailed.
+- Rows are deleted by the pks that were mailed; a mailed day re-edited
+  during the send keeps its row with `before` = the mailed text.
+- (Final fix wave.) No console backend: with `EMAIL_HOST` empty,
+  `messaging.send` tries nothing and records "mail not configured", and
+  the changes are kept. A batch is sent on one SMTP connection, and after
+  a connection-level failure the rest of the batch is marked failed
+  without being tried (a refused recipient is not a connection failure).
 
 **Section 9 (GP feed)**
 
@@ -781,3 +850,25 @@ they contradict are amended above; this section is the full list, by section.
   records outside the fetched window; both are counted in `detail` and in
   the message.
 - The rota app's range cap is "`to` at most 500 days after `from`".
+- (Final fix wave.) Matching skips leavers (`end_date` before the sync
+  day); of two GPs sharing an email, the one current today wins. The
+  window payload does not carry `GpSession.note` (the grid never draws
+  it).
+
+**Final fix wave: recorded only**
+
+- The Rota flyout carries no Templates item; the top bar's Templates
+  link is the entry point (section 3).
+- Download offers the CSV only; Print is the browser's print of the page
+  (the print stylesheet forces landscape and repeats the header); there
+  is no separate printable page and no printed title line (section 10).
+- An archived department is dropped when a line is re-parsed (find and
+  replace, retyping, a pasted text cell) or the shift is edited in the
+  shift dialog, whose select offers only unarchived departments
+  (section 5).
+- The e2e conftest sets `DJANGO_ALLOW_ASYNC_UNSAFE` under `E2E=1`
+  (section 13).
+- The clipboard block is kept in `sessionStorage`, not `localStorage`
+  (section 5); the hours report lists only people current in the range
+  or with hours in it (section 7); both CSV downloads prefix `'` to a
+  cell a spreadsheet would run (sections 7 and 10).

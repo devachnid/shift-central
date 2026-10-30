@@ -156,7 +156,9 @@ them.** Every fifteen minutes Shift Central asks it for the sessions in a window
 `ROTA_API_TOKENS`). Then, in one transaction:
 
 - Each session's **email** is matched, ignoring capitals, to a person here who is
-  **marked a GP** and is current or starting. Matched sessions replace the whole
+  **marked a GP** and is current or starting; a leaver (finish date passed) is never
+  matched. If two people here share the email (a GP who left and came back), the
+  one current today gets the sessions. Matched sessions replace the whole
   window's sessions here; a session the rota app has dropped disappears here at the
   next run.
 - A session for the same GP, day and part (AM or PM) twice in the feed is kept once,

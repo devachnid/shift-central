@@ -60,7 +60,7 @@ requirements' table.
 | History link | No | Their team's people | Everyone but themselves |
 | Health card and Sync now | No | Yes, limited to their team | Yes |
 | Departments | No | Yes | Yes |
-| Activity log | No | Entries about their team's people, and all department entries | Everything |
+| Activity log | No | Entries about their team's people (rota changes included), and all department and template entries | Everything |
 | Log in logs | No | No | Yes |
 
 The one case where "their team's people" and "themselves" differ: a team manager
@@ -126,8 +126,10 @@ time, who made the change (a person's email, or `practice-hr` for the sync),
 which record, the field, the old and new value and the reason. It shows changes to
 profiles (display fields, hours, and that the notes changed, never their text), to allowances, to manager grants
 (`manager_of`), to what the feed changed (including `created` for a new person and a
-new finish date arriving), and to departments. An allowance's row names the person
-it belongs to. Filter by **Person**, by **Field** (the field's name as shown, such as
+new finish date arriving), to departments, to the rota and to templates. An
+allowance's row names the person it belongs to, and so does a rota change (field
+`cell` for what the day said before and after, `appearance` for a colour or style,
+`notified` when the person was emailed); a template's row reads `template`. Filter by **Person**, by **Field** (the field's name as shown, such as
 `weekly_hours` or `end_date`; type it exactly) and by **From** and **To** dates (both
 included; either may be left blank).
 It is the answer to "who changed this, and when did I see that date arrive?".

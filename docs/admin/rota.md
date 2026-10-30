@@ -152,7 +152,12 @@ Monday fills next week.
 - Rows that fall below the last row, or on a person you cannot edit, are skipped,
   and the grid says how many.
 - A day the copy did not see, such as a weekday hidden in Options, is left alone
-  on the target.
+  on the target, and so is a cell inside the block that you did not select
+  (Ctrl-click a few cells, and only those are pasted). A selected cell that was
+  empty does clear the cell it lands on.
+- A paste goes by calendar day from the cell you paste at: a Monday-to-Friday
+  block pasted onto a Thursday fills Thursday, Friday, the weekend and Monday,
+  whether or not the weekend is shown, and can run past the last day on screen.
 - **Paste behaviour** in Options decides what happens to a cell that already has
   something: **Replace what is there** (the default), or **Add to what is there**.
 - Pasting is for managers only.
@@ -160,8 +165,10 @@ Monday fills next week.
 **Into and out of Excel.** Copying also puts the block on the computer's clipboard
 as tab-separated text, a cell per column and several items in one cell joined by
 ` / `, so it can be pasted into a spreadsheet. Pasting text from elsewhere does
-the reverse: one line into the selected cell reads as typed, and tabbed text fills
-cells to the right and lines downwards. The copy survives a reload of the page.
+the reverse: each cell is read exactly as if it had been typed into the grid,
+and tabbed text fills cells to the right and lines downwards. The copy survives a
+reload of the page, but not closing the browser, so nothing copied is left behind
+on a shared computer.
 
 ## Templates
 
@@ -215,7 +222,10 @@ Activity log.
 
 If the site has no mail relay configured (the `EMAIL_*` settings in
 [Setting up](setup.md)) nothing can be sent: the dialog lists everyone as failed and
-keeps all their changes, so nothing is lost by trying.
+keeps all their changes, so nothing is lost by trying. The same happens if the mail
+relay cannot be reached part-way through: the people not yet sent to are not tried,
+are listed as failed, and keep their changes. A change you make to someone's day
+while their email is being sent is kept for the next Notify.
 
 **The Health line.** The Health card on the Staff page counts *Unnotified rota
 changes over a week old* and links to this dialog. A week-old change that staff were
@@ -236,13 +246,15 @@ person may still be working the old rota.
 | Only my shifts | Only your own row. |
 | Hide staff with no shifts | Drops people with nothing in the window. |
 | Font size, Spacing | Small, normal or large type; tight, normal or loose rows. |
-| Days to display | Hides the unticked weekdays' columns. The shifts are still there and a paste never lands on a hidden day. |
+| Days to display | Hides the unticked weekdays' columns. The shifts are still there, and a paste whose block spans a hidden day still writes to it (a paste goes by calendar day). |
 | Paste behaviour | Replace or add. See [Copying weeks](#copying-weeks). |
 
 **Sort staff by drag and drop** is a link at the bottom of Options, for managers.
 The name column grows handles; drag a name to where it should go, and each drop is
 saved. **Done sorting** in the top bar leaves the mode. The order is the person's
-display order, so it changes for everyone and on the Staff page too.
+display order, so it changes for everyone and on the Staff page too. Only the
+people you manage are renumbered (not yourself, nor other teams' people, whose
+order stays as it was).
 
 **Filters** narrows the window to people whose **name contains** some text, to
 chosen **teams**, or to chosen **departments** (people with at least one shift in
