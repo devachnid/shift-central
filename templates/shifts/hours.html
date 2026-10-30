@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Hours · AMG Shift Central{% endblock %}
+{% block topbar_actions %}<a class="topbar-action" href="?from={{ start|date:'Y-m-d' }}&amp;to={{ end|date:'Y-m-d' }}&amp;download=1">Download</a>{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <label>From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
+  <label>To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <button class="btn btn-quiet" type="submit">Refresh</button>
+</form>
+{% for b in blocks %}
+<section class="report-block">
+  <h2>{{ b.person.name }} — {{ b.shifts }} shift{{ b.shifts|pluralize }} / {{ b.total_text }}{% if b.overtime %} + {{ b.overtime_text }} overtime{% endif %}</h2>
+  <table class="table">
+    <thead><tr><th>Day</th><th>Date</th><th>Start</th><th>Finish</th><th>Break</th><th>Hours</th><th>Overtime</th><th>Department or note</th></tr></thead>
+    <tbody>
+    {% for week in b.weeks %}
+      {% for r in week.rows %}
+      <tr><td>{{ r.day|date:"D" }}</td><td>{{ r.day|date:"j M Y" }}</td><td>{{ r.start|time:"H:i"|default:"" }}</td><td>{{ r.finish|time:"H:i"|default:"" }}</td>
+          <td>{% if r.break_minutes %}{{ r.break_minutes }} min{% endif %}</td><td>{{ r.hours_text }}</td><td>{{ r.overtime_text }}</td><td>{{ r.label }}</td></tr>
+      {% endfor %}
+      {% if multi_week %}<tr class="subtotal"><td colspan="5">Week of {{ week.start|date:"j M" }}</td><td>{{ week.subtotal_text }}</td><td>{{ week.overtime_text }}</td><td></td></tr>{% endif %}
+    {% empty %}<tr><td colspan="8">No shifts in this range.</td></tr>{% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="5">Total</td><td>{{ b.total_text }}</td><td>{{ b.overtime_text }}</td><td></td></tr></tfoot>
+  </table>
+</section>
+{% empty %}<p>Nobody to report on.</p>{% endfor %}
+{% endblock %}

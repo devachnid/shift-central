@@ -1,0 +1,9 @@
+{"from": "2027-01-04", "to": "2027-01-10",
+ "sessions": [
+  {"email": "doc@example.org", "day": "2027-01-04", "part": "AM", "type": "Surgery", "site": "AG", "note": ""},
+  {"email": "doc@example.org", "day": "2027-01-04", "part": "PM", "type": "Admin", "site": "", "note": "paperwork"},
+  {"email": "DOC@example.org", "day": "2027-01-05", "part": "AM", "type": "Surgery", "site": "PMC", "note": ""},
+  {"email": "nobody@example.org", "day": "2027-01-06", "part": "AM", "type": "Surgery", "site": "AG", "note": ""},
+  {"email": "sam.1@example.org", "day": "2027-01-06", "part": "AM", "type": "Surgery", "site": "AG", "note": ""}
+ ],
+ "without_email": 1}

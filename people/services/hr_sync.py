@@ -138,11 +138,12 @@ def not_seen_recently(now=None):
     day there is nothing to judge by, so nobody is listed; the Practice HR
     box on the Health card is red instead."""
     now = now or timezone.now()
-    good = SyncRun.objects.filter(ok=True, started_at__gte=now - NEVER_SEEN_AFTER).first()
+    good = SyncRun.objects.filter(source="practice-hr", ok=True,
+                                  started_at__gte=now - NEVER_SEEN_AFTER).first()
     if good is None:
         return Person.objects.none()
     return Person.objects.filter(last_seen_from_hr__lt=min(good.started_at, now - NEVER_SEEN_AFTER))
 
 
 def last_run():
-    return SyncRun.objects.first()
+    return SyncRun.objects.filter(source="practice-hr").first()

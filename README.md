@@ -7,11 +7,22 @@ rota (`devachnid/rota`) and Practice HR (`devachnid/practice-hr`), and it signs
 people in through Practice HR and reads its people from there, so nobody is
 typed in twice.
 
-This release is the foundation: sign-in, people (fed from Practice HR every
-fifteen minutes), teams, departments, who may manage whom, staff profiles with
+Built so far: the foundation (sign-in, people fed from Practice HR every
+fifteen minutes, teams, departments, who may manage whom, staff profiles with
 hours and leave allowances, the activity and log-in logs, and the Staff list's
-Health card. The rota grid, leave arithmetic and the rest follow in later
-specs.
+Health card), and the rota grid release:
+
+- **The rota grid**: a spreadsheet-style grid of days and people that managers
+  type shifts into, drag, copy, template, mark as overtime and print, with
+  **Notify staff** emailing each person what changed, and a read-only list of
+  the week on a phone.
+- **Who's in today** and **the hours report** (per person per week, overtime
+  apart, downloadable).
+- **The GP feed**: GPs' sessions are read from the GP rota app every fifteen
+  minutes, matched by work email, and drawn as read-only tiles.
+
+Leave arithmetic and the rest follow in later specs. Managers' guide:
+[docs/admin/rota.md](docs/admin/rota.md).
 
 The practice manager's requirements, approved on 29 October 2026, are in
 [docs/requirements/](docs/requirements/README.md): thirteen documents from
@@ -32,6 +43,13 @@ the requirements README.
     DEBUG=1 python manage.py migrate
     DEBUG=1 python manage.py runserver
     pytest
+    cd frontend && npm test
+
+The browser test (the grid, driven in Chromium) is skipped unless asked for:
+`pip install -r requirements-dev.txt` (Playwright and its pytest plugin, kept
+out of `requirements.txt` so the VPS never installs them), then
+`python -m playwright install chromium`, then `E2E=1 python -m pytest -q tests/e2e`.
+Where Chromium is already installed elsewhere, set `E2E_CHROMIUM` to its path.
 
 `DEBUG=1` is what lets `manage.py` start on a box with no `SECRET_KEY` in the
 environment. It then uses a key of this checkout's own, generated once into the
@@ -52,11 +70,12 @@ node on it.
 `main`, and nothing in it needs a secret:
 
 - **tests**: `ruff check .` (pyflakes rules only; see `ruff.toml`),
-  `makemigrations --check`, the suite, and `collectstatic` + `check --deploy`
-  against a throwaway environment.
+  `makemigrations --check`, the suite, the browser test (`E2E=1 pytest tests/e2e`,
+  in Playwright's Chromium), and `collectstatic` + `check --deploy` against a
+  throwaway environment.
 - **tests-next-python**: the suite on Python 3.14, an early warning for the next
-  interpreter. It is not a required check.
-- **frontend**: `npm ci`, the type check, `npm run build`, and `git diff
+  interpreter. It is not a required check, and it does not run the browser test.
+- **frontend**: `npm ci`, the type check, `npm test`, `npm run build`, and `git diff
   --exit-code -- static/dist`, which fails when the committed bundle is not what
   the source produces.
 
@@ -116,7 +135,7 @@ sandbox; `deploy/gunicorn.service` explains each part.
     install -d -o shift-central -g shift-central -m 700 /var/lib/shift-central
     git clone https://github.com/devachnid/shift-central /srv/shift-central
     cd /srv/shift-central
-    python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+    python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # requirements.txt only: requirements-dev.txt is for the browser test
     chown -R root:root /srv/shift-central
     chmod -R u=rwX,go=rX /srv/shift-central
 
@@ -162,6 +181,12 @@ has to read unreadable:
     HR_API_TOKEN=<the token you made above>
     OIDC_RP_CLIENT_ID=<printed by register_oidc_client>
     OIDC_RP_CLIENT_SECRET=<printed by register_oidc_client>
+    ROTA_URL=https://rota.example.org
+    ROTA_API_TOKEN=<one of ROTA_API_TOKENS in the rota app's /etc/rota.env>
+    EMAIL_HOST=smtp.example.org
+    EMAIL_HOST_USER=<relay user>
+    EMAIL_HOST_PASSWORD=<relay password>
+    DEFAULT_FROM_EMAIL=Shift Central <shift-central@example.org>
     EOF
     )
 
@@ -179,7 +204,9 @@ comment syntax after one):
 | `PRACTICE_HR_URL` | Practice HR's address, `https://hr.example.org`, with no trailing path. Sign-in and the people feed both use it. It must be `https`: the client refuses to send the token over anything else. Unset, the login page offers only the superuser's password form and `hr_sync` refuses to run. |
 | `HR_API_TOKEN` | The bearer token `hr_sync` sends, one of Practice HR's `HR_API_TOKENS`. Unset, `hr_sync` refuses to run and says so. |
 | `OIDC_RP_CLIENT_ID`, `OIDC_RP_CLIENT_SECRET` | Printed once by `register_oidc_client` in Practice HR. |
-| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL` | The outgoing mail relay. Wired now and not used: nothing in this release sends email, so they can be left out until leave requests do. `EMAIL_USE_TLS` defaults on. |
+| `ROTA_URL` | The GP rota app's address, `https://rota.example.org`, no trailing path. `gp_sync` reads `/api/v1/sessions` from it. It must be `https`. Unset (with `ROTA_API_TOKEN`), there is no GP feed: the grid has no GP tiles, `gp_sync` refuses to run, and the Health card says "not configured". |
+| `ROTA_API_TOKEN` | The bearer token `gp_sync` sends: one of the GP rota app's `ROTA_API_TOKENS` in its `/etc/rota.env` (comma-separated there; make it with `openssl rand -hex 32`, add it, restart the rota app). |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL` | The outgoing mail relay, used by Notify staff to tell people their rota changed. `EMAIL_HOST` set is what "mail is configured" means; `DEFAULT_FROM_EMAIL` is the sender staff see. With none of them, the app works and Notify staff keeps every change unsent. `EMAIL_USE_TLS` defaults on. |
 | `TRUSTED_PROXY_IPS` | Comma-separated addresses whose `CF-Connecting-IP` header is believed, for the log-in log's address. Defaults to loopback, which is right behind a Cloudflare tunnel; never set it to a wildcard. |
 | `CSP_REPORT_ONLY` | `1` sends the Content-Security-Policy as report-only, blocking nothing: the way back if it blocks something after a deploy. Unset, it is enforced. |
 
@@ -189,16 +216,20 @@ Then:
     deploy/manage migrate
     deploy/manage createsuperuser
     cp deploy/gunicorn.service /etc/systemd/system/shift-central.service
-    cp deploy/shift-central-backup.* deploy/shift-central-clearsessions.* deploy/shift-central-hr-sync.* /etc/systemd/system/
+    cp deploy/shift-central-backup.* deploy/shift-central-clearsessions.* deploy/shift-central-hr-sync.* deploy/shift-central-gp-sync.* /etc/systemd/system/
     systemctl daemon-reload
     systemctl enable --now shift-central shift-central-backup.timer shift-central-clearsessions.timer
     deploy/manage hr_sync
     systemctl enable --now shift-central-hr-sync.timer
+    deploy/manage gp_sync
+    systemctl enable --now shift-central-gp-sync.timer
 
-`hr_sync` is run by hand once, before its timer is enabled, so that a wrong
-URL or token shows up as a message on your screen rather than as a failed run
-on the Health card an hour later. A fresh database has no people until it
-succeeds.
+`hr_sync` and `gp_sync` are each run by hand once, before their timers are
+enabled, so that a wrong URL or token shows up as a message on your screen
+rather than as a failed run on the Health card an hour later. A fresh database
+has no people until `hr_sync` succeeds, and `gp_sync` needs the GPs to be there
+(and `ROTA_URL` and `ROTA_API_TOKEN` set); leave the last two lines out until
+the GP rota app has its sessions feed.
 
 **Run every management command through `deploy/manage`**, as root:
 `deploy/manage createsuperuser`, `deploy/manage check --deploy`, `deploy/manage
@@ -219,7 +250,9 @@ Practice HR's, and point its ingress at `http://127.0.0.1:8323`. (The rota is on
 `CSRF_TRUSTED_ORIGINS` and the redirect URI registered in Practice HR; change it
 later and sign-in stops until all three agree.
 
-`shift-central-hr-sync.timer` runs `hr_sync` every fifteen minutes and
+`shift-central-hr-sync.timer` runs `hr_sync` every fifteen minutes,
+`shift-central-gp-sync.timer` runs `gp_sync` every fifteen minutes at seven past
+the quarter hour (so the two never coincide), and
 `shift-central-clearsessions.timer` clears expired sessions nightly (a session
 lasts ten minutes from the last request, and each sign-in leaves a row).
 
@@ -228,8 +261,8 @@ request (`shiftcentral.access`: the client's address from Cloudflare,
 `user=<id>` or `anon`, method, path, status, time), without query strings.
 Also logged: server errors with tracebacks, disallowed hosts and CSRF failures
 (`django.security`), and a failed `hr_sync` (`journalctl -u
-shift-central-hr-sync`). The sync's own result is also on the Staff page's
-Health card.
+shift-central-hr-sync`, `-u shift-central-gp-sync`). The syncs' own results are also
+on the Staff page's Health card.
 
 **A Content-Security-Policy** is on every page the app renders (not the admin,
 whose theme needs `eval`): no inline script, no event-handler attributes, no
@@ -355,17 +388,17 @@ plaintext. It is optional: a host without it still backs up locally.
 
 From the box's own copy (the usual case: a bad deploy or a mistaken change):
 
-    systemctl stop shift-central shift-central-hr-sync.timer
+    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer
     ls -l /var/lib/shift-central/backups
     cp -p /var/lib/shift-central/db.sqlite3 /root/db-before-restore.sqlite3
     install -o shift-central -g shift-central -m 600 /var/lib/shift-central/backups/db-<date>.sqlite3 /var/lib/shift-central/db.sqlite3
     rm -f /var/lib/shift-central/db.sqlite3-wal /var/lib/shift-central/db.sqlite3-shm
     deploy/manage migrate
-    systemctl start shift-central shift-central-hr-sync.timer
+    systemctl start shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer
 
 Stopping first matters: a copy dropped under a running app leaves the old
 `-wal` file beside it, and SQLite would replay it into the restored database.
-The first line also stops the sync, so it cannot write into the restored file
+The first line also stops the syncs, so they cannot write into the restored file
 before you have looked at it. Keep the `cp -p` of the database you are
 replacing until you are sure. `deploy/manage migrate` brings an older copy up
 to the current code, and the next `hr_sync` (within fifteen minutes) brings

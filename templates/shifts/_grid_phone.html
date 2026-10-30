@@ -1,0 +1,21 @@
+{% load shifts_extras %}
+<div class="rota-phone">
+  {% for d in days %}
+  <section class="rota-phone-day{% if d.today %} is-today{% endif %}">
+    <h2>{{ d.label }}</h2>
+    {% for r in mine %}{% with cells=r.cells|get_item:d.date sessions=r.sessions|get_item:d.date %}
+      <div class="rota-phone-mine">
+        {% for s in sessions %}<div class="tile tile-session">{{ s.part }} · {{ s.label }}{% if s.site %} · {{ s.site }}{% endif %}</div>{% endfor %}
+        {% for e in cells %}<div class="tile">{{ e.line }}</div>{% empty %}{% if not sessions %}<div class="tile tile-none">No shift</div>{% endif %}{% endfor %}
+      </div>
+    {% endwith %}{% endfor %}
+    <details class="rota-phone-team"><summary>Whole team</summary>
+      {% for r in others %}{% with cells=r.cells|get_item:d.date sessions=r.sessions|get_item:d.date %}
+        {% if cells or sessions %}<div class="rota-phone-row"><span class="chip" style="background:{{ r.colour }}">{{ r.name }}</span>
+          {% for s in sessions %}<span class="tile tile-session">{{ s.part }} · {{ s.label }}</span>{% endfor %}
+          {% for e in cells %}<span class="tile">{{ e.line }}</span>{% endfor %}</div>{% endif %}
+      {% endwith %}{% endfor %}
+    </details>
+  </section>
+  {% endfor %}
+</div>

@@ -48,7 +48,7 @@ is wrong, change it in Practice HR and it arrives within fifteen minutes (or pre
 | **Team** | The team of the person's first position in HR. Decides which managers manage them. A person who changes team is moved at the next sync; a team manager's own grant does not move with them. HR sends only today's positions, so **a starter appears without a team until HR holds their position**; meanwhile an all-teams manager finds them under *Starting* on the Staff list and sets them up. A person between posts keeps the team they had. |
 | **Start date** | HR's employment start. Required: a record in the feed with no start date makes the whole sync fail (see [sync](sync.md#when-the-sync-fails)). Someone whose start date is in the future is *Starting*, not *Current*. |
 | **Finish date** | HR's employment end; blank while employed. After it passes, the person leaves the *Current* list and appears under *Left*. They stay on record. The Health card lists leavers in the next 30 days. |
-| **GP** | True when HR's contract unit for the person is *sessions*. A GP has no weekly hours or days per week here (their sessions come from the GP rota in a later release). If a GP shows as an ordinary member of staff, or the reverse, the fault is the contract in HR. |
+| **GP** | True when HR's contract unit for the person is *sessions*. A GP has no weekly hours or days per week here (their sessions come from the GP rota app, [read-only on the rota](rota.md#gps)). If a GP shows as an ordinary member of staff, or the reverse, the fault is the contract in HR. |
 
 ## Typed here: the Display tab
 
@@ -59,9 +59,9 @@ Editable by the managers of the person's team. Everyone can read their own.
 | **Job title** | Up to 80 characters; may be blank. Shown on the Staff list and under the name on the profile. Practice HR's position title is not copied; this is what the rota will show. |
 | **Name colour** | The colour of the person's name chip on the Staff list (and, later, on the rota). Pick from the swatches or type a hex value. Exactly `#rrggbb` is accepted; anything else is refused with "Choose a colour." Default is navy. A very pale colour makes the white name text unreadable. |
 | **Display order** | A whole number, 0 or more, default 100. People in the same team are listed by it, lowest first, then by last name, then first. Equal numbers (everyone starts at 100) therefore fall back to alphabetical. |
-| **Display on rota** | Whether the person appears on the rota grid. **Stored now and used from the rota grid release;** it changes nothing you can see today. |
+| **Display on rota** | Whether the person appears on the [rota](rota.md) grid (and Who's in today). Untick for someone who should not be on it; their shifts and the hours report are unaffected. |
 | **Show to other staff** | Whether other *staff* see this person on the Staff list. Untick for someone who should not be listed to colleagues. Managers always see everyone; the person always sees themselves. |
-| **Can see other staff** | Whether the person may see colleagues. **Stored now and used from the rota grid release;** the requirement is that everyone sees every rota, so leave it ticked unless a manager has a reason to restrict someone. |
+| **Can see other staff** | Whether the person may see colleagues on the [rota](rota.md). The requirement is that everyone sees every rota, so leave it ticked unless a manager has a reason to restrict someone: with it off they see only their own row. |
 
 ## Typed here: the Pay & time off tab
 

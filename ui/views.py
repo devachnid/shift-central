@@ -4,4 +4,4 @@ from django.shortcuts import redirect
 
 @login_required
 def home(request):
-    return redirect("/staff/")
+    return redirect("/rota/")

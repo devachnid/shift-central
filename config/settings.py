@@ -55,6 +55,8 @@ INSTALLED_APPS = [
     "mozilla_django_oidc",
     "accounts",
     "people",
+    "shifts",
+    "messaging",
     "ui",
 ]
 
@@ -194,6 +196,8 @@ LOGGING = {
         "shiftcentral": {"level": "INFO"},
         "accounts": {"level": "INFO"},
         "people": {"level": "INFO"},
+        "shifts": {"level": "INFO"},
+        "messaging": {"level": "INFO"},
     },
 }
 
@@ -220,3 +224,9 @@ OIDC_CREATE_USER = True
 OIDC_AUTH_REQUEST_EXTRA_PARAMS = {"prompt": "login"}
 # Kept so signing out can hand it to HR's sign-out as id_token_hint.
 OIDC_STORE_ID_TOKEN = True
+
+# The GP rota app's sessions feed (shifts/services/gp_sync.py). Both from
+# /etc/shift-central.env; either empty means no GP feed, and the Health
+# card says so.
+ROTA_URL = os.environ.get("ROTA_URL", "").rstrip("/")
+ROTA_API_TOKEN = os.environ.get("ROTA_API_TOKEN", "").strip()

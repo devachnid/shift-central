@@ -6,9 +6,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_the_built_files_exist_and_register_the_colour_picker():
+def test_the_built_files_exist_and_register_the_colour_picker_and_the_rota_grid():
     js = (ROOT / "static/dist/main.js").read_text()
     assert "colour-picker" in js and "data-component" in js
+    assert "rota-grid" in js
     assert (ROOT / "static/dist/main.css").exists()
 
 
@@ -26,7 +27,10 @@ def test_the_colour_picker_is_a_labelled_group_of_toggle_buttons():
     they are pressed do not. The group takes its name from the field's label."""
     js = (ROOT / "static/dist/main.js").read_text()
     assert "aria-pressed" in js and "aria-labelledby" in js
-    assert "listbox" not in js and "aria-selected" not in js
+    # The rota grid's cells use aria-selected, so that half is read from the
+    # picker's own source; the built bundle must not carry a listbox at all.
+    picker = (ROOT / "frontend/src/colour-picker.tsx").read_text()
+    assert "listbox" not in js and "aria-selected" not in picker and 'role="listbox"' not in picker
 
 
 def test_both_colour_fields_name_their_label_for_the_picker(db):

@@ -27,17 +27,36 @@ early December 2026, so it is the dependency with a date.
    `/etc/practice-hr.env` beside the others, and restart Practice HR. Without the
    token, step 5 fails with "returned 401".
 
+   For the GP sessions, do the same in the GP rota app (`/srv/rota`): make another
+   token (`openssl rand -hex 32`), add it to the comma-separated `ROTA_API_TOKENS`
+   in `/etc/rota.env`, and restart the rota app. The rota app must be the version
+   with the sessions feed (`/api/v1/sessions`); without it, or without the token,
+   the [GP sync](sync.md#when-the-gp-sync-fails) fails with "returned 404" or "401".
+   This can wait until the GP sessions are wanted: the rest of the go-live does not
+   depend on it, and the Health card says "not configured" meanwhile.
+
 2. **Write the environment file**, `/etc/shift-central.env`, root-only: the
    secret key, `DB_PATH`, the host and origin, `PRACTICE_HR_URL`, `HR_API_TOKEN`,
-   and the client id and secret from step 1. Every variable is explained in the
-   README's table. A missing one is usually loud (the app will not start); a wrong
-   `PRACTICE_HR_URL` is not, and shows in step 5.
+   and the client id and secret from step 1. Add `ROTA_URL` (the GP rota app's
+   address, `https`, no path) and `ROTA_API_TOKEN` (the rota-side token from step 1)
+   for the GP sessions, and the `EMAIL_*` variables for **Notify staff**:
+   `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`,
+   `EMAIL_USE_TLS` and `DEFAULT_FROM_EMAIL` (the address staff see the email come
+   from). Every variable is explained in the README's table. A missing one is usually
+   loud (the app will not start); a wrong `PRACTICE_HR_URL` is not, and shows in
+   step 5. Without `EMAIL_HOST` the app works, the grid included, and Notify staff
+   sends nothing: nothing is tried, each send is recorded as "mail not configured",
+   and the changes are kept for when mail is set up. There is no "print the email
+   to the log" fallback.
+   Without `ROTA_URL` or `ROTA_API_TOKEN` the grid has no GP tiles and the Health card
+   says "GP rota: not configured".
 
 3. **Migrate**: `deploy/manage migrate`. This creates the database in
    `/var/lib/shift-central` and puts the seventeen
    [departments](departments.md) in. Run `deploy/manage collectstatic --noinput`
    before the first start, and enable the service and the two housekeeping timers
-   as the README shows.
+   as the README shows. The units for both feeds are copied then too; their timers
+   are enabled in step 5.
 
 4. **Create the superuser**: `deploy/manage createsuperuser`, with a long password.
    It is the break-glass account: it signs in at `/admin/` with a password even
@@ -47,7 +66,11 @@ early December 2026, so it is the dependency with a date.
 5. **Read the people in**: `deploy/manage hr_sync`, then enable
    `shift-central-hr-sync.timer`. Expect "*N* people read from Practice HR". If it
    fails, [the table](sync.md#when-the-sync-fails) has the message; fix that
-   before going on. Afterwards, open `/admin/people/team/` and set each team's
+   before going on. Once `ROTA_URL` and `ROTA_API_TOKEN` are set, run `deploy/manage
+   gp_sync` the same way and enable `shift-central-gp-sync.timer` (every fifteen
+   minutes, seven past the quarter hour so it never meets the HR timer). The
+   GPs must be marked as GPs in Practice HR first, or their sessions will be listed
+   as unmatched. Afterwards, open `/admin/people/team/` and set each team's
    **Display order** so the Staff list is in the order the practice expects
    (GPs, Reception, Admin/Secretarial, Nursing, Pharmacy, Management,
    Cleaning, or whatever HR calls them), and untick **Active** on any team
@@ -84,7 +107,32 @@ early December 2026, so it is the dependency with a date.
     will not use.
 
 When the Health card shows the feed green, no one needing hours, and nobody in "not
-in the feed", the foundation is ready for the rota grid.
+in the feed", the foundation is ready for the rota grid. Then lay the rotas out
+(see [the rota](rota.md)), and press **Notify staff** when each team's is ready.
+
+## Upgrading a box that runs the Foundation
+
+A server already running Shift Central from before the rota grid takes the
+release like any other pull, plus the new settings and the GP feed's units. In
+`/srv/shift-central`, as root:
+
+1. `git pull`.
+2. `.venv/bin/pip install -r requirements.txt`. Only that file: `requirements-dev.txt`
+   is the browser test's (Playwright), and the server never needs it.
+3. `deploy/manage migrate` (the `shifts` and `messaging` tables, and the seventeen
+   departments if they are not there yet).
+4. `deploy/manage collectstatic --noinput`, then `deploy/manage check --deploy`.
+5. **Add the new variables** to `/etc/shift-central.env`: `ROTA_URL` and
+   `ROTA_API_TOKEN` (go-live step 1 makes the token), and the `EMAIL_*` values
+   (go-live step 2). Either can wait; see step 2 for what works without them.
+6. **Copy the GP sync's units**: `cp deploy/shift-central-gp-sync.* /etc/systemd/system/`,
+   and `cp deploy/gunicorn.service /etc/systemd/system/shift-central.service` if
+   it changed.
+7. `systemctl daemon-reload`, then `systemctl restart shift-central`.
+8. **Enable the GP timer only once `ROTA_URL` and `ROTA_API_TOKEN` are set**: run
+   `deploy/manage gp_sync` once and check it says how many GPs it read, then
+   `systemctl enable --now shift-central-gp-sync.timer`. Enabled without them, the
+   timer fails every fifteen minutes and fills the journal with it.
 
 ## Backups
 
@@ -117,21 +165,23 @@ migration that went wrong.
 
 From the box's own copy:
 
-    systemctl stop shift-central shift-central-hr-sync.timer
+    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer
     ls -l /var/lib/shift-central/backups
     cp -p /var/lib/shift-central/db.sqlite3 /root/db-before-restore.sqlite3
     install -o shift-central -g shift-central -m 600 /var/lib/shift-central/backups/db-<date>.sqlite3 /var/lib/shift-central/db.sqlite3
     rm -f /var/lib/shift-central/db.sqlite3-wal /var/lib/shift-central/db.sqlite3-shm
     deploy/manage migrate
-    systemctl start shift-central shift-central-hr-sync.timer
+    systemctl start shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer
 
 Stop first, and remove the old `-wal` and `-shm` files: otherwise SQLite replays a
 stale log into the restored file. `migrate` brings an older copy up to the current
 code. The next sync (within fifteen minutes, or *Sync now*) brings the people
-up to date from Practice HR, so **Practice HR does not need restoring with it**.
-What is lost is what was typed here after the copy was made: hours, allowances,
-notes, departments, manager grants and their entries in the Activity log. Check those
-against the History links and re-enter what is missing.
+up to date from Practice HR, so **Practice HR does not need restoring with it**; the
+next GP sync does the same for the GP sessions. What is lost is what was typed here
+after the copy was made: hours, allowances, notes, departments, manager grants and
+their entries in the Activity log, **and any rota changes**: shifts, templates and
+the list of changes not yet notified. Check those against the History links, and
+look over the rota for the weeks that were being laid out, and re-enter what is missing.
 
 From the Proxmox Backup Server, when the machine is gone: build a fresh server as
 in the README, put the same units in place, restore the snapshot with the key you

@@ -1,0 +1,13 @@
+[Unit]
+Description=Read GP sessions from the GP rota app every fifteen minutes
+
+[Timer]
+# Every quarter hour, offset from the HR timer so the two never run together.
+# The random minute of delay keeps the call from landing on the same second
+# as the box's other timers.
+OnCalendar=*-*-* *:7/15:00
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

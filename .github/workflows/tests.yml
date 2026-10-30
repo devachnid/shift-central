@@ -17,10 +17,14 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: pip install -r requirements.txt ruff==0.16.6
+      - run: pip install -r requirements.txt -r requirements-dev.txt ruff==0.16.6
       - run: ruff check .
       - run: DEBUG=1 python manage.py makemigrations --check --dry-run
       - run: python -m pytest -q
+      # The browser test: tests/e2e is collected only with E2E=1, so the
+      # plain suite above (and the Python 3.14 job) never needs Chromium.
+      - run: python -m playwright install --with-deps chromium
+      - run: E2E=1 python -m pytest -q tests/e2e
       - run: python manage.py collectstatic --noinput && python manage.py check --deploy
         env:
           DEBUG: "0"
@@ -55,6 +59,8 @@ jobs:
       - run: npm ci
         working-directory: frontend
       - run: npm run check
+        working-directory: frontend
+      - run: npm test
         working-directory: frontend
       - run: npm run build
         working-directory: frontend

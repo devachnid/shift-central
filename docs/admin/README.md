@@ -13,7 +13,8 @@ This is the *reference* for what each setting means once you are in there.
 | [People](people.md) | Teams, who a person is and what Practice HR owns of them, the fields typed here, the profile pop-up's tabs and who sees each, hours and the two leave allowances, notes, the Staff list and its download |
 | [Departments](departments.md) | The list of departments, colours, order, archiving instead of deleting |
 | [Access](access.md) | The three roles, where each is set, what each can see and do, the Permissions link, sessions and signing out, the two logs |
-| [The Practice HR feed](sync.md) | What the fifteen-minute sync changes and never changes, the Health card's four figures and what to do about each, Sync now, running it by hand |
+| [The rota](rota.md) | The grid, typing a shift and what the parser reads, the right-click menu, copying weeks, templates, overtime, notify staff, options and filters, the hours report, who's in today, the phone view, GP sessions |
+| [The Practice HR and GP feeds](sync.md) | Practice HR: what the fifteen-minute sync changes and never changes, the Health card's figures and what to do about each, Sync now, running it by hand. The GP rota app: sessions read every fifteen minutes, the unmatched list |
 | [Setting up](setup.md) | The go-live order, then backups and restore |
 
 ## The mental model

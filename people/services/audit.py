@@ -26,3 +26,14 @@ def record(actor, obj, changes, note=""):
         for field, (before, after) in stored.items() if before != after
     ]
     return AuditEntry.objects.bulk_create(rows)
+
+
+def record_as(actor, model, object_id, changes, note=""):
+    """record() for a change filed under another model's label: the grid
+    audits a cell against the person, under shifts.entry, so the Activity
+    log's person filter finds it and its field filter tells it apart."""
+    email = getattr(actor, "email", "") if actor is not None else SYNC_ACTOR_EMAIL
+    rows = [AuditEntry(actor=actor, actor_email=email, kind=AuditEntry.Kind.CHANGE, model=model,
+                       object_id=object_id, field=field, before=_text(before), after=_text(after), note=note)
+            for field, (before, after) in changes.items() if _text(before) != _text(after)]
+    return AuditEntry.objects.bulk_create(rows)

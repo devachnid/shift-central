@@ -12,10 +12,12 @@ and decide *who manages whom*; departments are typed here and decide *what a
 shift is for*. A nurse is in the Nursing team and may work a Nursing shift, or a
 Workflow one.
 
-**Nothing uses departments yet.** The rota grid release tags shifts with them.
-Until then the list is set up in advance, so that managers can agree the names and
-colours before the grid needs them. Nothing breaks if a setting here is
-wrong today; it is cheaper to get it right now than once shifts reference it.
+**The [rota](rota.md) tags shifts with departments**: a department's name typed
+after the times (`8-4 Reception PMC`) or picked from the shift dialog or right-click
+menu sets it, and its colour is the tile's colour. A name that contains *AG* or *PMC*
+as a word also decides which site Who's in today puts the shift under. Renaming or
+recolouring a department changes every shift tagged with it, so get the names right
+before the rotas are laid out.
 
 **A department is archived, never deleted.** Shifts will refer to it, and deleting
 it would orphan every one. There is no delete button.
@@ -41,7 +43,7 @@ Pharmacy Technician. They are numbered 10 to 26 in that order.
 | **Name** | Up to 60 characters, required. Must be unique **ignoring case**: "nursing" is refused as a clash with "Nursing", with the message "A department with this name already exists." Renaming keeps the department's identity, so existing shifts will follow the new name. |
 | **Colour** | The tile colour on the rota and the name chip here. Pick a swatch or type `#rrggbb`. Anything else is refused with "Choose a colour." New departments start on blue (`#2F6FB3`); pick another, as two departments the same colour cannot be told apart on a grid. A pale colour makes white text unreadable. |
 | **Display order** | A whole number, 0 or more, default 100. Lower comes first; ties fall back to alphabetical. A new department with the default sits after the seventeen seeded ones (10 to 26). To put one between two others, give it a number between theirs; there is no drag to reorder. |
-| **Archived** | Shown only when editing. Tick it to retire a department: it moves to the *Archived* table, and the rota grid release will stop offering it for new shifts while leaving the ones already tagged with it intact. Untick it to bring it back. Archiving something in use is safe; deleting would not have been. |
+| **Archived** | Shown only when editing. Tick it to retire a department: it moves to the *Archived* table, and the rota stops offering it for new shifts while leaving the ones already tagged with it intact. Untick it to bring it back. Archiving something in use is safe; deleting would not have been. |
 
 The button reads **Add department** or **Update department**. A form error
 (the clashing name, a bad colour) comes back in the same pop-up with the other

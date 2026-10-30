@@ -1,0 +1,44 @@
+[Unit]
+Description=Read GP sessions from the GP rota app into Shift Central
+After=network-online.target
+
+[Service]
+Type=oneshot
+# The same user, directories and sandbox as the web service; see
+# gunicorn.service for why each is there.
+User=shift-central
+Group=shift-central
+WorkingDirectory=/srv/shift-central
+StateDirectory=shift-central
+StateDirectoryMode=0700
+UMask=0077
+# ROTA_URL and ROTA_API_TOKEN live in the same environment file as
+# SECRET_KEY, readable only by root. See gunicorn.service for why. Without
+# them gp_sync refuses to run and says so in the journal; a failed run keeps
+# the last good sessions and shows on the Staff page's Health card.
+EnvironmentFile=/etc/shift-central.env
+ExecStart=/srv/shift-central/.venv/bin/python manage.py gp_sync
+
+# Sandbox: identical in every shift-central unit (tests/test_deploy_units.py).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM

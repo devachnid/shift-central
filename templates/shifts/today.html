@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Who's in today · AMG Shift Central{% endblock %}
+{% block topbar_actions %}
+  <a class="topbar-action" href="?day={{ prev|date:'Y-m-d' }}" aria-label="Previous day">‹</a>
+  <a class="topbar-action" href="?day={{ next|date:'Y-m-d' }}" aria-label="Next day">›</a>
+  <a class="topbar-action" href="{% url 'rota-today' %}">Today</a>
+{% endblock %}
+{% block content %}
+<h2 class="today-date">{{ day|date:"l j F Y" }}</h2>
+<div class="today-board">
+  {% for site in board.sites %}
+  <section class="today-site"><h3>{{ site.name }}</h3>
+    {% for t in site.teams %}<h4>{{ t.team }}</h4>
+      {% for row in t.people %}<div class="today-row"><span class="chip" style="background:{{ row.person.name_colour }}">{{ row.person.name }}</span> {{ row.lines|join:" · " }}</div>{% endfor %}
+    {% endfor %}
+  </section>
+  {% endfor %}
+  <section class="today-site"><h3>Working from home</h3>
+    {% for row in board.wfh %}<div class="today-row"><span class="chip" style="background:{{ row.person.name_colour }}">{{ row.person.name }}</span> {{ row.lines|join:" · " }}</div>{% empty %}<p class="muted">Nobody.</p>{% endfor %}
+  </section>
+  <section class="today-site"><h3>Off</h3>
+    {% for p in board.off %}<div class="today-row"><span class="chip" style="background:{{ p.name_colour }}">{{ p.name }}</span></div>{% empty %}<p class="muted">Nobody.</p>{% endfor %}
+  </section>
+</div>
+{% endblock %}

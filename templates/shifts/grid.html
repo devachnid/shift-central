@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Rota · AMG Shift Central{% endblock %}
+{% block topbar_actions %}
+  <a class="topbar-action" href="?{{ prev }}" aria-label="Back">‹</a>
+  <a class="topbar-action" href="?{{ next }}" aria-label="Forward">›</a>
+  <a class="topbar-action" href="?{{ today }}">Today</a>
+  <form class="topbar-form" method="get" action="/rota/">
+    {% for k, vs in filters.items %}{% for v in vs %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}{% endfor %}
+    <label>Show <select name="weeks" data-submit-on-change>{% for n in weeks_range %}<option value="{{ n }}"{% if n == weeks %} selected{% endif %}>{{ n }} week{{ n|pluralize }}</option>{% endfor %}</select></label>
+    <label>from <input type="date" name="from" value="{{ first|date:'Y-m-d' }}" data-submit-on-change></label>
+  </form>
+  <a class="topbar-action" href="{% url 'rota-options' %}?{{ query }}" data-dialog>Options</a>
+  <a class="topbar-action" href="{% url 'rota-filters' %}?{{ query }}" data-dialog>Filters</a>
+  <a class="topbar-action" href="{% url 'rota-download' %}?{{ query }}">Download</a>
+  {% if is_manager %}
+  <a class="topbar-action" href="{% url 'rota-templates' %}" data-dialog data-grid-templates>Templates</a>
+  <a class="topbar-action is-primary{% if not unnotified %} is-hidden{% endif %}" href="/rota/notify/" data-dialog id="notify-staff">Notify staff (<span data-unnotified>{{ unnotified }}</span>)</a>
+  {% endif %}
+  {% if reorder %}<a class="topbar-action" href="/rota/?{{ query }}">Done sorting</a>{% endif %}
+{% endblock %}
+{% block content %}
+<div class="rota-bar" id="rota-bar" role="alert" hidden></div>
+<div class="rota-desk" data-component="rota-grid" data-from="{{ first|date:'Y-m-d' }}" data-weeks="{{ weeks }}"
+     data-filters="{{ query }}" data-api="/rota/api/" data-role="{{ role }}" data-me="{{ me_pk }}"
+     data-reorder="{% if reorder %}1{% endif %}" data-bar="rota-bar"></div>
+{% include "shifts/_grid_phone.html" %}
+{% endblock %}

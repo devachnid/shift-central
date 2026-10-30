@@ -145,3 +145,43 @@ def test_allowance_rows_name_the_person():
     profiles.set_allowance(boss.user, nina, date(2026, 1, 1), "187.5", "60")
     body = c.get("/activity/", {"field": "annual_hours"}).content.decode()
     assert "<td>Nina Shah</td>" in body and "<td>allowance</td>" not in body
+
+
+def test_a_rota_cell_edit_appears_under_that_persons_filter():
+    from shifts.services import entries
+    boss, c = _boss()
+    nina = make_person(first_name="Nina", last_name="Shah")
+    other = make_person(first_name="Omar", last_name="Ali")
+    entries.set_cell_text(boss.user, nina, date(2027, 3, 1), "08:00-12:00")
+    entries.set_cell_text(boss.user, other, date(2027, 3, 1), "13:00-17:00")
+    body = c.get("/activity/", {"person": str(nina.pk)}).content.decode()
+    assert "<td>Nina Shah</td>" in body and "<td>cell</td>" in body and "08:00" in body
+    assert "13:00" not in body and "Omar Ali</td>" not in body
+
+
+def test_a_team_manager_sees_rota_changes_for_their_team_only():
+    from shifts.services import entries
+    nursing = make_team("Nursing")
+    lead = make_person(team=nursing)
+    make_team_manager(lead, nursing)
+    boss = make_user_for(make_person(first_name="Boss"), is_all_teams_manager=True)
+    entries.set_cell_text(boss, make_person(first_name="Nina", team=nursing), date(2027, 3, 1), "08:00-12:00")
+    entries.set_cell_text(boss, make_person(first_name="Rec"), date(2027, 3, 1), "13:00-17:00")
+    body = _client(lead).get("/activity/").content.decode()
+    assert "08:00" in body and "13:00" not in body
+
+
+def test_template_changes_appear_labelled_template():
+    from shifts.services import templates
+    boss, c = _boss()
+    templates.save(boss.user, "Monday cover", {"days": 1, "rows": []})
+    body = c.get("/activity/").content.decode()
+    assert "<td>template</td>" in body and "Monday cover" in body
+
+
+def test_a_staff_users_activity_log_is_still_forbidden_with_rota_changes_in_it():
+    from shifts.services import entries
+    boss, _ = _boss()
+    nina = make_person(first_name="Nina")
+    entries.set_cell_text(boss.user, nina, date(2027, 3, 1), "08:00-12:00")
+    assert _client(nina).get("/activity/").status_code == 403

@@ -256,3 +256,18 @@ def test_the_command_refuses_without_a_token(settings, capsys):
     settings.PRACTICE_HR_URL, settings.HR_API_TOKEN = "https://hr.example", ""
     with pytest.raises(CommandError, match="HR_API_TOKEN"):
         call_command("hr_sync")
+
+
+def test_a_good_run_from_the_gp_feed_does_not_judge_absence():
+    """The GP feed shares SyncRun; only Practice HR's good run counts, so a
+    fresh GP run leaves the last good HR run (three days old) in charge."""
+    hr_sync.sync(FakeClient())
+    _a_while_ago()
+    SyncRun.objects.create(source="gp-rota", ok=True)
+    assert not hr_sync.not_seen_recently().exists()
+
+
+def test_the_health_card_reads_only_practice_hr_runs():
+    hr_sync.sync(FakeClient())
+    SyncRun.objects.create(source="gp-rota", ok=False, message="unreachable")
+    assert hr_sync.last_run().source == "practice-hr"

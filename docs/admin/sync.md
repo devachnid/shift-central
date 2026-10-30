@@ -1,7 +1,8 @@
 # The Practice HR feed
 
 **Where:** the Health card at the top of the Staff page (managers); `deploy/manage
-hr_sync` on the server; `shift-central-hr-sync.timer`.
+hr_sync` on the server; `shift-central-hr-sync.timer`. The GP rota app's sessions
+are read in the same way, and are [at the end of this page](#gp-sessions-from-the-rota-app).
 
 ## The mental model
 
@@ -142,3 +143,96 @@ screen instead of in a journal.
 `shift-central-hr-sync.service` is the unit the timer starts. It fails (shown in
 `systemctl status shift-central-hr-sync`) when a run fails, which is the second
 place to look beside the Health card.
+
+## GP sessions from the rota app
+
+**Where:** the Health card's *GP rota* box and *GPs in the rota app not matched
+here*; `deploy/manage gp_sync` on the server; `shift-central-gp-sync.timer`.
+
+**The GP rota app (`devachnid/rota`) owns the GPs' sessions; this app only shows
+them.** Every fifteen minutes Shift Central asks it for the sessions in a window,
+**from eight weeks before today to fifty-two weeks after**, with `ROTA_URL` +
+`/api/v1/sessions` and the bearer token `ROTA_API_TOKEN` (one of the rota app's
+`ROTA_API_TOKENS`). Then, in one transaction:
+
+- Each session's **email** is matched, ignoring capitals, to a person here who is
+  **marked a GP** and is current or starting; a leaver (finish date passed) is never
+  matched. If two people here share the email (a GP who left and came back), the
+  one current today gets the sessions. Matched sessions replace the whole
+  window's sessions here; a session the rota app has dropped disappears here at the
+  next run.
+- A session for the same GP, day and part (AM or PM) twice in the feed is kept once,
+  and a session outside the window is ignored. Both are counted in the run's message.
+- Sessions that match nobody are not stored, and the addresses are listed on the
+  Health card.
+- Nothing is ever written back to the rota app, and a session cannot be edited here:
+  the rota draws them as read-only tiles and the hours report counts each as 4 h 10 min.
+
+The timer is `shift-central-gp-sync.timer`, `OnCalendar=*:7/15:00`: at seven past,
+twenty-two past, thirty-seven past and fifty-two past the hour, so that it never
+runs at the same moment as the HR timer. Like the HR sync, **a failed run keeps the
+last good sessions** exactly as they were, and shows on the Health card; it never
+shows an error page.
+
+### The Health lines
+
+**GP rota** is the last run: "*N* GPs, 29 Oct 14:32" when it worked (the count is the
+GPs who had a session in the window); "failed 29 Oct 14:32" in red with the message
+when it did not; "never read" before the first run; "not configured" when `ROTA_URL`
+or `ROTA_API_TOKEN` is unset, which is right for a site that has no GP rota app and is
+not a fault. A run that worked can still carry a note in grey under the figure, such as
+"3 emails unmatched; 1 clinician without an email; 2 duplicate sessions"; the words are
+counts only.
+
+**GPs in the rota app not matched here** appears when the last good run held sessions
+for email addresses that belong to no GP here, with the count. **All-teams managers
+also see the addresses**; team managers see the count only.
+
+- *What to do:* find each address. The usual cause is that the GP's work email in the
+  GP rota app differs from the one in Practice HR (a different spelling, an old
+  address, a personal one). Correct whichever is wrong, in that system, and the next
+  run (within fifteen minutes) picks the sessions up. Another cause is that the person
+  is not marked as a GP in Practice HR (their contract unit must be *sessions*): then the
+  address is unmatched and the fault is in HR.
+- The note "*N* clinicians without an email" is the other direction: the rota app holds
+  sessions for a clinician who has no email there at all, so there is nothing to match.
+  Give them one in the rota app.
+
+### When the GP sync fails
+
+| Message | Meaning, and the fix |
+|---|---|
+| `GP rota returned 401 for sessions` | `ROTA_API_TOKEN` is not one of the values in `ROTA_API_TOKENS` in the rota app's `/etc/rota.env`, or the rota app has not been restarted since the token was added. |
+| `GP rota returned 400 ...` | The rota app refused the range. Its limit is a `to` date at most 500 days after `from`; the window is far inside that, so look at whether the rota app is the version with the feed. |
+| `GP rota returned 404 ...` or `403 ...` | `ROTA_URL` is wrong, or the rota app does not have the feed yet. It must be the rota app's address with no path. |
+| `GP rota returned 429 ...` | The rate limit for the feed was hit: something else is polling hard from this address. |
+| `GP rota unreachable` | A network failure, a wrong hostname, or the rota app down. |
+| `ROTA_URL is not https; the token was not sent` | Use the public `https` hostname, not `http://127.0.0.1:8321`. |
+| `GP rota returned a non-JSON body for sessions` or `... has no 'sessions' list` | The address answers, but it is not the feed. |
+| `session N in the feed: missing or bad email, day or part` | The Nth session lacks something this app requires. Until the rota app is fixed no sessions are updated. It never names the value. |
+| `unexpected error; see the journal` | `journalctl -u shift-central-gp-sync` has the traceback. |
+
+### Running it by hand
+
+On the server, as root:
+
+    deploy/manage gp_sync
+
+It prints "sessions for *N* GPs read from the GP rota", with any note in brackets, or
+exits with an error and says why. It refuses to start, naming the settings, if
+`ROTA_URL` or `ROTA_API_TOKEN` is unset. Run it by hand once after setting those two
+and before enabling the timer, and after any change to either. There is no Sync now
+button for it: the timer is fifteen minutes, and the hand run is for urgent cases.
+
+`shift-central-gp-sync.service` is the unit the timer starts. It fails when a run fails,
+which shows in `systemctl status shift-central-gp-sync`.
+
+### To revisit
+
+**Link GPs by Practice HR's employee id once the rota app holds one.** Today a GP is
+found by work email, so a changed address silently drops their sessions until someone
+corrects it; the Health line is the safety net. Once the rota app records the employee
+id, matching on it removes that failure. The practice manager's answer to the
+requirements' amendment 2 (GP sessions shown read-only) also decides whether this stays
+as it is: if the answer is no, this section is what changes.
+

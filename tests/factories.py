@@ -1,9 +1,12 @@
 """Short builders for the suite. Every default is a plausible receptionist."""
 
-from datetime import date
+from datetime import date, time
+
+from django.utils import timezone
 
 from accounts.models import User
-from people.models import Person, Team, TeamManager
+from people.models import Department, Person, Team, TeamManager
+from shifts.models import Entry, GpSession
 
 _next_id = iter(range(1000, 100000))
 
@@ -34,3 +37,24 @@ def make_user_for(person, **kw):
 
 def make_team_manager(person, team, granted_by=None):
     return TeamManager.objects.create(person=person, team=team, granted_by=granted_by)
+
+
+def make_department(name="Reception PMC", colour="#2F6FB3", **kw):
+    dept, _ = Department.objects.get_or_create(name=name, defaults={"colour": colour, **kw})
+    return dept
+
+
+def make_entry(person, day, **kw):
+    kw.setdefault("kind", "shift")
+    if kw["kind"] == "shift":
+        kw.setdefault("start", time(8, 0))
+        kw.setdefault("finish", time(16, 15))
+    kw.setdefault("position", Entry.objects.filter(person=person, day=day).count())
+    return Entry.objects.create(person=person, day=day, **kw)
+
+
+def make_gp_session(person, day, part="AM", **kw):
+    kw.setdefault("label", "Surgery")
+    kw.setdefault("site", "AG")
+    kw.setdefault("synced_at", timezone.now())
+    return GpSession.objects.create(person=person, day=day, part=part, **kw)

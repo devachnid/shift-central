@@ -11,3 +11,11 @@
     try { localStorage.setItem(KEY, app.classList.contains("is-collapsed") ? "collapsed" : "open"); } catch (e) {}
   });
 })();
+
+/* Selects and date inputs marked data-submit-on-change submit their form
+ * when changed (the Rota's weeks and from). No inline onchange: the CSP
+ * forbids it. */
+document.addEventListener("change", function (e) {
+  var el = e.target.closest && e.target.closest("[data-submit-on-change]");
+  if (el && el.form) { el.form.requestSubmit(); }
+});
