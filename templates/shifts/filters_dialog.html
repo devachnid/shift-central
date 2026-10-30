@@ -1,0 +1,11 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}Filters{% endblock %}
+{% block dialog_body %}
+<form method="get" action="/rota/">
+  <input type="hidden" name="from" value="{{ from }}"><input type="hidden" name="weeks" value="{{ weeks }}">
+  <div class="field"><label for="f-name">Name contains</label><input id="f-name" type="text" name="name" value="{{ name }}"></div>
+  <fieldset class="field"><legend>Teams</legend>{% for t in teams %}<label><input type="checkbox" name="team" value="{{ t.pk }}"{% if t.pk|stringformat:"s" in team %} checked{% endif %}> {{ t.name }}</label> {% endfor %}</fieldset>
+  <fieldset class="field"><legend>Departments</legend>{% for d in departments %}<label><input type="checkbox" name="dept" value="{{ d.pk }}"{% if d.pk|stringformat:"s" in dept %} checked{% endif %}> {{ d.name }}</label> {% endfor %}</fieldset>
+  <button class="btn btn-dark">Apply filters</button> <a class="btn btn-quiet" href="/rota/?from={{ from }}&amp;weeks={{ weeks }}">Clear</a>
+</form>
+{% endblock %}

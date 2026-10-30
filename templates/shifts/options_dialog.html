@@ -1,0 +1,17 @@
+{% extends "ui/_dialog.html" %}
+{% load shifts_extras %}
+{% block dialog_title %}Options{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% url 'rota-options' %}" data-dialog-form>
+  {% csrf_token %}
+  {% for name in "staff_colours,job_titles,department_colours,float_headers,my_shifts_on_top,only_my_shifts,hide_no_shifts"|split %}
+  {% with f=form|field:name %}<div class="field"><label><input type="checkbox" name="{{ name }}"{% if f.value %} checked{% endif %}> {{ f.label }}</label></div>{% endwith %}
+  {% endfor %}
+  <div class="field"><label for="id_font_size">Font size</label>{{ form.font_size }}</div>
+  <div class="field"><label for="id_spacing">Spacing</label>{{ form.spacing }}</div>
+  <div class="field"><span class="field-label">Days to display</span>{{ form.days }}</div>
+  <div class="field"><label for="id_paste">Paste behaviour</label>{{ form.paste }}</div>
+  <button class="btn btn-dark">Save options</button>
+</form>
+{% endblock %}
+{% block dialog_links %}{% if is_manager %}<div class="dialog-links"><a href="/rota/?{{ query }}&amp;reorder=1">Sort staff by drag and drop</a></div>{% endif %}{% endblock %}

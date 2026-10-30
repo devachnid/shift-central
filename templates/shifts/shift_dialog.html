@@ -1,0 +1,20 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}{{ person.name }} · {{ day|date:"D j M Y" }}{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% if entry %}{% url 'rota-shift-edit' person.pk day|date:'Y-m-d' entry.pk %}{% else %}{% url 'rota-shift' person.pk day|date:'Y-m-d' %}{% endif %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <div class="field-row">
+    <div class="field{% if form.start.errors %} has-error{% endif %}"><label for="id_start">Start</label>{{ form.start }}{% for e in form.start.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+    <div class="field{% if form.finish.errors %} has-error{% endif %}"><label for="id_finish">Finish</label>{{ form.finish }}{% for e in form.finish.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+    <div class="field"><label for="id_break_minutes">Break</label>{{ form.break_minutes }}</div>
+  </div>
+  <div class="field"><label for="id_department">Department</label>{{ form.department }}</div>
+  <div class="field"><label for="id_text">Comment</label>{{ form.text }}</div>
+  <div class="field"><label><input type="checkbox" name="wfh"{% if form.wfh.value %} checked{% endif %}> Working from home</label></div>
+  <fieldset class="field"><legend>Overtime</legend>
+    {% for value, label in form.fields.overtime.choices %}<label><input type="radio" name="overtime" value="{{ value }}"{% if form.overtime.value|default:"" == value %} checked{% endif %}> {{ label }}</label> {% endfor %}
+  </fieldset>
+  <button class="btn btn-dark">{% if entry %}Update shift{% else %}Add shift{% endif %}</button>
+</form>
+{% endblock %}

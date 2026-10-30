@@ -1,0 +1,9 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}{% if template %}Rename template{% else %}Save as template{% endif %}{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% if template %}{% url 'rota-template-rename' template.pk %}{% else %}{% url 'rota-template-save' %}{% endif %}" data-dialog-form>
+  {% csrf_token %}{% if not template %}<input type="hidden" name="block" value="{{ block }}">{% endif %}
+  <div class="field{% if form.name.errors %} has-error{% endif %}"><label for="id_name">Name</label>{{ form.name }}{% for e in form.name.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  <button class="btn btn-dark">{% if template %}Rename{% else %}Save template{% endif %}</button>
+</form>
+{% endblock %}

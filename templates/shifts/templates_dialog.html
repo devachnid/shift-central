@@ -1,0 +1,18 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}Templates{% endblock %}
+{% block dialog_body %}
+{% if not cell %}<p class="field-help">Select a cell on the grid first to apply a template there.</p>{% endif %}
+<table class="table">
+  <thead><tr><th>Name</th><th>Saved by</th><th></th></tr></thead>
+  <tbody>
+  {% for t in templates %}
+  <tr><td>{{ t.name }}</td><td>{{ t.created_by.email|default:"" }}</td>
+    <td class="actions">
+      {% if cell %}<form method="post" action="{% url 'rota-template-apply' t.pk %}" data-dialog-form>{% csrf_token %}<input type="hidden" name="cell" value="{{ cell }}"><input type="hidden" name="row_order" value="{{ row_order }}"><button class="btn btn-quiet">Apply</button></form>{% endif %}
+      <a href="{% url 'rota-template-rename' t.pk %}" data-dialog>Rename</a>
+      <form method="post" action="{% url 'rota-template-delete' t.pk %}" data-dialog-form>{% csrf_token %}<button class="btn btn-quiet">Delete</button></form>
+    </td></tr>
+  {% empty %}<tr><td colspan="3">No templates yet. Select cells on the grid, right-click, Save selection as template.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

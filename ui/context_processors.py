@@ -8,12 +8,18 @@ from people.services import access
 
 def _items(request, role):
     path = request.path
-    items = [{"key": "staff", "label": "Staff", "icon": "people", "url": "/staff/",
+    items = [{"key": "rota", "label": "Rota", "icon": "calendar", "url": "/rota/",
+              "active": path.startswith("/rota/"),
+              "children": [{"label": "Who's in today", "url": "/rota/today/"}] if role != "staff" else []},
+             {"key": "staff", "label": "Staff", "icon": "people", "url": "/staff/",
               "active": path.startswith("/staff/"), "children": []}]
     if role != "staff":
         items.append({"key": "departments", "label": "Departments", "icon": "tag",
                       "url": "/departments/", "active": path.startswith("/departments/"),
                       "children": []})
+    items.append({"key": "reports", "label": "Reports", "icon": "report", "url": "/reports/hours/",
+                  "active": path.startswith("/reports/"), "children": [{"label": "Hours", "url": "/reports/hours/"}]})
+    if role != "staff":
         children = [{"label": "Activity log", "url": "/activity/"}]
         if role == "all":
             children.append({"label": "Log in logs", "url": "/activity/logins/"})

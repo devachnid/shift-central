@@ -6,7 +6,8 @@
  *    #dialog, focusing the first field.
  *  - <form data-dialog-form> inside posts by fetch, its buttons disabled
  *    while the post is in flight. A 200 replaces the dialog with the response
- *    (a form shown again with its errors); a JSON {"redirect": url} follows it.
+ *    (a form shown again with its errors); a JSON {"redirect": url} follows it, and
+ *    {"refresh": true} closes the dialog and fires shift-central:refresh.
  *  - Failures never put an error page in the dialog. A redirect to the log-in
  *    page (the session ended) or a non-2xx answer shows a "Something went
  *    wrong" dialog for a fetch, or a flash at the top of the form (which stays
@@ -127,7 +128,9 @@
         var type = r.headers.get("Content-Type") || "";
         if (type.indexOf("application/json") === 0) {
           return r.json().then(function (j) {
-            if (j.redirect) { window.location.assign(j.redirect); } else { setBusy(false); }
+            if (j.redirect) { window.location.assign(j.redirect); return; }
+            if (j.refresh) { close(); document.dispatchEvent(new CustomEvent("shift-central:refresh")); return; }
+            setBusy(false);
           });
         }
         return r.text().then(show);

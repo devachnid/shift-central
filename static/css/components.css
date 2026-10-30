@@ -110,3 +110,25 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
   .page { padding-bottom: 72px; }
   .topbar { flex-wrap: wrap; height: auto; padding: var(--sp-2) var(--sp-3); }
 }
+
+/* --- rota page ------------------------------------------------------------- */
+.topbar-form { display: inline-flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-sm); }
+.topbar-form select, .topbar-form input { font: inherit; padding: 2px 4px; }
+.is-hidden { display: none !important; }
+.rota-bar { background: var(--danger-soft); color: var(--danger); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); margin-bottom: var(--sp-3); font-size: var(--fs-sm); }
+.rota-bar a { color: inherit; font-weight: 700; }
+.field-row { display: flex; gap: var(--sp-3); }
+.field-row .field { flex: 1; }
+.rota-phone { display: none; }
+.tile { display: block; font-size: var(--fs-sm); padding: 4px 6px; border-radius: 3px; background: var(--ground); margin: 2px 0; }
+.tile-session { background: var(--pale); }
+.tile-none { color: var(--muted); font-style: italic; background: none; }
+@media (max-width: 767px) {
+  .rota-desk { display: none; }
+  .rota-phone { display: block; }
+  .rota-phone-day { background: var(--surface); border: 1px solid var(--hairline); border-radius: 6px; padding: var(--sp-3); margin-bottom: var(--sp-3); }
+  .rota-phone-day.is-today { border-color: var(--amber); }
+  .rota-phone-day h2 { margin: 0 0 var(--sp-2); font-size: var(--fs-md); }
+  .rota-phone-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0; }
+  .rota-phone-team summary { color: var(--muted); font-size: var(--fs-sm); cursor: pointer; margin-top: var(--sp-2); }
+}
