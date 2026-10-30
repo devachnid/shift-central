@@ -11,6 +11,9 @@ class SyncRun(models.Model):
     message = models.CharField(max_length=300, blank=True, default="")
     # Which feed: "practice-hr" (people) or "gp-rota" (GP sessions, spec 2).
     source = models.CharField(max_length=20, default="practice-hr", db_index=True)
+    # Counts and, for the GP feed, the unmatched emails (shown on the Health
+    # card, never logged).
+    detail = models.JSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["-started_at"]

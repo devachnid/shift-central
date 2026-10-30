@@ -6,6 +6,15 @@
     {% if health.last_run and not health.last_run.ok %}<span>{{ health.last_run.message }}</span>{% endif %}
     <form method="post" action="{% url 'staff-sync' %}">{% csrf_token %}<button class="btn btn-quiet">Sync now</button></form>
   </div>
+  <div class="health-item{% if health.gp_configured and not health.gp_last_run.ok %} is-bad{% endif %}">
+    GP rota
+    <strong>{% if not health.gp_configured %}not configured{% elif not health.gp_last_run %}never read{% elif health.gp_last_run.ok %}{{ health.gp_last_run.people_seen }} GPs, {{ health.gp_last_run.finished_at|date:"j M H:i" }}{% else %}failed {{ health.gp_last_run.finished_at|date:"j M H:i" }}{% endif %}</strong>
+    {% if health.gp_last_run and health.gp_last_run.message %}<span>{{ health.gp_last_run.message }}</span>{% endif %}
+  </div>
+  {% if health.gp_unmatched_count %}
+  <div class="health-item is-warning">GPs in the rota app not matched here<strong>{{ health.gp_unmatched_count }}</strong>
+    {% for e in health.gp_unmatched %}{{ e }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+  {% endif %}
   <div class="health-item{% if health.needs_setup %} is-warning{% endif %}">Needs hours and allowances<strong>{{ health.needs_setup.count }}</strong>
     {% for p in health.needs_setup|slice:":5" %}<a href="{% url 'profile' p.pk %}" data-dialog>{{ p.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>
   <div class="health-item{% if health.not_seen %} is-bad{% endif %}">Not in Practice HR's feed for a day<strong>{{ health.not_seen.count }}</strong>
