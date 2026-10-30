@@ -86,3 +86,15 @@ def set_notes(actor, person, notes):
     person.notes = notes
     person.save(update_fields=["notes"])
     return audit.record(actor, person, {"notes": (NOTES_BEFORE if before else "", NOTES_AFTER)})
+
+
+def reorder(actor, ids):
+    """The grid's "sort staff": display_order 10, 20, 30… for the ids in the
+    order given; people not listed keep theirs. Managers only — the view
+    checks; this audits each change."""
+    from people.models import Person
+    people = {p.pk: p for p in Person.objects.filter(pk__in=ids)}
+    for n, pk in enumerate(ids, start=1):
+        person = people.get(pk)
+        if person is not None:
+            _apply(actor, person, {"display_order": n * 10})
