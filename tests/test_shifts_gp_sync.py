@@ -150,3 +150,32 @@ def test_the_command_refuses_to_run_unconfigured(settings):
     settings.ROTA_URL, settings.ROTA_API_TOKEN = "", ""
     with pytest.raises(CommandError):
         call_command("gp_sync")
+
+
+def test_a_leaver_sharing_a_current_gps_email_gets_no_sessions():
+    leaver = make_person(first_name="Old", email="doc@example.org", is_gp=True,
+                         start_date=date(2020, 1, 6), end_date=date(2023, 3, 31))
+    doc = make_person(first_name="Doc", email="Doc@example.org", is_gp=True)
+    run = gp_sync.sync(FakeClient(), now=NOW)
+    assert run.people_seen == 1
+    assert not GpSession.objects.filter(person=leaver).exists()
+    assert GpSession.objects.filter(person=doc).count() == 3
+
+
+def test_a_gp_whose_end_date_has_passed_is_unmatched_and_counted():
+    make_person(first_name="Doc", email="doc@example.org", is_gp=True, end_date=date(2027, 1, 4))
+    run = gp_sync.sync(FakeClient(), now=NOW)
+    assert run.ok and run.people_seen == 0 and not GpSession.objects.exists()
+    assert "doc@example.org" in run.detail["unmatched"]
+    assert run.message.startswith("3 emails unmatched")
+
+
+def test_a_gp_starting_later_is_matched_but_the_current_one_wins_a_shared_email():
+    returning = make_person(first_name="Back", email="doc@example.org", is_gp=True, start_date=date(2027, 4, 5))
+    doc = make_person(first_name="Doc", email="doc@example.org", is_gp=True)
+    gp_sync.sync(FakeClient(), now=NOW)
+    assert GpSession.objects.filter(person=doc).count() == 3
+    assert not GpSession.objects.filter(person=returning).exists()
+    starter = make_person(first_name="New", email="sam.1@example.org", is_gp=True, start_date=date(2027, 2, 1))
+    gp_sync.sync(FakeClient(), now=NOW)
+    assert GpSession.objects.filter(person=starter).count() == 1

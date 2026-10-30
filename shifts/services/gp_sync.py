@@ -9,6 +9,7 @@ from datetime import date, timedelta
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from people.models import Person, SyncRun
@@ -42,11 +43,27 @@ def _parse(record, position):
         raise BadRecord(f"session {position} in the feed: missing or bad email, day or part") from None
 
 
-def _apply(payload, start, end, now):
+def _gps(today):
+    """GPs by lowercased email: those current on the sync day or starting
+    after it, never a leaver. A work email can be reused (a GP who left and
+    came back has two records); when two share one, the one current today
+    wins, else the earlier record."""
+    gps = {}
+    people = (Person.objects.filter(is_gp=True).exclude(email="")
+              .filter(Q(end_date__isnull=True) | Q(end_date__gte=today)).order_by("pk"))
+    for person in people:
+        key = person.email.lower()
+        held = gps.get(key)
+        if held is None or (person.current(today) and not held.current(today)):
+            gps[key] = person
+    return gps
+
+
+def _apply(payload, start, end, now, today):
     """Rows outside start..end are skipped (the window delete would never
     clear them) and a repeated (person, day, part) keeps its first record
     (the table is unique on it); both are counted, not stored."""
-    gps = {p.email.lower(): p for p in Person.objects.filter(is_gp=True).exclude(email="")}
+    gps = _gps(today)
     rows, slots = [], set()
     unmatched, matched = set(), set()
     duplicates = outside = 0
@@ -102,7 +119,7 @@ def sync(client=None, now=None):
     run = SyncRun.objects.create(source=SOURCE)
     try:
         payload = client.sessions(start, end)
-        seen, detail = _apply(payload, start, end, now)
+        seen, detail = _apply(payload, start, end, now, today)
         run.ok, run.people_seen = True, seen
         run.detail = detail
         run.message = _message(detail)
