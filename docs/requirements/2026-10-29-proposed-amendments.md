@@ -109,3 +109,12 @@ delay elsewhere does not hold them up.
 1. Yes or no to each of 1, 2 and 3 (and any changes to the dates in 3).
 2. Your answers to the two smaller points.
 3. The redacted FindMyShift screenshots, when ready.
+
+## Postscript, 29 October 2026 (developers)
+
+Built as proposed in 2: GP sessions appear in the Shift Central grid as
+read-only tiles, read from the GP rota app every fifteen minutes and matched
+to each GP by their work email. If a GP's email differs between the two
+systems their sessions do not show and the Staff page's Health card lists
+the address. We will revisit the link (by Practice HR's employee id) once
+the GP rota app holds one. Your yes or no to 1, 2 and 3 is still needed.

@@ -273,10 +273,10 @@ JSON. Each mutation returns `{"cells": {"<person>": {"<day>": [entries]}},
 | `POST cell/items/` | `{person, day, items: [{kind, …}]}` | `entries.set_cell(user, person, day, items)` — the structured form (undo, Common/Recent, the shift dialog) |
 | `POST entries/<id>/` | any of `department`, `break_minutes`, `overtime`, `wfh`, `appearance`, `text` | `entries.patch(user, entry, fields)` |
 | `POST move/` | `{cells: [[person, day]…], days: ±n, rows: ±n, copy: bool, row_order: [person…]}` | `entries.move(user, cells, days, rows, copy)` — rows counted over the window's row order sent as `row_order: [person…]` |
-| `POST paste/` | `{anchor: [person, day], block, mode}` | `entries.paste(user, anchor, block, mode)` — `mode` replace or add |
+| `POST paste/` | `{anchor: [person, day], block, mode, row_order: [person…]}` | `entries.paste(user, anchor, block, mode, row_order)` — `mode` replace or add; rows are counted over `row_order`, the grid's row order |
 | `POST clear/` | `{cells}` | `entries.clear(user, cells)` |
-| `POST replace/` | `{cells or "window", find, replace, match_case}` | `entries.replace(user, scope, find, replace, match_case)` — over each item's text line; a changed line is re-parsed |
-| `POST order/` | `{people: [id…]}` | `people.services.profiles.reorder(user, ids)` — managers only; `display_order` set to 10, 20, 30… for the ids sent, audited |
+| `POST replace/` | `{cells, find, replace, match_case}` | `entries.replace(user, cells, find, replace, match_case)` — over each item's text line; a changed line is re-parsed; the island sends the window's cells for "whole window" |
+| `POST order/` | `{people: [id…]}` | `people.services.profiles.reorder(user, ids)` — atomic, refuses a non-manager itself; `display_order` set to 10, 20, 30… for the ids sent, audited |
 
 **The one writer** is `shifts/services/entries.py`. Every mutation:
 
@@ -285,20 +285,29 @@ JSON. Each mutation returns `{"cells": {"<person>": {"<day>": [entries]}},
    write (the whole request fails, nothing partial).
 2. In one `transaction.atomic()`: for each day touched, `DayChange` is
    created if absent with `before = render.day_text(person, day)`; the
-   change is applied; `audit.record` writes one `AuditEntry` per cell
-   with `model="shifts.entry"`, `object_id=person.pk`, `field="cell"`,
+   change is applied; `audit.record_as(actor, "shifts.entry", person.pk,
+   changes, note)` writes one `AuditEntry` per cell (a new function, so
+   the label is `shifts.entry` while the object is the person), with
+   `field="cell"`,
    `before`/`after` the day's text and `note` = `"{day:%a %-d %b %Y} ·
    {person.name}"`. Appearance-only changes audit as field
    `"appearance"` with the entry's line in the note, so the Activity log
    is not flooded with colour changes that read like shift changes.
 3. Returns the cells' new entries.
 
+A write that leaves a cell's rendered text and appearance unchanged is a
+no-op: no `DayChange`, no rewrite, no audit entry. `order/` and `paste/`
+are manager-only at the view. `window.payload` decides `editable` without
+a query per row, and `can_edit` is simply "the viewer is a manager".
+
 `set_cell_text` parses with `parse.cell(text, departments)` (section 5)
 and keeps the existing items' appearance where a parsed item matches an
 old one by position and kind. `paste` writes each block cell at `anchor +
 offset`, skipping offsets that land on a row the viewer may not edit
 (reported in the answer as `skipped: n`) and days outside the window;
-`replace` mode clears the target first, `add` appends. `move` is copy
+`replace` mode clears the target first, `add` appends. A block cell may
+be `null` (a day the copy did not see, such as a hidden weekday): `paste`
+leaves that target untouched, whereas `[]` still clears it. `move` is copy
 then clear of the source, in that order, inside the transaction.
 
 **Dialogs**, server-rendered under `/rota/…/` and fetched into `#dialog`:
@@ -311,8 +320,8 @@ then clear of the source, in that order, inside the transaction.
   "Sort staff…" switching the grid into reorder mode on close.
 - `filters/`: name contains, team (multi), department (multi); submits
   as the grid's query string.
-- `templates/`: list with Apply (to the selected cell: the island sends
-  the selection in the dialog URL), Rename, Delete; and
+- `templates/`: list with Apply (to the selected cell: the island fills the
+  dialog's hidden input on `shift-central:mounted`), Rename, Delete; and
   `templates/save/` from the menu, named by the manager, storing the
   selection's block.
 - `replace/`: Find, Replace with, Match case, scope (selection or whole
@@ -330,7 +339,9 @@ is `---`. `render.day_text(person, day)` is the cell's lines joined by
 audit hold and what the notify email prints.
 
 **Parser** (`shifts/services/parse.py`, mirrored in `parser.ts` for the
-live preview; the server's reading is what is stored). For each line:
+live preview; the server's reading is what is stored; both are tested
+against one shared table, `frontend/src/rota-grid/parser.cases.json`, of
+38 rows). For each line:
 
 1. `---` (three or more hyphens alone) → separator.
 2. A time range makes a shift. Each side is `H`, `HH`, `H:MM`, `HH:MM`,
@@ -338,17 +349,28 @@ live preview; the server's reading is what is stored). For each line:
    space); the sides joined by `-`, `–`, `—`, `to` or `until`. A side
    with `pm` and an hour under 12 adds 12; `12am` is 00:00. When neither
    side has a marker and the finish is not after the start, the finish is
-   read as pm (`8-4` → 08:00–16:00); when it still is not after the
-   start, the line is a comment. Minutes over 59 or hours over 23 → the
-   line is a comment.
+   read as pm (`8-4` → 08:00–16:00), but only when the start hour is
+   before 13:00 (`12:30-1` → 12:30–13:00; `13:00-2` is a comment); this
+   applies whenever the *finish* has no marker, a superset of "neither
+   side". When the finish is pm and the start unmarked, the start is pm
+   too if start + 12 h is still before the finish (`1-5pm` → 13:00–17:00;
+   `8-4pm` → 08:00–16:00). When it still is not after the start, the line
+   is a comment. Minutes over 59 or hours over 23 → the line is a
+   comment. `am`/`pm` must be followed by a non-word character; a
+   trailing `:` or `.` not followed by a digit does not block a range;
+   the first range the parser accepts in a line wins.
 3. From the rest of a shift line, in this order, each removed when found:
-   a break — `N hour(s) break`, `N h break`, `N min(s) break`, `N minute
-   break`, `break N`, `N m` where N is 15, 30, 45, 60 or `1 hour`;
+   a break — the word "break" is required on the hour and minute forms:
+   `N hour(s) break`, `N h break`, `N min(s) break`, `N minute break`,
+   `break N`; only the bare shorthand `30m` / `30 m` stands alone; N is
+   15, 30, 45, 60 or `1 hour`;
    `wfh` as a word; `toil` as a word → overtime TOIL; `ot paid`,
    `overtime paid`, `paid overtime`, `ot` as a word → overtime paid; the
    longest unarchived department name that matches as a whole phrase,
    case-insensitively. What remains, trimmed and with runs of spaces
-   collapsed, is the comment (up to 200 characters; longer is cut).
+   collapsed, is the comment (up to 200 characters; longer is cut);
+   leading and trailing ` ,.:;` are stripped only from a shift line's
+   leftover text, and a pure comment keeps its text as typed.
 4. A line with no time range is a comment.
 
 The parser never raises. A comment that contains a department name or
@@ -357,8 +379,9 @@ behaviour too; the shift dialog is the exact way.
 
 **Clipboard block.** `{"rows": [[{item}…]…], "days": n}` as cells
 relative to the block's top-left: `rows[r][d]` is the item list at row
-offset `r`, day offset `d` (a column index within the selected days, so
-a copied Monday-to-Friday block pastes onto the next Monday). Items carry
+offset `r`, day offset `d` (a calendar-day offset, so a copied
+Monday-to-Friday block pastes onto the next Monday; a day the copy did
+not see is `null`). Items carry
 kind, times, break, department id and name, text, overtime, wfh and
 appearance. Held in the island, saved to `localStorage`
 (`shift-central.clipboard`) so it survives a reload, and written to the
@@ -427,6 +450,9 @@ range spans more than one and a total per person. A GP session is a row
 with its part and label, Start and Finish blank, Hours 4 h 10 min. A
 comment is not a row. Download is CSV with the same columns plus Name.
 `services/hours.py` returns the figures; the view only renders.
+`hours.report` returns `(blocks, start, end)` with the normalised range,
+and the weekly subtotals appear when the range spans more than one Monday
+week.
 
 **Who's in today (ROTA-12)** at `/rota/today/?day=`, managers only, with
 ‹ › and Today. By site, then by team: AG, PMC, Either, from the shift's
@@ -457,8 +483,11 @@ Plain text only; no attachments; one recipient per message.
 rows among those the viewer manages, each with a tick box (ticked), their
 changed days as "Tue 3 Mar, Sat 7 Mar", and a note where sending is
 impossible: "no email" (greyed, unticked) or "changes cancel out"
-(greyed; the rows go when Send runs, the dialog itself writes nothing).
-Send posts the ticked ids to `services/notify.py`:
+(greyed but still ticked, so that Send clears their rows; the dialog
+itself writes nothing). Only "no email" is disabled. Send posts the
+ticked ids to `services/notify.py` as `send(user, person_ids,
+base_url)`, the link built from the view's
+`request.build_absolute_uri("/")`:
 
 For each person, in one transaction per person: build the lines for
 their `DayChange` rows in date order, deleting unmailed any row whose
@@ -472,12 +501,14 @@ under "Your rota has changed. Here is what is different:" and above
 "Your rota has changed"; `messaging.send()`; if it reports `sent_at`,
 delete the rows and `audit.record` one entry (`model="shifts.entry"`,
 `field="notified"`, `after` = the count of days, note the person's name);
-if not, leave the rows for next time. The dialog re-renders with what
+if not, leave the rows for next time. Rows are deleted by the pks that
+were mailed, so a change made while sending is not lost. The dialog re-renders with what
 went out and what failed, by name.
 
 The **Health card** gains "Unnotified rota changes over a week old: N",
 counting `DayChange` rows older than seven days among the viewer's
-managed people, linking to the notify dialog.
+managed people (`old_count` counts people with at least one real line),
+linking to the notify dialog.
 
 ## 9. GP sessions from the rota app
 
@@ -486,7 +517,8 @@ managed people, linking to the notify dialog.
 `Authorization: Bearer <token>`, the token one of `ROTA_API_TOKENS` in
 `/etc/rota.env` (comma-separated, compared in constant time, in HR's
 `api/auth.py` pattern, with the same per-address rate limit), CSRF-exempt,
-no session. 400 for a missing or unordered range or one over 500 days;
+no session. 400 for a missing or unordered range or one where `to` is more than 500
+days after `from`;
 401 without a valid token. Answers
 
     {"from": "…", "to": "…",
@@ -508,9 +540,13 @@ DEBUG, refuses redirects, ten-second timeout, `GpError` on anything but a
 now=None)` fetches from eight weeks before today to fifty-two after,
 matches each email to a `Person` with `is_gp` (case-insensitive,
 current or future), replaces the window's `GpSession` rows in one
-transaction (delete the window, bulk-create the new), writes a `SyncRun`
-with `source="gp-rota"`, `people_seen` = matched clinicians, and a
-`message` naming counts only ("3 emails unmatched"); never raises;
+transaction (delete the window, bulk-create the new), de-duplicating by
+(person, day, part), first wins, and skipping records outside the
+fetched window (both counted), writes a `SyncRun` with `source="gp-rota"`,
+`people_seen` = matched clinicians, a `detail` JSON carrying the
+unmatched emails (and the counts of duplicates and out-of-window
+records) for the Health card, and a `message` naming counts only
+("3 emails unmatched", duplicates and skips included); never raises;
 `last_run()` and `unmatched()` for the Health card. `manage.py gp_sync`
 runs it; `deploy/shift-central-gp-sync.{service,timer}` every fifteen
 minutes, offset from the HR timer.
@@ -528,8 +564,9 @@ GP's sessions; the Health line is the safety net until then.
 
 **Options** saves `GridOptions` and answers `{"refresh": true}`; the
 island re-renders from the new payload. "Sort staff…" puts the grid into
-reorder mode: the name column grows drag handles, dropping posts
-`order/`, Done leaves the mode. Managers only; staff do not see the
+reorder mode, entered by `?reorder=1` from a link in the dialog: the
+name column grows drag handles, dropping posts `order/`, Done leaves the
+mode. Managers only; staff do not see the
 item. "Days to display" hides the unticked weekdays' columns (the data
 still exists; a paste never lands on a hidden day).
 
@@ -561,8 +598,9 @@ audit rows (its data is the rota app's, replaced wholesale), only its
 - A window request that fails (network, 5xx) leaves the last grid on
   screen and shows a red bar under the top bar: "The rota couldn't be
   loaded. Check your connection and try again." with a Retry link.
-- A mutation that fails puts the cells back as they were before the
-  optimistic update and shows the bar: "That change wasn't saved: …" with
+- A mutation that fails shows the bar (nothing was applied
+  optimistically, so there is nothing to roll back beyond the editor it
+  closed): "That change wasn't saved: …" with
   the server's message for 400/403, "Your session ended" with a sign-in
   link carrying `next` for 401, the connection message for a network
   failure. Never a browser alert.
@@ -663,3 +701,83 @@ revisit.
 - Link GP rota clinicians by HR employee id, not email (section 9).
 - The practice manager's answer to amendment 2 (GP sessions read-only);
   if it changes, this spec's section 9 is what changes.
+
+## Deviations recorded during the build (30 October 2026)
+
+Each is a ruling made in review while the release was built. The sentences
+they contradict are amended above; this section is the full list, by section.
+
+**Section 4 (API and services)**
+
+- `paste/` takes `row_order` (the grid's row order, the only way the server
+  knows which row is below the anchor); `replace/` always takes `cells`,
+  never `"window"` (the island knows the window and sends its cells).
+- Audit rows are written by `audit.record_as(actor, "shifts.entry",
+  person.pk, …)`.
+- A write that leaves a cell's rendered text and appearance unchanged is a
+  no-op: no `DayChange`, no rewrite, no audit entry.
+- `profiles.reorder` is atomic and refuses a non-manager itself; `order/`
+  and `paste/` are manager-only at the view.
+- `window.payload` decides `editable` without a query per row; `can_edit`
+  is simply "the viewer is a manager".
+- A block cell may be `null` (a day the copy did not see, e.g. a hidden
+  weekday): `paste` leaves that target untouched; `[]` still clears.
+
+**Section 5 (parser)**
+
+- The word "break" is required on the hour and minute forms (`1 hour
+  break`, `30 min break`, `break 30`); only the bare `30m` / `30 m`
+  shorthand stands alone.
+- `am`/`pm` must be followed by a non-word character; a trailing `:` or `.`
+  not followed by a digit does not block a range; the first range the
+  parser accepts in a line wins.
+- An unmarked finish not after the start is read as pm only when the start
+  hour is before 13:00 (`12:30-1` → 12:30–13:00; `13:00-2` is a comment).
+  The inference applies when the *finish* has no marker (`8am-4` is
+  08:00–16:00), a superset of the spec's "neither side".
+- When the finish is pm and the start unmarked, the start is pm too if
+  start + 12 h is still before the finish (`1-5pm` → 13:00–17:00; `8-4pm`
+  → 08:00–16:00).
+- Leading and trailing ` ,.:;` are stripped only from a shift line's
+  leftover text; a pure comment keeps its text as typed.
+- The shared table `frontend/src/rota-grid/parser.cases.json` has 38 rows
+  and both parsers are tested against it.
+
+**Sections 3 and 10 (island, dialogs)**
+
+- Mutations are not applied optimistically; they go through one queue, with
+  undo steps pushed on enqueue; window loads are sequenced.
+- Sort mode is entered by `?reorder=1` from the Options dialog's link, not
+  by a flag the dialog returns.
+- Save-as-template and Find & Replace open their dialogs by a short GET;
+  the island fills the dialog's hidden `block` / `cells` input on
+  `shift-central:mounted`, so no payload rides a URL.
+- Ctrl-V is the browser's paste event; the menu's Paste reads the system
+  clipboard with the internal block as fallback; blocks and drag offsets
+  count calendar days.
+- `modal.js` also dispatches `shift-central:refresh` when a shown dialog
+  contains `[data-dialog-refresh]` (the notify outcome and the Templates
+  skipped-rows warning use it).
+
+**Section 7 (reports)**
+
+- `hours.report` returns `(blocks, start, end)` with the normalised range;
+  weekly subtotals appear when the range spans more than one Monday week.
+
+**Section 8 (notify)**
+
+- `send(user, person_ids, base_url)` builds the link from the view's
+  `request.build_absolute_uri("/")`.
+- A "changes cancel out" person is listed ticked (greyed) so Send clears
+  their rows; only "no email" is disabled; `old_count` counts people with
+  at least one real line.
+- Rows are deleted by the pks that were mailed.
+
+**Section 9 (GP feed)**
+
+- `SyncRun` gains `detail` (JSON) alongside `source`, carrying the
+  unmatched emails for the Health card; the message carries counts only.
+- `gp_sync` de-duplicates by (person, day, part), first wins, and skips
+  records outside the fetched window; both are counted in `detail` and in
+  the message.
+- The rota app's range cap is "`to` at most 500 days after `from`".
