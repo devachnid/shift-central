@@ -26,14 +26,17 @@ def clamp_weeks(value):
         return 1
 
 
-def visible_people(user, first, last):
+def visible_people(user, first, last, manager=None):
     """People current on at least one day of the window with display_on_rota
     (section 6); for staff, also shown to other staff; a viewer who may not
-    see others sees themselves only. The viewer is always their own row."""
+    see others sees themselves only. The viewer is always their own row.
+    Pass manager when the caller already knows it (it is a query)."""
     me = getattr(user, "person", None)
+    if manager is None:
+        manager = access.is_manager(user)
     people = Person.objects.filter(display_on_rota=True, start_date__lte=last).filter(
         Q(end_date__isnull=True) | Q(end_date__gte=first)).select_related("team")
-    if access.is_manager(user):
+    if manager:
         return people
     if me is None:
         return people.filter(show_to_other_staff=True)
@@ -60,8 +63,10 @@ def _filtered(people, filters, first, last):
     return people
 
 
-def payload_unnotified(user):
-    if not access.is_manager(user):
+def payload_unnotified(user, manager=None):
+    if manager is None:
+        manager = access.is_manager(user)
+    if not manager:
         return 0
     return DayChange.objects.filter(person__in=access.managed_people(user)).values("person").distinct().count()
 
@@ -73,7 +78,13 @@ def payload(user, start, weeks, filters):
     days = [first + timedelta(days=i) for i in range(7 * weeks)]
     opts = options.for_user(user)
     me = getattr(user, "person", None)
-    people = _filtered(visible_people(user, first, last), filters, first, last)
+    manager = access.is_manager(user)
+    all_teams = access.is_all_teams(user)
+    # Who is editable is decided once here, not per row through
+    # access.can_manage (a query each); the two must agree, a test checks it.
+    managed_team_ids = (set(access.managed_teams(user).values_list("pk", flat=True))
+                        if manager and not all_teams else set())
+    people = _filtered(visible_people(user, first, last, manager), filters, first, last)
     if opts["only_my_shifts"] and me is not None:
         people = people.filter(pk=me.pk)
     people = list(people.order_by("team__display_order", "team__name", "display_order", "last_name", "first_name"))
@@ -95,12 +106,11 @@ def payload(user, start, weeks, filters):
         rows.append({
             "person": p.pk, "name": p.name, "colour": p.name_colour, "job_title": p.job_title,
             "team": p.team.name if p.team else "", "is_gp": p.is_gp,
-            "editable": access.can_manage(user, p),
+            "editable": manager and (me is None or p.pk != me.pk) and (all_teams or p.team_id in managed_team_ids),
             "cells": {day: [serialize.entry(e) for e in sorted(es, key=lambda e: e.position)]
                       for day, es in by_cell.get(p.pk, {}).items()},
             "sessions": sessions.get(p.pk, {}),
         })
-    manager = access.is_manager(user)
     return {
         "from": first.isoformat(), "weeks": weeks,
         "days": [{"date": d.isoformat(), "label": d.strftime(DAY_LABEL).format(d=d.day),
@@ -111,6 +121,6 @@ def payload(user, start, weeks, filters):
         "common": common.common(user) if manager else [],
         "recent": common.recent(user) if manager else [],
         "options": opts,
-        "unnotified": payload_unnotified(user),
-        "can_edit": any(r["editable"] for r in rows),
+        "unnotified": payload_unnotified(user, manager),
+        "can_edit": manager,
     }

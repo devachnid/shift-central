@@ -5,9 +5,15 @@ import json
 from datetime import date
 
 import pytest
+from django.db import connection
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
 
+from accounts.models import User
+from people.models import Person
+from people.services import access
 from shifts.models import DayChange, Entry, GridOptions
+from shifts.services import options, window
 from tests.factories import (make_department, make_entry, make_gp_session, make_person, make_team,
                              make_team_manager, make_user_for)
 
@@ -184,9 +190,36 @@ def test_unnotified_counts_people_the_viewer_manages(world):
 
 
 def test_saving_options_drops_unknown_keys_and_coerces_values(world):
-    from shifts.services import options
     saved = options.save(world["lead"].user, {"job_titles": 1, "font_size": "huge", "days": ["1", "9", "x", 3],
                                               "paste": "add", "nonsense": True})
     assert saved["job_titles"] is True and saved["font_size"] == "md" and saved["paste"] == "add"
     assert saved["days"] == [1, 3] and "nonsense" not in saved
     assert "nonsense" not in GridOptions.objects.get(user=world["lead"].user).data
+
+
+def test_editable_agrees_with_can_manage_for_every_kind_of_viewer(world):
+    make_person(first_name="Teamless", team=None)
+    boss = make_user_for(make_person(first_name="Boss", team=world["nurse"].team), is_all_teams_manager=True)
+    staff = make_user_for(world["nina"])
+    for viewer in (world["lead"].user, boss, staff):
+        viewer = User.objects.get(pk=viewer.pk)  # fresh, as a request has it
+        body = window.payload(viewer, MON, 1, {})
+        assert len(body["rows"]) >= 5
+        for row in body["rows"]:
+            assert row["editable"] == access.can_manage(viewer, Person.objects.get(pk=row["person"])), (viewer, row["name"])
+        assert body["can_edit"] == access.is_manager(viewer)
+
+
+def test_the_window_costs_the_same_queries_for_three_rows_or_twelve(world):
+    def cost():
+        viewer = User.objects.get(pk=world["lead"].user.pk)
+        with CaptureQueriesContext(connection) as ctx:
+            body = window.payload(viewer, MON, 1, {})
+        return len(ctx), len(body["rows"])
+
+    few_queries, few_rows = cost()
+    for i in range(9):
+        make_person(first_name=f"Extra{i}", team=world["lead"].team)
+    many_queries, many_rows = cost()
+    assert many_rows >= few_rows + 9
+    assert many_queries == few_queries
