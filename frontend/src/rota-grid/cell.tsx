@@ -19,9 +19,10 @@ export function Tile({ entry, options }: { entry: EntryJson; options: Options })
                a.strike && "is-strike", a.wrap && "is-wrap", a.size && `is-${a.size}`, entry.overtime && "is-overtime"]
     .filter(Boolean).join(" ");
   if (entry.kind === "separator") return <hr class="tile-separator" />;
-  if (entry.kind === "comment") return <div class={cls} style={tileStyle(entry, options)}>{entry.text}</div>;
+  // The tile clips long text; the title carries the whole line for hover.
+  if (entry.kind === "comment") return <div class={cls} style={tileStyle(entry, options)} title={entry.line || entry.text}>{entry.text}</div>;
   return (
-    <div class={cls} style={tileStyle(entry, options)}>
+    <div class={cls} style={tileStyle(entry, options)} title={entry.line}>
       <div>{dash(`${entry.start}-${entry.finish}`)}</div>
       {entry.break_minutes ? <div>{entry.break_minutes === 60 ? "1 hour break" : `${entry.break_minutes} min break`}</div> : null}
       {entry.department_name || entry.text ? <div>{[entry.department_name, entry.text].filter(Boolean).join(" · ")}</div> : null}

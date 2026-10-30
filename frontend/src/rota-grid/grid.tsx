@@ -19,7 +19,7 @@ export function useGridState(props: GridProps) {
   const undo = useRef<UndoStep[]>([]);
   const barEl = () => document.getElementById(props.bar);
 
-  const showBar = useCallback((message: string, signIn = false) => {
+  const showBar = useCallback((message: string, signIn = false, retry?: () => void) => {
     const el = barEl();
     if (!el) return;
     el.textContent = message + " ";
@@ -27,6 +27,13 @@ export function useGridState(props: GridProps) {
       const a = document.createElement("a");
       a.href = "/accounts/login/?next=" + encodeURIComponent(location.pathname + location.search);
       a.textContent = "Sign in";
+      el.appendChild(a);
+    }
+    if (retry) {
+      const a = document.createElement("a");
+      a.href = "#";
+      a.textContent = "Retry";
+      a.addEventListener("click", (e) => { e.preventDefault(); retry(); });
       el.appendChild(a);
     }
     el.hidden = false;
@@ -38,13 +45,32 @@ export function useGridState(props: GridProps) {
     else showBar("That change wasn't saved.");
   }, [showBar]);
 
+  // Mutations go through one queue (below); `applied` counts those finished,
+  // so a window answer that was asked for before one finished can be told
+  // from one that already includes it.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const applied = useRef(0);
+  const loadSeq = useRef(0);
+
   const load = useCallback(async () => {
-    try {
-      const w = await getWindow(props.api, props.from, props.weeks, props.filters);
+    const seq = ++loadSeq.current;
+    for (;;) {
+      const seen = applied.current;
+      let w: WindowJson;
+      try {
+        w = await getWindow(props.api, props.from, props.weeks, props.filters);
+      } catch (e) {
+        if (seq !== loadSeq.current) return; // a newer load speaks for the grid
+        if (e instanceof ApiError && e.signedOut) showBar("Your session ended.", true);
+        else showBar("The rota couldn't be loaded. Check your connection and try again.", false, () => { load(); });
+        return;
+      }
+      if (seq !== loadSeq.current) return;
+      // A save finished while this was in flight, so the answer may predate
+      // it and would put the old cells back: ask again.
+      if (seen !== applied.current) continue;
       setWin(w); hideBar(); setUnnotified(w.unnotified);
-    } catch (e) {
-      if (e instanceof ApiError && e.signedOut) showBar("Your session ended.", true);
-      else showBar("The rota couldn't be loaded. Check your connection and try again.");
+      return;
     }
   }, [props.api, props.from, props.weeks, props.filters]);
 
@@ -90,36 +116,63 @@ export function useGridState(props: GridProps) {
     setUnnotified(c.unnotified);
   }, []);
 
-  /** Post a mutation; on success patch the cells in, on failure show why.
-   *  `before` is what to put back if the person undoes it. */
-  const mutate = useCallback(async (path: string, body: unknown, before?: UndoStep) => {
+  /** One POST, its answer patched in, or the reason shown. Null on failure. */
+  const send = useCallback(async (path: string, body: unknown): Promise<Changed | null> => {
     try {
       const c = await post(props.api, path, body);
-      if (before) pushUndo(before);
       applyChanged(c);
       hideBar();
       return c;
     } catch (e) { fail(e); return null; }
   }, [props.api, applyChanged, fail]);
 
+  /** Run jobs one after another, so saves and undos reach the server in the
+   *  order they were asked for and the undo stack matches what it holds. */
+  const enqueue = useCallback(<T,>(job: () => Promise<T>): Promise<T> => {
+    const run = queue.current.then(job).finally(() => { applied.current++; });
+    queue.current = run.catch(() => undefined);
+    return run;
+  }, []);
+
+  /** Post a mutation; on success patch the cells in, on failure show why.
+   *  `before` (what the cells held) is the undo step: it goes on the stack as
+   *  the mutation is queued, so a Ctrl-Z straight after undoes this change,
+   *  and comes off again if the save fails. */
+  const mutate = useCallback((path: string, body: unknown, before?: UndoStep) => {
+    if (before) pushUndo(before);
+    return enqueue(async () => {
+      const c = await send(path, body);
+      if (!c && before) undo.current = undo.current.filter((s) => s !== before);
+      return c;
+    });
+  }, [enqueue, send]);
+
   const undoLast = useCallback(async () => {
     const step = undo.current.pop();
     if (!step) return;
-    for (const cell of step) {
-      const c = await mutate("cell/items/", { person: cell.person, day: cell.date, items: cell.items });
-      if (!c) break; // the bar says why; the cells not yet restored stay as they are
-    }
-  }, [mutate]);
+    await enqueue(async () => {
+      for (const cell of step) {
+        const c = await send("cell/items/", { person: cell.person, day: cell.date, items: cell.items });
+        if (!c) break; // the bar says why; the cells not yet restored stay as they are
+      }
+    });
+  }, [enqueue, send]);
+
+  /** The selection only ever holds cells the viewer may edit; a read-only
+   *  row or a read-only viewer gets the focus ring and nothing selected. */
+  const selectable = (k: CellKey) => !!win?.can_edit && editable(k);
+  const keepSelectable = (keys: Iterable<CellKey>) => new Set([...keys].filter(selectable));
 
   const select = (k: CellKey, mode: "set" | "extend" | "toggle") => {
-    if (mode === "extend" && anchor) setSel(block(people, days, anchor, k));
-    else if (mode === "toggle") setSel((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
-    else { setSel(new Set([k])); setAnchor(k); }
+    if (mode === "extend" && anchor) setSel(keepSelectable(block(people, days, anchor, k)));
+    else if (mode === "toggle") {
+      if (selectable(k)) setSel((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+    } else { setSel(keepSelectable([k])); setAnchor(k); }
     setFocus(k);
   };
 
   return { win, sel, setSel, anchor, setAnchor, focus, setFocus, editing, setEditing, people, days, shownDays,
-           rowOf, cellEntries, editable, snapshot, pushUndo, mutate, undoLast, load, showBar, hideBar, select };
+           rowOf, cellEntries, editable, selectable, keepSelectable, snapshot, pushUndo, mutate, undoLast, load, showBar, hideBar, select };
 }
 
 /** The top bar's "Notify staff (n)" follows the server's count. */
@@ -251,13 +304,13 @@ export function RotaGrid(props: GridProps) {
   const cls = ["rota-grid", `is-${o.font_size}`, `is-${o.spacing}`, o.float_headers && "is-float", canEdit && "can-edit"].filter(Boolean).join(" ");
 
   return (
-    <div class="rota-wrap" ref={table} tabIndex={0} role="grid" aria-label="Rota" onKeyDown={onKey}>
-      <table class={cls}>
+    <div class="rota-wrap" ref={table} tabIndex={0} onKeyDown={onKey}>
+      <table class={cls} role="grid" aria-label="Rota">
         <thead><tr>
           <th class="rota-name-head"></th>
           {shownDays.map((d) => (
             <th key={d.date} class={[d.today && "is-today", d.weekend && "is-weekend"].filter(Boolean).join(" ")}
-                onClick={() => { const col = win.rows.filter((r) => r.editable).map((r) => key(r.person, d.date)); g.setSel(new Set(col)); g.setFocus(col[0] ?? null); }}>
+                onClick={() => { const col = win.rows.map((r) => key(r.person, d.date)); g.setSel(g.keepSelectable(col)); g.setFocus(col[0] ?? null); }}>
               {d.label}
             </th>
           ))}
@@ -266,7 +319,7 @@ export function RotaGrid(props: GridProps) {
           {win.rows.map((r) => (
             <tr key={r.person} data-person={r.person} class={r.editable ? "" : "is-readonly"}>
               <th class="rota-name" scope="row"
-                  onClick={(e) => { if ((e.target as HTMLElement).closest("a")) return; if (!r.editable) return; const row = shownDays.map((d) => key(r.person, d.date)); g.setSel(new Set(row)); g.setFocus(row[0]); }}>
+                  onClick={(e) => { if ((e.target as HTMLElement).closest("a")) return; const row = shownDays.map((d) => key(r.person, d.date)); g.setSel(g.keepSelectable(row)); g.setFocus(row[0] ?? null); }}>
                 <a href={`/staff/${r.person}/profile/`} data-dialog class={o.staff_colours ? "chip" : "rota-plain-name"} style={o.staff_colours ? { background: r.colour } : {}}>{r.name}</a>
                 {o.job_titles && r.job_title ? <div class="rota-job">{r.job_title}</div> : null}
               </th>
@@ -275,9 +328,10 @@ export function RotaGrid(props: GridProps) {
                 const entries = r.cells[d.date] ?? [];
                 const sessions = r.sessions[d.date] ?? [];
                 const isEditing = editing?.key === k;
+                const picked = sel.has(k) && g.selectable(k);
                 return (
-                  <td key={k} role="gridcell" aria-selected={sel.has(k)} data-cell={k}
-                      class={[sel.has(k) && "is-selected", focus === k && "is-focus", d.today && "is-today", overlaps(entries) && "has-overlap"].filter(Boolean).join(" ")}
+                  <td key={k} role="gridcell" aria-selected={picked} data-cell={k}
+                      class={[picked && "is-selected", focus === k && "is-focus", d.today && "is-today", overlaps(entries) && "has-overlap"].filter(Boolean).join(" ")}
                       title={overlaps(entries) ? "These shifts overlap" : undefined}
                       onMouseDown={(e) => {
                         // a click inside the open editor is the editor's, not a new selection
