@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { selectionActions } from "./actions";
 import { ApiError, getWindow, post } from "./api";
 import { overlaps, SessionTile, Tile } from "./cell";
+import { CellEditor } from "./editor";
+import { handleKey } from "./keys";
+import { Menu } from "./menu";
+import { menuItems } from "./menu-items";
+import { useMouse } from "./mouse";
 import { block, key, split, type CellKey } from "./selection";
+import { useSort } from "./sort";
 import { toItem, type Changed, type DayJson, type EntryJson, type Item, type Row, type WindowJson } from "./types";
 
 export interface GridProps { from: string; weeks: number; filters: string; api: string; role: string; me: string; reorder: string; bar: string }
 
 interface CellState { person: number; date: string; items: Item[] }
-type UndoStep = CellState[];
+export type UndoStep = CellState[];
 
 /** The island's state and the operations every part of it shares. */
 export function useGridState(props: GridProps) {
@@ -45,9 +52,9 @@ export function useGridState(props: GridProps) {
     else showBar("That change wasn't saved.");
   }, [showBar]);
 
-  // Mutations go through one queue (below); `applied` counts those finished,
-  // so a window answer that was asked for before one finished can be told
-  // from one that already includes it.
+  // Mutations go through one queue (below); `applied` counts the posts whose
+  // answer is in the cells, so a window answer that was asked for before one
+  // finished can be told from one that already includes it.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const applied = useRef(0);
   const loadSeq = useRef(0);
@@ -121,6 +128,9 @@ export function useGridState(props: GridProps) {
     try {
       const c = await post(props.api, path, body);
       applyChanged(c);
+      // Counted here, once per post whose answer is in the cells, so a window
+      // load cannot slip in between the restores of a multi-cell undo.
+      applied.current++;
       hideBar();
       return c;
     } catch (e) { fail(e); return null; }
@@ -129,7 +139,7 @@ export function useGridState(props: GridProps) {
   /** Run jobs one after another, so saves and undos reach the server in the
    *  order they were asked for and the undo stack matches what it holds. */
   const enqueue = useCallback(<T,>(job: () => Promise<T>): Promise<T> => {
-    const run = queue.current.then(job).finally(() => { applied.current++; });
+    const run = queue.current.then(job);
     queue.current = run.catch(() => undefined);
     return run;
   }, []);
@@ -158,6 +168,14 @@ export function useGridState(props: GridProps) {
     });
   }, [enqueue, send]);
 
+  /** Sort mode: show the rows in this order now; the load that follows the
+   *  save says what the server holds. */
+  const reorder = (ids: number[]) => setWin((w) => {
+    if (!w) return w;
+    const byPerson = new Map(w.rows.map((r) => [r.person, r]));
+    return { ...w, rows: ids.map((id) => byPerson.get(id)).filter((r): r is Row => !!r) };
+  });
+
   /** The selection only ever holds cells the viewer may edit; a read-only
    *  row or a read-only viewer gets the focus ring and nothing selected. */
   const selectable = (k: CellKey) => !!win?.can_edit && editable(k);
@@ -172,7 +190,7 @@ export function useGridState(props: GridProps) {
   };
 
   return { win, sel, setSel, anchor, setAnchor, focus, setFocus, editing, setEditing, people, days, shownDays,
-           rowOf, cellEntries, editable, selectable, keepSelectable, snapshot, pushUndo, mutate, undoLast, load, showBar, hideBar, select };
+           rowOf, cellEntries, editable, selectable, keepSelectable, snapshot, pushUndo, mutate, undoLast, load, showBar, hideBar, fail, reorder, select };
 }
 
 /** The top bar's "Notify staff (n)" follows the server's count. */
@@ -184,62 +202,38 @@ function setUnnotified(n: number) {
 
 export type GridState = ReturnType<typeof useGridState>;
 
-/** The in-place editor: Enter saves, Shift-Enter adds a line, Escape
- *  cancels, leaving the cell saves. */
-function CellEditor(p: { text: string; onText: (t: string) => void; onCommit: (refocus: boolean) => void; onCancel: () => void }) {
-  const el = useRef<HTMLTextAreaElement>(null);
-  // autofocus only works at page load, so focus by hand, caret at the end.
-  useEffect(() => {
-    const t = el.current;
-    if (!t) return;
-    t.focus();
-    t.setSelectionRange(t.value.length, t.value.length);
-  }, []);
-  return (
-    <textarea class="rota-editor" ref={el} value={p.text} rows={Math.max(2, p.text.split("\n").length)}
-              aria-label="Shifts for this day, one per line"
-              onInput={(e) => p.onText((e.target as HTMLTextAreaElement).value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); p.onCommit(true); }
-                else if (e.key === "Escape") { e.preventDefault(); p.onCancel(); }
-                e.stopPropagation(); // the grid's own keys are not for the editor
-              }}
-              onBlur={() => p.onCommit(false)} />
-  );
-}
 
 export function RotaGrid(props: GridProps) {
   const g = useGridState(props);
   const { win, sel, focus, editing, people, days, shownDays } = g;
   const table = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
   // The editor can be left three ways at once (Enter, then the blur its
   // removal causes; Escape, then the blur); the ref makes the first one win.
   const editingRef = useRef(editing);
   editingRef.current = editing;
-  const canEdit = !!win?.can_edit;
-  const editableSel = () => [...sel].filter(g.editable);
+  const [menu, setMenu] = useState<{ x: number; y: number; key: CellKey } | null>(null);
+  const sort = useSort(g, props.api, props.reorder === "1");
+  // In sort mode the cells are inert: no selection, no menu, no editing.
+  const canEdit = !!win?.can_edit && !sort.on;
+  const act = selectionActions(g);
+  const focusGrid = () => table.current?.focus();
+  const mouse = useMouse(g, focusGrid);
 
   const setEdit = (next: { key: CellKey; text: string } | null) => { editingRef.current = next; g.setEditing(next); };
   const startEdit = (k: CellKey, seed = "") => {
     if (!g.editable(k)) return;
     setEdit({ key: k, text: seed || g.cellEntries(k).map((e) => e.line).join("\n") });
   };
-  const cancelEdit = () => { setEdit(null); table.current?.focus(); };
+  const cancelEdit = () => { setEdit(null); focusGrid(); };
   const commitEdit = async (refocus: boolean) => {
     const cur = editingRef.current;
     if (!cur) return;
     setEdit(null);
-    if (refocus) table.current?.focus();
+    if (refocus) focusGrid();
     const [person, date] = split(cur.key);
     if (cur.text.trim() === g.cellEntries(cur.key).map((e) => e.line).join("\n").trim()) return; // nothing changed
     const saved = await g.mutate("cell/", { person, day: date, text: cur.text }, g.snapshot([cur.key]));
     if (!saved) setEdit(cur); // not saved: give the typing back rather than lose it
-  };
-  const clearSel = async () => {
-    const keys = editableSel();
-    if (!keys.length) return;
-    await g.mutate("clear/", { cells: keys.map(split) }, g.snapshot(keys));
   };
 
   /** Move the focused cell; true when it went anywhere. */
@@ -255,106 +249,116 @@ export function RotaGrid(props: GridProps) {
     return true;
   };
 
-  // A drag that starts on a cell selects the block under the pointer until
-  // the button comes up, wherever it comes up.
-  useEffect(() => {
-    const up = () => { dragging.current = false; };
-    document.addEventListener("mouseup", up);
-    return () => document.removeEventListener("mouseup", up);
-  }, []);
-
   // Keep the focused cell in view as the keyboard moves it.
   useEffect(() => {
     if (!focus) return;
     table.current?.querySelector(`[data-cell="${focus}"]`)?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [focus]);
 
-  const onKey = (e: KeyboardEvent) => {
-    const mod = e.ctrlKey || e.metaKey;
-    const open = editingRef.current;
-    if (open) {
-      // The editor stops its own keys, so one that gets here was typed in the
-      // moment between the edit opening and the textarea taking focus: feed it
-      // to the edit rather than lose it.
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commitEdit(true); }
-      else if (e.key === "Escape") { e.preventDefault(); cancelEdit(); }
-      else if (!mod && e.key.length === 1) { e.preventDefault(); setEdit({ ...open, text: open.text + e.key }); }
-      return;
-    }
-    if ((e.target as HTMLElement).closest("a")) return; // a name link keeps its own Enter
-    if (e.key === "ArrowUp") { e.preventDefault(); move(-1, 0, e.shiftKey); }
-    else if (e.key === "ArrowDown") { e.preventDefault(); move(1, 0, e.shiftKey); }
-    else if (e.key === "ArrowLeft") { e.preventDefault(); move(0, -1, e.shiftKey); }
-    else if (e.key === "ArrowRight") { e.preventDefault(); move(0, 1, e.shiftKey); }
-    // Tab walks the days but lets go at either end, so the keyboard is not trapped.
-    else if (e.key === "Tab") { if (move(0, e.shiftKey ? -1 : 1, false)) e.preventDefault(); }
-    else if (e.key === "Home") { e.preventDefault(); move(0, -days.length, e.shiftKey); }
-    else if (e.key === "End") { e.preventDefault(); move(0, days.length, e.shiftKey); }
-    else if (e.key === "Escape") { g.setSel(new Set()); }
-    else if (!canEdit) return;
-    else if (e.key === "Enter" || e.key === "F2") { e.preventDefault(); if (focus) startEdit(focus); }
-    else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); clearSel(); }
-    else if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); g.undoLast(); }
-    else if (!mod && e.key.length === 1 && focus && sel.size === 1) { e.preventDefault(); startEdit(focus, e.key); }
-    // Ctrl-X/C/V, the menu key and Shift-F10 are Task 7's.
+  // The top bar's Templates link is outside the island and has no idea which
+  // cell is selected: tell it just before modal.js reads its href.
+  const anchor = act.anchorCell();
+  useEffect(() => {
+    const on = (e: MouseEvent) => {
+      const link = (e.target as Element | null)?.closest?.("[data-grid-templates]");
+      if (!link) return;
+      const base = (link.getAttribute("href") ?? "").split("?")[0];
+      link.setAttribute("href", anchor ? `${base}?cell=${encodeURIComponent(anchor)}&row_order=${people.join(",")}` : base);
+    };
+    document.addEventListener("click", on, true);
+    return () => document.removeEventListener("click", on, true);
+  }, [anchor, people]);
+
+  const openMenu = (k: CellKey, x: number, y: number) => {
+    if (!canEdit || !g.selectable(k)) return;
+    if (!sel.has(k)) g.select(k, "set");
+    setMenu({ x, y, key: k });
+  };
+  const openMenuAtFocus = () => {
+    const box = focus ? table.current?.querySelector(`[data-cell="${focus}"]`)?.getBoundingClientRect() : null;
+    if (focus && box) openMenu(focus, box.left + box.width / 2, box.top + box.height / 2);
+  };
+  // Back to the grid, unless the click that closed the menu already put focus somewhere else.
+  const closeMenu = useCallback(() => {
+    setMenu(null);
+    const at = document.activeElement;
+    if (!at || at === document.body || at.closest(".rota-menu")) table.current?.focus();
+  }, []);
+
+  const onKey = (e: KeyboardEvent) => handleKey(e, {
+    editing: () => editingRef.current, canEdit, focus, move, dayCount: days.length, singleCell: sel.size === 1,
+    selectNone: () => g.setSel(new Set()), startEdit, commitEdit, cancelEdit,
+    typeIntoEdit: (text) => { if (editingRef.current) setEdit({ ...editingRef.current, text }); },
+    clear: act.clear, undo: g.undoLast, cut: act.cut, copy: act.copy, openMenu: openMenuAtFocus,
+  });
+
+  // Ctrl-V and the browser's own Paste arrive here with the clipboard's text,
+  // which needs no permission, unlike reading the clipboard ourselves.
+  const onPaste = (e: ClipboardEvent) => {
+    if (!canEdit || editingRef.current || (e.target as HTMLElement).closest("textarea, input")) return;
+    e.preventDefault();
+    void act.paste(e.clipboardData?.getData("text") ?? "");
   };
 
   if (!win) return <div class="rota-loading">Loading the rota…</div>;
   const o = win.options;
-  const cls = ["rota-grid", `is-${o.font_size}`, `is-${o.spacing}`, o.float_headers && "is-float", canEdit && "can-edit"].filter(Boolean).join(" ");
+  const cls = ["rota-grid", `is-${o.font_size}`, `is-${o.spacing}`, o.float_headers && "is-float", canEdit && "can-edit", sort.on && "is-sorting"].filter(Boolean).join(" ");
+  const pick = (cells: CellKey[]) => { g.setSel(g.keepSelectable(cells)); g.setFocus(cells[0] ?? null); };
 
   return (
-    <div class="rota-wrap" ref={table} tabIndex={0} onKeyDown={onKey}>
-      <table class={cls} role="grid" aria-label="Rota">
-        <thead><tr>
-          <th class="rota-name-head"></th>
-          {shownDays.map((d) => (
-            <th key={d.date} class={[d.today && "is-today", d.weekend && "is-weekend"].filter(Boolean).join(" ")}
-                onClick={() => { const col = win.rows.map((r) => key(r.person, d.date)); g.setSel(g.keepSelectable(col)); g.setFocus(col[0] ?? null); }}>
-              {d.label}
-            </th>
-          ))}
-        </tr></thead>
-        <tbody>
-          {win.rows.map((r) => (
-            <tr key={r.person} data-person={r.person} class={r.editable ? "" : "is-readonly"}>
-              <th class="rota-name" scope="row"
-                  onClick={(e) => { if ((e.target as HTMLElement).closest("a")) return; const row = shownDays.map((d) => key(r.person, d.date)); g.setSel(g.keepSelectable(row)); g.setFocus(row[0] ?? null); }}>
-                <a href={`/staff/${r.person}/profile/`} data-dialog class={o.staff_colours ? "chip" : "rota-plain-name"} style={o.staff_colours ? { background: r.colour } : {}}>{r.name}</a>
-                {o.job_titles && r.job_title ? <div class="rota-job">{r.job_title}</div> : null}
+    <>
+      <div class="rota-wrap" ref={table} tabIndex={0} onKeyDown={onKey} onPaste={onPaste}>
+        <table class={cls} role="grid" aria-label="Rota">
+          <thead><tr>
+            <th class="rota-name-head"></th>
+            {shownDays.map((d) => (
+              <th key={d.date} class={[d.today && "is-today", d.weekend && "is-weekend"].filter(Boolean).join(" ")}
+                  onClick={sort.on ? undefined : () => pick(win.rows.map((r) => key(r.person, d.date)))}>
+                {d.label}
               </th>
-              {shownDays.map((d) => {
-                const k = key(r.person, d.date);
-                const entries = r.cells[d.date] ?? [];
-                const sessions = r.sessions[d.date] ?? [];
-                const isEditing = editing?.key === k;
-                const picked = sel.has(k) && g.selectable(k);
-                return (
-                  <td key={k} role="gridcell" aria-selected={picked} data-cell={k}
-                      class={[picked && "is-selected", focus === k && "is-focus", d.today && "is-today", overlaps(entries) && "has-overlap"].filter(Boolean).join(" ")}
-                      title={overlaps(entries) ? "These shifts overlap" : undefined}
-                      onMouseDown={(e) => {
-                        // a click inside the open editor is the editor's, not a new selection
-                        if (e.button !== 0 || (e.target as HTMLElement).closest("textarea")) return;
-                        const mode = e.shiftKey ? "extend" : e.ctrlKey || e.metaKey ? "toggle" : "set";
-                        g.select(k, mode);
-                        dragging.current = mode !== "toggle";
-                        table.current?.focus();
-                      }}
-                      onMouseEnter={() => { if (dragging.current) g.select(k, "extend"); }}
-                      onDblClick={() => startEdit(k)}>
-                    {sessions.map((s, i) => <SessionTile key={i} session={s} />)}
-                    {isEditing ? (
-                      <CellEditor text={editing!.text} onText={(text) => setEdit({ key: k, text })}
-                                  onCommit={commitEdit} onCancel={cancelEdit} />
-                    ) : entries.map((e) => <Tile key={e.id} entry={e} options={o} />)}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+            ))}
+          </tr></thead>
+          <tbody>
+            {win.rows.map((r) => (
+              <tr key={r.person} data-person={r.person} class={r.editable ? "" : "is-readonly"} {...(sort.on ? sort.rowProps(r.person) : {})}>
+                <th class="rota-name" scope="row"
+                    onClick={sort.on ? undefined : (e) => { if (!(e.target as HTMLElement).closest("a")) pick(shownDays.map((d) => key(r.person, d.date))); }}>
+                  {sort.on ? <span class="rota-handle" title="Drag to reorder" {...sort.handleProps(r.person)}>≡</span> : null}
+                  <a href={`/staff/${r.person}/profile/`} data-dialog tabIndex={-1} class={o.staff_colours ? "chip" : "rota-plain-name"} style={o.staff_colours ? { background: r.colour } : {}}>{r.name}</a>
+                  {o.job_titles && r.job_title ? <div class="rota-job">{r.job_title}</div> : null}
+                </th>
+                {shownDays.map((d) => {
+                  const k = key(r.person, d.date);
+                  const entries = r.cells[d.date] ?? [];
+                  const sessions = r.sessions[d.date] ?? [];
+                  const isEditing = editing?.key === k;
+                  const picked = sel.has(k) && g.selectable(k);
+                  const dropping = mouse.dropCells?.has(k);
+                  return (
+                    <td key={k} role="gridcell" aria-selected={picked} data-cell={k}
+                        class={[picked && "is-selected", focus === k && "is-focus", d.today && "is-today", overlaps(entries) && "has-overlap",
+                                dropping && (mouse.dropOk ? "is-drop" : "is-nodrop")].filter(Boolean).join(" ")}
+                        title={overlaps(entries) ? "These shifts overlap" : undefined}
+                        onMouseDown={sort.on ? undefined : (e) => mouse.onDown(k, e)}
+                        onMouseEnter={sort.on ? undefined : () => mouse.onEnter(k)}
+                        onContextMenu={sort.on ? undefined : (e) => { e.preventDefault(); openMenu(k, e.clientX, e.clientY); }}
+                        onDblClick={sort.on ? undefined : () => startEdit(k)}>
+                      {sessions.map((s, i) => <SessionTile key={i} session={s} />)}
+                      {isEditing ? (
+                        <CellEditor text={editing!.text} onText={(text) => setEdit({ key: k, text })}
+                                    onCommit={commitEdit} onCancel={cancelEdit} />
+                      ) : entries.map((e) => <Tile key={e.id} entry={e} options={o} />)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* Outside the wrap, so its keys and clicks are not the grid's. */}
+      {menu ? <Menu x={menu.x} y={menu.y} onClose={closeMenu}
+                    items={menuItems(g, act, menu.key, (k, seed) => startEdit(k, seed))} /> : null}
+    </>
   );
 }

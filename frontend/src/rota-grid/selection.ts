@@ -28,3 +28,14 @@ export function bounds(sel: Set<CellKey>, people: number[], days: string[]) {
   }
   return r1 < 0 ? null : { r0, r1, d0, d1 };
 }
+
+// Days are counted on the calendar, in UTC so a clock change never moves one.
+const ms = (iso: string) => Date.parse(iso + "T00:00:00Z");
+export const addDays = (iso: string, n: number): string => new Date(ms(iso) + n * 86400000).toISOString().slice(0, 10);
+export const dayDiff = (a: string, b: string): number => Math.round((ms(b) - ms(a)) / 86400000);
+
+/** The shown days in the Monday-to-Sunday week that holds `date`. */
+export function weekOf(days: string[], date: string): string[] {
+  const start = addDays(date, -((new Date(ms(date)).getUTCDay() + 6) % 7));
+  return days.filter((d) => { const n = dayDiff(start, d); return n >= 0 && n < 7; });
+}
