@@ -17,6 +17,10 @@ from shifts.models import DayChange, Entry
 from shifts.services import parse, render
 
 HEX = re.compile(r"^#[0-9A-Fa-f]{6}$")
+# No grid action names more cells than this (twenty weeks of a full team is
+# far fewer); a request that does is refused before any work.
+MAX_CELLS = 2000
+TOO_MANY = f"that is more than {MAX_CELLS} cells at once"
 APPEARANCE_BOOLS = ("bold", "italic", "underline", "strike", "wrap")
 SIZES = ("sm", "md", "lg")
 
@@ -79,7 +83,7 @@ def _clean_item(raw, departments):
         raise ValueError("the break must be 15, 30, 45 or 60 minutes")
     dept = raw.get("department")
     if dept not in (None, ""):
-        dept = departments.get(int(dept)) if str(dept).isdigit() else None
+        dept = departments.get(int(dept)) if str(dept).isascii() and str(dept).isdigit() else None
         if dept is None:
             raise ValueError("unknown department")
     item["department"] = dept or None
@@ -120,9 +124,12 @@ def _check(user, person):
         raise PermissionDenied("you can't edit this person's rota")
 
 
-def _touch(person, day):
-    DayChange.objects.get_or_create(person=person, day=day,
-                                    defaults={"before": render.day_text(person, day)})
+def _touch(person, day, before=None):
+    """Record the day's text before its first unnotified change; `before`
+    when the caller has already read it (the change is already saved)."""
+    if before is None:
+        before = render.day_text(person, day)
+    DayChange.objects.get_or_create(person=person, day=day, defaults={"before": before})
 
 
 def _write(user, person, day, items, keep_appearance=True):
@@ -209,16 +216,21 @@ def patch(user, entry, **fields):
                             note=f"{render.audit_note(entry.person, entry.day)} · {before_line}")
             return entry
         before = render.day_text(entry.person, entry.day)
-        _touch(entry.person, entry.day)
         for name, value in fields.items():
             setattr(entry, name, value if name != "text" else str(value or "")[:200])
         entry.save()
-        audit.record_as(user, "shifts.entry", entry.person.pk, {"cell": (before, render.day_text(entry.person, entry.day))},
+        after = render.day_text(entry.person, entry.day)
+        if after == before:
+            return entry   # e.g. Overtime ▸ None on a shift with none: nothing for Notify or the log
+        _touch(entry.person, entry.day, before=before)
+        audit.record_as(user, "shifts.entry", entry.person.pk, {"cell": (before, after)},
                         note=render.audit_note(entry.person, entry.day))
         return entry
 
 
 def _cells(cells):
+    if len(cells) > MAX_CELLS:
+        raise ValueError(TOO_MANY)
     return [(int(p), d if isinstance(d, date) else date.fromisoformat(d)) for p, d in cells]
 
 
@@ -246,9 +258,11 @@ def _items_of(person, day):
 
 def move(user, cells, days, rows, copy, row_order):
     """Translate a selection by (days, rows) over the grid's row order.
-    Targets are checked before anything is written; a target off the row
-    list or on a row the user may not edit refuses the whole move."""
+    The sources are checked first, then the targets, before anything is
+    written; a target off the row list, off the calendar or on a row the
+    user may not edit refuses the whole move."""
     cells = _cells(cells)
+    _people(user, [p for p, _ in cells])
     row_order = [int(p) for p in row_order]
     targets = []
     for pk, day in cells:
@@ -258,7 +272,10 @@ def move(user, cells, days, rows, copy, row_order):
             raise ValueError("a moved row is not on the grid") from None
         if idx < 0 or idx >= len(row_order):
             raise ValueError("the move goes off the grid")
-        targets.append((row_order[idx], day + timedelta(days=days)))
+        try:
+            targets.append((row_order[idx], day + timedelta(days=days)))
+        except OverflowError:
+            raise ValueError("the move goes off the calendar") from None
     people = _people(user, [p for p, _ in cells] + [p for p, _ in targets])
     changed = Changed()
     with transaction.atomic():
@@ -287,6 +304,8 @@ def paste(user, anchor, block, mode, row_order):
     rows = block.get("rows") if isinstance(block, dict) else None
     if not isinstance(rows, list):
         raise ValueError("the block has no rows")
+    if sum(len(r) if isinstance(r, list) else 1 for r in rows) > MAX_CELLS:
+        raise ValueError(TOO_MANY)
     departments = _departments()
     offered = [d for d in departments.values() if not d.archived]
     start = row_order.index(anchor_pk)

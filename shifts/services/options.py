@@ -25,7 +25,7 @@ def clean(data):
         if key in CHOICES:
             out[key] = value if value in CHOICES[key] else default
         elif key == "days":
-            out[key] = sorted({int(d) for d in value if str(d).isdigit() and 0 <= int(d) <= 6}) or default
+            out[key] = sorted({int(d) for d in value if str(d).isascii() and str(d).isdigit() and 0 <= int(d) <= 6}) or default
         else:
             out[key] = bool(value)
     return out

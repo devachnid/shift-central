@@ -3,12 +3,12 @@ signed out is 401, refused is 403, bad input is 400, each with an "error"
 sentence the island shows in its bar. Every write is a service call."""
 
 import json
-from datetime import date
 from functools import wraps
 
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from people.models import Person
@@ -48,15 +48,12 @@ def json_view(view):
 
 
 def _day(value):
-    try:
-        return date.fromisoformat(str(value))
-    except ValueError:
-        raise ValueError("that is not a date") from None
+    return window.parse_day(value)
 
 
 def _person(request):
     pk = request.json.get("person")
-    if not str(pk).isdigit():
+    if not window.is_pk(pk):
         raise ValueError("no person")
     return get_object_or_404(Person, pk=int(pk))
 
@@ -71,7 +68,7 @@ def _changed(request, result):
 @require_GET
 @json_view
 def window_view(request):
-    start = _day(request.GET.get("from") or date.today().isoformat())
+    start = _day(request.GET.get("from") or timezone.localdate().isoformat())
     weeks = window.clamp_weeks(request.GET.get("weeks", 1))
     return JsonResponse(window.payload(request.user, start, weeks, request.GET))
 
@@ -120,6 +117,8 @@ def _cells(request):
     cells = request.json.get("cells")
     if not isinstance(cells, list) or not cells:
         raise ValueError("no cells")
+    if len(cells) > entries.MAX_CELLS:
+        raise ValueError(entries.TOO_MANY)
     return [(int(p), _day(d)) for p, d in cells]
 
 
@@ -168,6 +167,6 @@ def replace(request):
 def order(request):
     if not access.is_manager(request.user):
         raise PermissionDenied("managers only")
-    ids = [int(p) for p in request.json.get("people", []) if str(p).isdigit()]
+    ids = [int(p) for p in request.json.get("people", []) if window.is_pk(p)]
     profiles.reorder(request.user, ids)
     return JsonResponse({"ok": True})

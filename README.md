@@ -46,6 +46,8 @@ the requirements README.
     cd frontend && npm test
 
 The browser test (the grid, driven in Chromium) is skipped unless asked for:
+`pip install -r requirements-dev.txt` (Playwright and its pytest plugin, kept
+out of `requirements.txt` so the VPS never installs them), then
 `python -m playwright install chromium`, then `E2E=1 python -m pytest -q tests/e2e`.
 Where Chromium is already installed elsewhere, set `E2E_CHROMIUM` to its path.
 
@@ -133,7 +135,7 @@ sandbox; `deploy/gunicorn.service` explains each part.
     install -d -o shift-central -g shift-central -m 700 /var/lib/shift-central
     git clone https://github.com/devachnid/shift-central /srv/shift-central
     cd /srv/shift-central
-    python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+    python3 -m venv .venv && .venv/bin/pip install -r requirements.txt   # requirements.txt only: requirements-dev.txt is for the browser test
     chown -R root:root /srv/shift-central
     chmod -R u=rwX,go=rX /srv/shift-central
 

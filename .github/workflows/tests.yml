@@ -17,7 +17,7 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: pip install -r requirements.txt ruff==0.16.6
+      - run: pip install -r requirements.txt -r requirements-dev.txt ruff==0.16.6
       - run: ruff check .
       - run: DEBUG=1 python manage.py makemigrations --check --dry-run
       - run: python -m pytest -q

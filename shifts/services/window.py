@@ -1,7 +1,7 @@
 """One payload for the grid's window (spec, sections 3 and 6): who is a
 row for this viewer, what is in each cell, and the viewer's options."""
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.db.models import Q
 from django.utils import timezone
@@ -13,6 +13,28 @@ from shifts.services import common, options, serialize
 
 MAX_WEEKS = 20
 DAY_LABEL = "%a. %b. {d}"
+# The days a request may name. Wide enough for any rota, narrow enough that
+# a window or a week either side of it never runs off the calendar.
+FIRST_DAY, LAST_DAY = date(2000, 1, 1), date(2100, 12, 31)
+
+
+def parse_day(value):
+    """An ISO date from request input, within FIRST_DAY..LAST_DAY; else
+    ValueError with a sentence the island or a page can show."""
+    try:
+        day = date.fromisoformat(str(value))
+    except ValueError:
+        raise ValueError("that is not a date") from None
+    if not FIRST_DAY <= day <= LAST_DAY:
+        raise ValueError("that date is out of range")
+    return day
+
+
+def is_pk(value):
+    """A request value that int() reads as a row id: isdigit() alone admits
+    superscripts and other digits int() refuses."""
+    value = str(value)
+    return value.isascii() and value.isdigit()
 
 
 def monday(day):
@@ -46,7 +68,7 @@ def visible_people(user, first, last, manager=None):
 
 
 def _ids(values):
-    return [int(v) for v in values if str(v).isdigit()]
+    return [int(v) for v in values if is_pk(v)]
 
 
 def _filtered(people, filters, first, last):

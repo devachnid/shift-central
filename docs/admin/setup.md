@@ -44,8 +44,10 @@ early December 2026, so it is the dependency with a date.
    `EMAIL_USE_TLS` and `DEFAULT_FROM_EMAIL` (the address staff see the email come
    from). Every variable is explained in the README's table. A missing one is usually
    loud (the app will not start); a wrong `PRACTICE_HR_URL` is not, and shows in
-   step 5. Without the `EMAIL_*` values the app works, the grid included, and Notify
-   staff sends nothing: every send fails and keeps the changes.
+   step 5. Without `EMAIL_HOST` the app works, the grid included, and Notify staff
+   sends nothing: nothing is tried, each send is recorded as "mail not configured",
+   and the changes are kept for when mail is set up. There is no "print the email
+   to the log" fallback.
    Without `ROTA_URL` or `ROTA_API_TOKEN` the grid has no GP tiles and the Health card
    says "GP rota: not configured".
 
@@ -107,6 +109,30 @@ early December 2026, so it is the dependency with a date.
 When the Health card shows the feed green, no one needing hours, and nobody in "not
 in the feed", the foundation is ready for the rota grid. Then lay the rotas out
 (see [the rota](rota.md)), and press **Notify staff** when each team's is ready.
+
+## Upgrading a box that runs the Foundation
+
+A server already running Shift Central from before the rota grid takes the
+release like any other pull, plus the new settings and the GP feed's units. In
+`/srv/shift-central`, as root:
+
+1. `git pull`.
+2. `.venv/bin/pip install -r requirements.txt`. Only that file: `requirements-dev.txt`
+   is the browser test's (Playwright), and the server never needs it.
+3. `deploy/manage migrate` (the `shifts` and `messaging` tables, and the seventeen
+   departments if they are not there yet).
+4. `deploy/manage collectstatic --noinput`, then `deploy/manage check --deploy`.
+5. **Add the new variables** to `/etc/shift-central.env`: `ROTA_URL` and
+   `ROTA_API_TOKEN` (go-live step 1 makes the token), and the `EMAIL_*` values
+   (go-live step 2). Either can wait; see step 2 for what works without them.
+6. **Copy the GP sync's units**: `cp deploy/shift-central-gp-sync.* /etc/systemd/system/`,
+   and `cp deploy/gunicorn.service /etc/systemd/system/shift-central.service` if
+   it changed.
+7. `systemctl daemon-reload`, then `systemctl restart shift-central`.
+8. **Enable the GP timer only once `ROTA_URL` and `ROTA_API_TOKEN` are set**: run
+   `deploy/manage gp_sync` once and check it says how many GPs it read, then
+   `systemctl enable --now shift-central-gp-sync.timer`. Enabled without them, the
+   timer fails every fifteen minutes and fills the journal with it.
 
 ## Backups
 

@@ -3,7 +3,7 @@
 {% block dialog_body %}
 {% if error %}<p class="flash flash-error">{{ error }}</p>{% endif %}
 {% if warning %}<p class="flash flash-warning">{{ warning }}</p><span data-dialog-refresh hidden></span>{% endif %}
-{% if not cell %}<p class="field-help">Select a cell on the grid first to apply a template there.</p>{% endif %}
+{% if not cell and not warning %}<p class="field-help">Select a cell on the grid first to apply a template there.</p>{% endif %}
 <table class="table">
   <thead><tr><th>Name</th><th>Saved by</th><th></th></tr></thead>
   <tbody>

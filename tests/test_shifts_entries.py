@@ -267,3 +267,9 @@ def test_paste_of_an_empty_text_cell_clears_and_a_bad_cell_is_refused(world):
     assert _lines(nina, MON) == []
     with pytest.raises(ValueError):
         entries.paste(world["u_lead"], (nina.pk, MON), {"days": 1, "rows": [[{"kind": "comment"}]]}, "replace", [nina.pk])
+
+
+def test_cell_text_past_2000_characters_is_cut_not_refused(world):
+    nina = world["nina"]
+    entries.set_cell_text(world["u_lead"], nina, MON, "x" * 2500 + "\n08:00-12:00")
+    assert [e.kind for e in _lines(nina, MON)] == ["comment"]

@@ -1,7 +1,7 @@
 """The Rota page and its pop-ups (spec, sections 3, 4 and 10)."""
 
 import json
-from datetime import date
+from datetime import date, time
 
 import pytest
 from django.test import Client
@@ -233,3 +233,61 @@ def test_modal_js_honours_refresh():
     from pathlib import Path
     js = Path("static/js/modal.js").read_text()
     assert "j.refresh" in js and "shift-central:refresh" in js
+
+
+def test_a_skipped_rows_warning_after_applying_a_template_offers_no_second_apply(lead):
+    c = _client(lead)
+    nina = make_person(first_name="Nina", team=lead.team)
+    nurse = make_person(first_name="Nurse", team=make_team("Nursing"))
+    rows = [[[{"kind": "comment", "text": "x"}]], [[{"kind": "comment", "text": "y"}]]]
+    c.post("/rota/templates/save/", {"name": "Two rows", "block": json.dumps({"days": 1, "rows": rows})})
+    t = Template.objects.get()
+    body = c.post(f"/rota/templates/{t.pk}/apply/",
+                  {"cell": f"{nina.pk}:2027-03-01", "row_order": f"{nina.pk},{nurse.pk}"}).content.decode()
+    assert "1 row couldn&#x27;t be pasted onto." in body or "1 row couldn't be pasted onto." in body
+    assert "/apply/" not in body and 'name="cell"' not in body and "Select a cell" not in body
+    assert Entry.objects.filter(person=nina).count() == 1
+
+
+def test_editing_a_shift_after_a_gap_in_the_positions_replaces_that_shift(lead):
+    nina = make_person(first_name="Nina", team=lead.team)
+    make_entry(nina, MON, kind="comment", text="first", position=0)
+    second = make_entry(nina, MON, start=time(8), finish=time(12), position=2)   # an admin deleted position 1
+    keep = make_entry(nina, MON, position=3)
+    r = _client(lead).post(f"/rota/shift/{nina.pk}/2027-03-01/{second.pk}/",
+                           {"start": "13:00", "finish": "17:00", "break_minutes": "0", "department": "",
+                            "text": "", "overtime": ""})
+    assert r.json() == {"refresh": True}
+    lines = [(e.kind, e.text, e.start and e.start.strftime("%H:%M")) for e in Entry.objects.filter(person=nina).order_by("position")]
+    assert lines == [("comment", "first", None), ("shift", "", "13:00"), ("shift", "", keep.start.strftime("%H:%M"))]
+
+
+@pytest.mark.parametrize("url", ["/rota/?from=9999-12-31", "/rota/?from=0001-01-01", "/rota/download/?from=9999-12-31",
+                                 "/rota/today/?day=9999-12-31", "/rota/today/?day=0001-01-01",
+                                 "/reports/hours/?from=9999-12-31", "/reports/hours/?from=2027-03-01&to=9999-12-31"])
+def test_a_day_at_the_ends_of_the_calendar_falls_back_rather_than_failing(lead, url):
+    assert _client(lead).get(url).status_code == 200
+
+
+def test_the_dialogs_treat_a_day_outside_2000_to_2100_as_no_date(lead):
+    nina = make_person(first_name="Nina", team=lead.team)
+    c = _client(lead)
+    assert c.get(f"/rota/shift/{nina.pk}/2101-01-01/").status_code == 404
+    c.post("/rota/templates/save/", {"name": "One", "block": json.dumps({"rows": [[[{"kind": "comment", "text": "x"}]]]})})
+    t = Template.objects.get()
+    body = c.post(f"/rota/templates/{t.pk}/apply/", {"cell": f"{nina.pk}:1999-12-31", "row_order": str(nina.pk)}).content.decode()
+    assert "that date is out of range" in body and not Entry.objects.exists()
+
+
+def test_the_rota_csv_shows_a_formula_like_cell_as_text(lead):
+    nina = make_person(first_name="Nina", team=lead.team)
+    make_entry(nina, MON, kind="comment", text="=HYPERLINK(\"http://x\")")
+    text = _client(lead).get("/rota/download/?from=2027-03-01&weeks=1").content.decode()
+    assert "'=HYPERLINK" in text and ",=HYPERLINK" not in text
+
+
+@pytest.mark.parametrize("value, out", [("=1+1", "'=1+1"), ("+44 7700", "'+44 7700"), ("-x", "'-x"),
+                                        ("@me", "'@me"), ("08:00-12:00", "08:00-12:00"), (None, ""), (7, "7")])
+def test_a_csv_cell_that_a_spreadsheet_would_run_is_prefixed_with_a_quote(value, out):
+    from shifts.services import csv_safe
+    assert csv_safe.cell(value) == out

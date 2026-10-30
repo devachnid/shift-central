@@ -4,7 +4,6 @@ answers {"refresh": true}, which modal.js turns into a reload of the
 island's window."""
 
 import json
-from datetime import date
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -15,7 +14,7 @@ from people.models import Department, Person, Team
 from people.services import access
 from shifts.forms import OptionsForm, ReplaceForm, ShiftForm, TemplateForm
 from shifts.models import Entry, Template
-from shifts.services import entries, options
+from shifts.services import entries, options, window
 from shifts.services import templates as template_service
 
 REFRESH = {"refresh": True}
@@ -28,15 +27,15 @@ def _cells(text):
         if ":" not in part:
             continue
         pk, day = part.split(":", 1)
-        if pk.isdigit():
-            out.append((int(pk), date.fromisoformat(day)))
+        if window.is_pk(pk):
+            out.append((int(pk), window.parse_day(day)))
     if not out:
         raise ValueError("no cells selected")
     return out
 
 
 def _row_order(text):
-    return [int(p) for p in (text or "").split(",") if p.isdigit()]
+    return [int(p) for p in (text or "").split(",") if window.is_pk(p)]
 
 
 @login_required
@@ -45,24 +44,26 @@ def shift(request, person_pk, day, entry_pk=None):
     if not access.can_manage(request.user, person):
         raise PermissionDenied
     try:
-        day = date.fromisoformat(day)
+        day = window.parse_day(day)
     except ValueError:
         raise Http404("not a date") from None
     entry = get_object_or_404(Entry, pk=entry_pk, person=person, day=day) if entry_pk else None
     if request.method == "POST":
         form = ShiftForm(request.POST)
         if form.is_valid():
+            cell = list(Entry.objects.filter(person=person, day=day).order_by("position"))
             items = [{"kind": e.kind, "start": e.start and e.start.strftime("%H:%M"),
                       "finish": e.finish and e.finish.strftime("%H:%M"), "break_minutes": e.break_minutes,
                       "department": e.department_id, "text": e.text, "wfh": e.wfh, "overtime": e.overtime,
                       "appearance": e.appearance}
-                     for e in Entry.objects.filter(person=person, day=day).order_by("position")]
+                     for e in cell]
             new = form.item()
             if entry is None:
                 items.append(new)
             else:
+                # By pk, not by position: an admin delete can leave a gap in the positions.
                 new["appearance"] = entry.appearance
-                items[entry.position] = new
+                items[[e.pk for e in cell].index(entry.pk)] = new
             try:
                 entries.set_cell(request.user, person, day, items)
                 return JsonResponse(REFRESH)
@@ -162,9 +163,10 @@ def template_apply(request, pk):
         return _templates_dialog(request, cell, row_order, error=str(e))
     if result.skipped:
         # Shown in place of the refresh: the island picks the paste up on its next window load.
+        # Without the cell and row order, so no Apply button is offered: a second click would
+        # paste the template again on top of the first.
         noun = "row" if result.skipped == 1 else "rows"
-        return _templates_dialog(request, cell, row_order,
-                                 warning=f"{result.skipped} {noun} couldn't be pasted onto.")
+        return _templates_dialog(request, "", "", warning=f"{result.skipped} {noun} couldn't be pasted onto.")
     return JsonResponse(REFRESH)
 
 
@@ -197,7 +199,7 @@ def notify_view(request):
     from shifts.services import notify
     outcome = warning = None
     if request.method == "POST":
-        ids = [int(p) for p in request.POST.getlist("people") if p.isascii() and p.isdigit()]
+        ids = [int(p) for p in request.POST.getlist("people") if window.is_pk(p)]
         if ids:
             outcome = notify.send(request.user, ids, request.build_absolute_uri("/"))
         else:

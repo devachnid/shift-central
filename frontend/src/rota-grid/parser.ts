@@ -4,17 +4,18 @@
 import type { Department, Item, Overtime } from "./types";
 
 // 'am'/'pm' only counts as a marker when no word character follows, so
-// '9-5 amazing' is not 9-5am.
-const SIDE = (p: string) => `(?<${p}h>\\d{1,2})(?:[:.]?(?<${p}m>\\d{2}))?\\s*(?<${p}ap>(?:am|pm)(?!\\w))?`;
-const RANGE_SOURCE = `(?<![\\d:.])${SIDE("a")}\\s*(?:-|–|—|to|until)\\s*${SIDE("b")}(?!\\d)(?![:.]\\d)`;
+// '9-5 amazing' is not 9-5am. Digits are [0-9], as in parse.py, where \d
+// would be any Unicode digit.
+const SIDE = (p: string) => `(?<${p}h>[0-9]{1,2})(?:[:.]?(?<${p}m>[0-9]{2}))?\\s*(?<${p}ap>(?:am|pm)(?!\\w))?`;
+const RANGE_SOURCE = `(?<![0-9:.])${SIDE("a")}\\s*(?:-|–|—|to|until)\\s*${SIDE("b")}(?![0-9])(?![:.][0-9])`;
 const SEPARATOR = /^\s*-{3,}\s*$/;
 // The word 'break' is required on the hour and minute forms, so
 // '1 hour training' stays a comment; only the bare 'N m' shorthand stands alone.
 const BREAK_SOURCE =
-  "(?<!\\w)(?:(?<h>\\d+)\\s*(?:hours?|hrs?|h)\\s+break" +
-  "|(?<m>\\d+)\\s*(?:minutes?|mins?)\\s+break" +
-  "|break\\s+(?<n>\\d+)" +
-  "|(?<s>\\d+)\\s*m)(?!\\w)";
+  "(?<!\\w)(?:(?<h>[0-9]+)\\s*(?:hours?|hrs?|h)\\s+break" +
+  "|(?<m>[0-9]+)\\s*(?:minutes?|mins?)\\s+break" +
+  "|break\\s+(?<n>[0-9]+)" +
+  "|(?<s>[0-9]+)\\s*m)(?!\\w)";
 const WFH_SOURCE = "(?<!\\w)wfh(?!\\w)";
 const TOIL = /(?<!\w)toil(?!\w)/i;
 const PAID = /(?<!\w)(?:ot paid|overtime paid|paid overtime|ot)(?!\w)/i;
@@ -98,7 +99,12 @@ const comment = (text: string) => [...text.split(/\s+/).filter(Boolean).join(" "
  *  tidied: a pure comment such as 'OFF.' or '...' keeps what was typed. */
 const leftover = (text: string) => comment(text).replace(/^[ ,.:;]+|[ ,.:;]+$/g, "");
 
+/** Runs of whitespace collapsed (and the ends trimmed) before matching, as
+ *  the server does, so the range pattern cannot backtrack on a long run. */
+const collapse = (text: string) => text.split(/\s+/).filter(Boolean).join(" ");
+
 export function parseLine(text: string, departments: Department[]): Item {
+  text = collapse(text);
   if (SEPARATOR.test(text)) return { kind: "separator" };
   const found = firstRange(text);
   if (!found) return { kind: "comment", text: comment(text) };

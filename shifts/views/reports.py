@@ -1,26 +1,25 @@
 """The hours report page and its CSV (spec, section 7)."""
 
-import csv
-from datetime import date, timedelta
+from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
-from shifts.services import hours
+from shifts.services import csv_safe, hours
 from shifts.services import render as fmt
-from shifts.services.window import monday
+from shifts.services.window import monday, parse_day
 
 
 def _dates(request):
     today = timezone.localdate()
     try:
-        start = date.fromisoformat(request.GET.get("from", ""))
+        start = parse_day(request.GET.get("from", ""))
     except ValueError:
         start = monday(today)
     try:
-        end = date.fromisoformat(request.GET.get("to", ""))
+        end = parse_day(request.GET.get("to", ""))
     except ValueError:
         end = start + timedelta(days=6)
     return start, end
@@ -33,7 +32,7 @@ def hours_report(request):
     if request.GET.get("download"):
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="hours-{start.isoformat()}-{end.isoformat()}.csv"'
-        w = csv.writer(response)
+        w = csv_safe.Writer(response)
         w.writerow(["Name", "Day", "Date", "Start", "Finish", "Break", "Hours", "Overtime", "Department or note"])
         for b in blocks:
             for week in b["weeks"]:

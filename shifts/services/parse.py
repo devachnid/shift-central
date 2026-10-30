@@ -4,25 +4,27 @@ department name are pulled out, and what remains is the comment. A line
 without a range is a comment; three or more hyphens alone, a separator.
 Never raises: whatever cannot be read is kept as text, so nothing typed is
 lost. frontend/src/rota-grid/parser.ts mirrors this for the live preview;
-parser.cases.json is the shared table both are tested against."""
+parser.cases.json is the shared table both are tested against. Digits are
+[0-9], not \\d: Python's \\d is any Unicode digit and JavaScript's is
+ASCII, and the two parsers must agree."""
 
 import re
 from datetime import time
 
 from shifts.models import Entry
 
-_SIDE = r"(?P<{p}h>\d{{1,2}})(?:[:.]?(?P<{p}m>\d{{2}}))?\s*(?P<{p}ap>(?:am|pm)(?!\w))?"
+_SIDE = r"(?P<{p}h>[0-9]{{1,2}})(?:[:.]?(?P<{p}m>[0-9]{{2}}))?\s*(?P<{p}ap>(?:am|pm)(?!\w))?"
 RANGE = re.compile(
-    r"(?<![\d:.])" + _SIDE.format(p="a") + r"\s*(?:-|–|—|to|until)\s*" + _SIDE.format(p="b") + r"(?!\d)(?![:.]\d)",
+    r"(?<![0-9:.])" + _SIDE.format(p="a") + r"\s*(?:-|–|—|to|until)\s*" + _SIDE.format(p="b") + r"(?![0-9])(?![:.][0-9])",
     re.IGNORECASE)
 SEPARATOR = re.compile(r"^\s*-{3,}\s*$")
 # The word 'break' is required on the hour and minute forms, so '1 hour
 # training' stays a comment; the bare 'N m' / 'Nm' shorthand needs none.
 BREAK = re.compile(
-    r"(?<!\w)(?:(?P<h>\d+)\s*(?:hours?|hrs?|h)\s+break"
-    r"|(?P<m>\d+)\s*(?:minutes?|mins?)\s+break"
-    r"|break\s+(?P<n>\d+)"
-    r"|(?P<s>\d+)\s*m)(?!\w)",
+    r"(?<!\w)(?:(?P<h>[0-9]+)\s*(?:hours?|hrs?|h)\s+break"
+    r"|(?P<m>[0-9]+)\s*(?:minutes?|mins?)\s+break"
+    r"|break\s+(?P<n>[0-9]+)"
+    r"|(?P<s>[0-9]+)\s*m)(?!\w)",
     re.IGNORECASE)
 WFH = re.compile(r"(?<!\w)wfh(?!\w)", re.IGNORECASE)
 TOIL = re.compile(r"(?<!\w)toil(?!\w)", re.IGNORECASE)
@@ -114,7 +116,10 @@ def _leftover(text):
 
 
 def line(text, departments):
-    """One line of cell text as an item dict."""
+    """One line of cell text as an item dict. Runs of whitespace are
+    collapsed first: what is stored is collapsed anyway, and the range
+    pattern's optional spaces would otherwise backtrack on a long run."""
+    text = " ".join(text.split())
     if SEPARATOR.match(text):
         return {"kind": "separator"}
     found = _first_range(text)

@@ -122,3 +122,23 @@ def test_a_range_over_a_year_is_clamped_and_the_form_shows_it(world):
     assert "6 Jan 2020" not in body and "1 Mar 2027" in body
     _, start, end = hours.report(world["user"], date(2020, 1, 1), date(2027, 3, 1))
     assert (start, end) == (clamped, date(2027, 3, 1))
+
+
+def test_the_hours_csv_shows_a_formula_like_cell_as_text(world):
+    make_entry(world["nina"], MON + timedelta(days=2), start=time(9), finish=time(12), text="@cover +1")
+    c = Client()
+    c.force_login(world["user"])
+    text = c.get("/reports/hours/?from=2027-03-01&to=2027-03-07&download=1").content.decode()
+    assert ",'@cover +1" in text
+
+
+def test_the_hours_report_lists_people_current_in_the_range_or_with_hours_in_it(world):
+    team = world["nina"].team
+    gone = make_person(first_name="Gone", team=team, end_date=MON - timedelta(days=1))
+    left_mid = make_person(first_name="Late", team=team, end_date=MON + timedelta(days=2))
+    later = make_person(first_name="Later", team=team, start_date=MON + timedelta(days=30))
+    early = make_person(first_name="Early", team=team, start_date=MON + timedelta(days=30))
+    make_entry(early, MON, start=time(9), finish=time(12))   # hours before their HR start date still show
+    listed = [b["person"] for b in hours.report(world["user"], MON, MON + timedelta(days=6))[0]]
+    assert left_mid in listed and early in listed and world["nina"] in listed
+    assert gone not in listed and later not in listed

@@ -223,3 +223,64 @@ def test_the_window_costs_the_same_queries_for_three_rows_or_twelve(world):
     many_queries, many_rows = cost()
     assert many_rows >= few_rows + 9
     assert many_queries == few_queries
+
+
+def test_the_window_defaults_to_the_local_date_not_the_servers(world, monkeypatch):
+    from shifts.views import api
+    monkeypatch.setattr(api.timezone, "localdate", lambda: date(2027, 3, 10))
+    assert world["c_lead"].get("/rota/api/window/").json()["from"] == "2027-03-08"
+
+
+@pytest.mark.parametrize("url", ["/rota/api/window/?team=²&dept=①", "/rota/download/?team=²&dept=①"])
+def test_a_non_ascii_digit_in_a_filter_is_ignored_not_an_error(world, url):
+    assert world["c_lead"].get(url).status_code == 200
+
+
+@pytest.mark.parametrize("day", ["1999-12-31", "2101-01-01", "9999-12-31"])
+def test_a_day_outside_2000_to_2100_is_a_400(world, day):
+    c = world["c_lead"]
+    r = _post(c, "/rota/api/cell/", {"person": world["nina"].pk, "day": day, "text": "08:00-12:00"})
+    assert r.status_code == 400 and r.json()["error"] == "that date is out of range"
+    assert c.get(f"/rota/api/window/?from={day}").status_code == 400
+    assert not Entry.objects.exists()
+
+
+def test_a_person_given_as_a_non_ascii_digit_is_a_400(world):
+    r = _post(world["c_lead"], "/rota/api/cell/", {"person": "²", "day": "2027-03-01", "text": "x"})
+    assert r.status_code == 400
+
+
+def test_a_move_from_a_row_the_viewer_cannot_edit_is_refused_before_the_targets_are_worked_out(world):
+    nurse = world["nurse"]
+    r = _post(world["c_lead"], "/rota/api/move/", {"cells": [[nurse.pk, "2027-03-01"]], "days": 1, "rows": 0,
+                                                    "row_order": []})
+    assert r.status_code == 403
+
+
+def test_a_move_off_the_calendar_is_a_400(world):
+    nina = world["nina"]
+    make_entry(nina, MON)
+    r = _post(world["c_lead"], "/rota/api/move/", {"cells": [[nina.pk, "2027-03-01"]], "days": 10 ** 7, "rows": 0,
+                                                    "row_order": [nina.pk]})
+    assert r.status_code == 400 and Entry.objects.filter(person=nina, day=MON).exists()
+
+
+def test_a_mutation_naming_more_than_2000_cells_is_a_400(world):
+    nina, c = world["nina"], world["c_lead"]
+    cells = [[nina.pk, "2027-03-01"]] * 2001
+    r = _post(c, "/rota/api/clear/", {"cells": cells})
+    assert r.status_code == 400 and "2000" in r.json()["error"]
+    block = {"days": 2001, "rows": [[[]] * 2001]}
+    r = _post(c, "/rota/api/paste/", {"anchor": [nina.pk, "2027-03-01"], "block": block, "row_order": [nina.pk]})
+    assert r.status_code == 400 and "2000" in r.json()["error"]
+    assert _post(c, "/rota/api/clear/", {"cells": cells[:2000]}).status_code == 200
+
+
+def test_a_patch_that_changes_nothing_on_the_day_records_nothing(world):
+    from people.models import AuditEntry
+    e = make_entry(world["nina"], MON)
+    r = _post(world["c_lead"], f"/rota/api/entries/{e.pk}/", {"overtime": ""})
+    assert r.status_code == 200 and r.json()["unnotified"] == 0
+    assert not DayChange.objects.exists() and not AuditEntry.objects.filter(model="shifts.entry").exists()
+    _post(world["c_lead"], f"/rota/api/entries/{e.pk}/", {"overtime": "toil"})
+    assert DayChange.objects.get().before == "08:00-16:15"

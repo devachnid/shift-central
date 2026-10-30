@@ -78,3 +78,12 @@ def test_durations_and_the_audit_note():
     assert render.duration(timedelta(0)) == "0 min"
     p = make_person(first_name="Nina")
     assert render.audit_note(p, date(2027, 3, 1)) == "Mon 1 Mar 2027 · Nina Patel"
+
+
+def test_a_long_run_of_spaces_is_collapsed_before_matching():
+    import time as clock
+    began = clock.monotonic()
+    item = parse.line("1" + " " * 20000 + "x", [])
+    assert item == {"kind": "comment", "text": "1 x"}
+    assert clock.monotonic() - began < 1
+    assert parse.line("08:00   -   12:00    30m", [])["break_minutes"] == 30

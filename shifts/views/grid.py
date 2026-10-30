@@ -2,7 +2,6 @@
 page is the island's mount point plus the phone list; the island fetches
 its own data from the API."""
 
-import csv
 from datetime import date, timedelta
 
 from django.contrib.auth.decorators import login_required
@@ -11,12 +10,12 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from people.services import access
-from shifts.services import window
+from shifts.services import csv_safe, window
 
 
 def _start(request):
     try:
-        return window.monday(date.fromisoformat(request.GET.get("from", "")))
+        return window.monday(window.parse_day(request.GET.get("from", "")))
     except ValueError:
         return window.monday(timezone.localdate())
 
@@ -56,7 +55,7 @@ def download(request):
     data = window.payload(request.user, first, weeks, request.GET)
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename="rota-{first.isoformat()}.csv"'
-    writer = csv.writer(response)
+    writer = csv_safe.Writer(response)
     days = data["days"]
     writer.writerow(["Name", "Team"] + [date.fromisoformat(d["date"]).strftime("%a %-d %b") for d in days])
     for row in data["rows"]:
