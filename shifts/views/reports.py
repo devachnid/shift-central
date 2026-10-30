@@ -29,7 +29,7 @@ def _dates(request):
 @login_required
 def hours_report(request):
     start, end = _dates(request)
-    blocks = hours.report(request.user, start, end)
+    blocks, start, end = hours.report(request.user, start, end)
     if request.GET.get("download"):
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="hours-{start.isoformat()}-{end.isoformat()}.csv"'
@@ -50,4 +50,4 @@ def hours_report(request):
                 r["hours_text"] = fmt.duration(r["hours"]) if r["hours"] else ""
                 r["overtime_text"] = fmt.duration(r["overtime"]) if r["overtime"] else ""
     return render(request, "shifts/hours.html", {"page_title": "Hours", "blocks": blocks, "start": start, "end": end,
-                                                 "multi_week": (end - start).days >= 7})
+                                                 "multi_week": monday(start) != monday(end)})

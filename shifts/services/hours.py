@@ -23,7 +23,7 @@ def people_for(user):
 
 def _rows(person, start, end):
     rows = []
-    for e in Entry.objects.filter(person=person, day__range=(start, end), kind=Entry.Kind.SHIFT).order_by("day", "position"):
+    for e in Entry.objects.filter(person=person, day__range=(start, end), kind=Entry.Kind.SHIFT).select_related("department").order_by("day", "position"):
         worked = e.hours
         rows.append({"day": e.day, "start": e.start, "finish": e.finish, "break_minutes": e.break_minutes,
                      "hours": timedelta(0) if e.overtime else worked, "overtime": worked if e.overtime else timedelta(0),
@@ -36,6 +36,8 @@ def _rows(person, start, end):
 
 
 def report(user, start, end):
+    """(blocks, start, end): the range actually reported, swapped if
+    backwards and clamped to MAX_RANGE, so callers can show what was used."""
     if end < start:
         start, end = end, start
     if end - start > MAX_RANGE:
@@ -54,4 +56,4 @@ def report(user, start, end):
         blocks.append({"person": person, "shifts": len(rows), "weeks": weeks,
                        "total": sum((r["hours"] for r in rows), timedelta(0)),
                        "overtime": sum((r["overtime"] for r in rows), timedelta(0))})
-    return blocks
+    return blocks, start, end
