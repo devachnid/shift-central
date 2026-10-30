@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { fromText, toBlock, toTSV } from "./clipboard";
 import { key } from "./selection";
-import type { EntryJson } from "./types";
+import type { EntryJson, Item } from "./types";
 
 const departments = [{ id: 1, name: "Reception PMC", colour: "#2F6FB3" }];
 const shift = (id: number, text = ""): EntryJson => ({
@@ -17,15 +17,21 @@ it("a block is the selection's bounding rectangle, relative to its top-left", ()
   const { block, anchor } = toBlock(new Set([key(10, "2027-03-01"), key(11, "2027-03-02")]), people, days, entries)!;
   expect(anchor).toEqual([10, "2027-03-01"]);
   expect(block.days).toBe(2);
-  expect(block.rows[0][0]![0].start).toBe("08:00");
-  expect(block.rows[0][1]).toEqual([]);
-  expect(block.rows[1][1]![0].text).toBe("late");
+  expect((block.rows[0][0] as Item[])[0].start).toBe("08:00");
+  expect(block.rows[0][1]).toBeNull();
+  expect((block.rows[1][1] as Item[])[0].text).toBe("late");
 });
 
-it("cells inside the rectangle but outside the selection are left empty", () => {
+it("cells inside the rectangle but outside the selection are null, so a paste leaves them alone", () => {
   const { block } = toBlock(new Set([key(10, "2027-03-01"), key(11, "2027-03-02")]), people, days, (k) => [shift(9, k)])!;
-  expect(block.rows[0][1]).toEqual([]);
-  expect(block.rows[1][0]).toEqual([]);
+  expect(block.rows[0][1]).toBeNull();
+  expect(block.rows[1][0]).toBeNull();
+});
+
+it("a selected cell with nothing in it is an empty list, so a paste clears there", () => {
+  const { block } = toBlock(new Set([key(10, "2027-03-02"), key(11, "2027-03-02")]), people, days, entries)!;
+  expect(block.rows[0][0]).toEqual([]);
+  expect((block.rows[1][0] as Item[])[0].text).toBe("late");
 });
 
 it("a day the grid hides still takes its column, so the server pastes by date", () => {
@@ -47,37 +53,38 @@ it("TSV has a tab per day and a line per row, items joined by slash", () => {
   expect(toTSV(block, departments)).toBe("08:00-12:00 Reception PMC\t\n\t08:00-12:00 Reception PMC late");
 });
 
-it("plain text pastes as parsed cells, tabs rightward and lines downward", () => {
-  const b = fromText("08:00-12:00\tTraining\n---", departments);
+it("plain text pastes as text cells for the server to parse, tabs rightward and lines downward", () => {
+  const b = fromText("08:00-12:00 Reception PMC\tTraining\n---");
   expect(b.days).toBe(2);
-  expect(b.rows[0][0]![0].kind).toBe("shift");
-  expect(b.rows[0][1]![0].text).toBe("Training");
-  expect(b.rows[1][0]![0].kind).toBe("separator");
+  expect(b.rows).toEqual([["08:00-12:00 Reception PMC", "Training"], ["---", ""]]);
 });
 
-it("text copied out of the island parses back to the same cells", () => {
+it("text copied out of the island comes back as the same text", () => {
   const { block } = toBlock(new Set([key(10, "2027-03-01"), key(11, "2027-03-02")]), people, days, entries)!;
-  const back = fromText(toTSV(block, departments), departments);
+  const tsv = toTSV(block, departments);
+  const back = fromText(tsv);
   expect(back.days).toBe(2);
-  expect(back.rows[0][0]![0]).toMatchObject({ start: "08:00", finish: "12:00", department: 1 });
-  expect(back.rows[1][1]![0]).toMatchObject({ start: "08:00", department: 1, text: "late" });
+  expect(back.rows[0][0]).toBe("08:00-12:00 Reception PMC");
+  expect(back.rows[1][1]).toBe("08:00-12:00 Reception PMC late");
+  expect(toTSV(back, departments)).toBe(tsv);
 });
 
-it("a slash-joined cell comes back as separate items", () => {
-  const b = fromText("08:00-12:00 / 13:00-17:00", departments);
-  expect(b.rows[0][0]!.map((i) => i.start)).toEqual(["08:00", "13:00"]);
+it("a slash-joined field is one cell with a line per item, and goes back out slash-joined", () => {
+  const b = fromText("08:00-12:00 / 13:00-17:00");
+  expect(b.rows[0][0]).toBe("08:00-12:00\n13:00-17:00");
+  expect(toTSV(b, departments)).toBe("08:00-12:00 / 13:00-17:00");
 });
 
 it("an empty line is an empty cell: later rows keep their place", () => {
-  const b = fromText("08:00-12:00\r\n\r\n09:00-17:00", departments);
-  expect(b.rows.map((r) => r[0] && r[0].length)).toEqual([1, 0, 1]);
+  const b = fromText("08:00-12:00\r\n\r\n09:00-17:00");
+  expect(b.rows.map((r) => r[0])).toEqual(["08:00-12:00", "", "09:00-17:00"]);
 });
 
 it("one trailing line break, as a spreadsheet ends a copy, adds no row", () => {
-  expect(fromText("08:00-12:00\r\n", departments).rows).toHaveLength(1);
-  expect(fromText("08:00-12:00\n\n", departments).rows).toHaveLength(2);
+  expect(fromText("08:00-12:00\r\n").rows).toHaveLength(1);
+  expect(fromText("08:00-12:00\n\n").rows).toHaveLength(2);
 });
 
-it("text never produces a null cell", () => {
-  expect(fromText("a\t\tb\n\n", departments).rows.flat().every((c) => Array.isArray(c))).toBe(true);
+it("text never produces a null cell: an empty field clears", () => {
+  expect(fromText("a\t\tb\n\n").rows.flat().every((c) => typeof c === "string")).toBe(true);
 });

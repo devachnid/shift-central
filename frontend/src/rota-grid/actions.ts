@@ -42,7 +42,7 @@ export function selectionActions(g: GridState) {
     if (!at || !g.win) return;
     const stored = load();
     let blk = stored?.block;
-    if (external !== undefined && external.trim() && (!stored || external.trim() !== stored.tsv.trim())) blk = fromText(external, g.win.departments);
+    if (external !== undefined && external.trim() && (!stored || external.trim() !== stored.tsv.trim())) blk = fromText(external);
     if (!blk || !blk.rows.length) return;
     const [person, date] = split(at);
     const row = g.people.indexOf(person);

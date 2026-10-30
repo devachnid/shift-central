@@ -97,7 +97,7 @@ def payload(user, start, weeks, filters):
     sessions = {}
     for s in GpSession.objects.filter(person__in=people, day__range=(first, last)):
         sessions.setdefault(s.person_id, {}).setdefault(s.day.isoformat(), []).append(
-            {"part": s.part, "label": s.label, "site": s.site, "note": s.note})
+            {"part": s.part, "label": s.label, "site": s.site})   # not the note: the grid never draws it
     if opts["hide_no_shifts"]:
         people = [p for p in people if p.pk in by_cell or p.pk in sessions]
 

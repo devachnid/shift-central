@@ -154,10 +154,19 @@ def _write(user, person, day, items, keep_appearance=True):
 
 # --- the API's verbs --------------------------------------------------------
 
+MAX_TEXT = 2000
+
+
+def _parsed(text, offered):
+    """Cell text as items, by the server's parser (the island's is only a
+    preview). Text past MAX_TEXT characters is cut, not refused: no cell
+    needs it, and it bounds the parser's work."""
+    return [_from_parsed(p) for p in parse.cell(str(text)[:MAX_TEXT], offered)]
+
+
 def set_cell_text(user, person, day, text):
     _check(user, person)
-    offered = Department.objects.filter(archived=False)
-    items = [_from_parsed(p) for p in parse.cell(text, offered)]
+    items = _parsed(text, list(Department.objects.filter(archived=False)))
     with transaction.atomic():
         return _write(user, person, day, items)
 
@@ -266,7 +275,9 @@ def paste(user, anchor, block, mode, row_order):
     """Write a clipboard block with its top-left at the anchor. Rows below
     the end of the grid, or the user may not edit, are skipped and counted;
     nothing else about the paste is refused. A null cell is left untouched,
-    an empty list clears."""
+    an empty list clears. A cell that is a string is text from outside the
+    island (a spreadsheet), one item per line, and is parsed here as typed
+    text is: the island's parser is only a preview."""
     if mode not in ("replace", "add"):
         raise ValueError("paste mode must be replace or add")
     anchor_pk, anchor_day = _cells([anchor])[0]
@@ -277,6 +288,7 @@ def paste(user, anchor, block, mode, row_order):
     if not isinstance(rows, list):
         raise ValueError("the block has no rows")
     departments = _departments()
+    offered = [d for d in departments.values() if not d.archived]
     start = row_order.index(anchor_pk)
     planned, skipped = [], 0
     people = {p.pk: p for p in Person.objects.filter(pk__in=row_order[start:start + len(rows)])}
@@ -290,8 +302,14 @@ def paste(user, anchor, block, mode, row_order):
             continue
         for d, items in enumerate(cells if isinstance(cells, list) else []):
             if items is None:
-                continue  # a day the copy did not see (hidden in the grid): leave the target alone
-            planned.append((person, anchor_day + timedelta(days=d), [_clean_item(i, departments) for i in items]))
+                continue  # a day or cell the copy did not take: leave the target alone
+            if isinstance(items, str):
+                cleaned = _parsed(items, offered)
+            elif isinstance(items, list) and all(isinstance(i, dict) for i in items):
+                cleaned = [_clean_item(i, departments) for i in items]
+            else:
+                raise ValueError("a block cell must be items, text or null")
+            planned.append((person, anchor_day + timedelta(days=d), cleaned))
     changed = Changed(skipped=skipped)
     with transaction.atomic():
         for person, day, items in planned:

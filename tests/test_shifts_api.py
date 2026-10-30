@@ -50,7 +50,7 @@ def test_signed_out_gets_401_json_not_a_redirect():
 
 def test_the_window_has_days_rows_cells_sessions_and_who_may_edit(world):
     make_entry(world["nina"], MON, department=world["pmc"], break_minutes=60)
-    make_gp_session(world["gp"], MON, "PM")
+    make_gp_session(world["gp"], MON, "PM", note="covering the duty doctor")
     body = world["c_lead"].get("/rota/api/window/?from=2027-03-03&weeks=1").json()
     assert [d["date"] for d in body["days"]][:2] == ["2027-03-01", "2027-03-02"], "snapped to Monday"
     assert len(body["days"]) == 7 and body["days"][0]["label"] == "Mon. Mar. 1"
@@ -60,7 +60,7 @@ def test_the_window_has_days_rows_cells_sessions_and_who_may_edit(world):
     cell = rows["Nina Patel"]["cells"]["2027-03-01"][0]
     assert cell["line"] == "08:00-16:15 1 hour break Reception PMC" and cell["hours"] == 435
     assert cell["department_colour"] == world["pmc"].colour == "#5B8FD6", "the seeded colour"
-    assert rows["Doc Patel"]["sessions"]["2027-03-01"] == [{"part": "PM", "label": "Surgery", "site": "AG", "note": ""}]
+    assert rows["Doc Patel"]["sessions"]["2027-03-01"] == [{"part": "PM", "label": "Surgery", "site": "AG"}]
     assert body["can_edit"] and body["unnotified"] == 0
     assert "Reception PMC" in [d["name"] for d in body["departments"]], "the departments are offered to the menus"
 

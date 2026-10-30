@@ -19,7 +19,7 @@ export interface Item {
   text?: string; wfh?: boolean; overtime?: Overtime; appearance?: Appearance;
 }
 
-export interface SessionJson { part: string; label: string; site: string; note: string }
+export interface SessionJson { part: string; label: string; site: string }
 export interface DayJson { date: string; label: string; today: boolean; weekend: boolean }
 export interface Department { id: number; name: string; colour: string }
 export interface Shape { start: string; finish: string; break_minutes: number; department: number | null; label: string }
@@ -41,9 +41,11 @@ export interface WindowJson {
 }
 
 export interface Changed { cells: Record<string, Record<string, EntryJson[]>>; skipped: number; unnotified: number }
-/** A block cell is its items, or null for a day the copy did not see (hidden
- *  in the grid): pasting leaves the target there alone, where [] clears it. */
-export type BlockCell = Item[] | null;
+/** A block cell is its items; or a string, text from outside the island
+ *  (one item per line) that the server parses; or null for a cell the copy
+ *  did not take (a day hidden in the grid, a cell left out of the
+ *  selection): pasting leaves the target there alone, where [] clears it. */
+export type BlockCell = Item[] | string | null;
 export interface Block { days: number; rows: BlockCell[][] }
 
 export const toItem = (e: EntryJson): Item => ({

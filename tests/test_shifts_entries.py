@@ -246,3 +246,24 @@ def test_reorder_skips_people_the_manager_does_not_manage_including_themselves(w
     assert (tom.display_order, nina.display_order) == (10, 20)
     assert {p.pk: p.display_order for p in (lead, nurse)} == before
     assert not AuditEntry.objects.filter(model="people.person", object_id__in=[lead.pk, nurse.pk]).exists()
+
+
+def test_paste_parses_a_text_cell_on_the_server(world):
+    nina = world["nina"]
+    old = make_department("Old Annex", archived=True)
+    block = {"days": 2, "rows": [["08:00-12:00 Reception PMC\n13:00-17:00 30m Old Annex", "---"]]}
+    entries.paste(world["u_lead"], (nina.pk, MON), block, "replace", [nina.pk])
+    first, second = _lines(nina, MON)
+    assert (first.start, first.finish, first.department, first.text) == (time(8), time(12), world["pmc"], "")
+    assert (second.break_minutes, second.department, second.text) == (30, None, "Old Annex"), \
+        "an archived department is not offered to the server's parser"
+    assert old.pk and [e.kind for e in _lines(nina, TUE)] == ["separator"]
+
+
+def test_paste_of_an_empty_text_cell_clears_and_a_bad_cell_is_refused(world):
+    nina = world["nina"]
+    make_entry(nina, MON, text="gone")
+    entries.paste(world["u_lead"], (nina.pk, MON), {"days": 1, "rows": [[""]]}, "replace", [nina.pk])
+    assert _lines(nina, MON) == []
+    with pytest.raises(ValueError):
+        entries.paste(world["u_lead"], (nina.pk, MON), {"days": 1, "rows": [[{"kind": "comment"}]]}, "replace", [nina.pk])
