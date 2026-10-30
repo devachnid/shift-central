@@ -132,3 +132,4 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
   .rota-phone-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0; }
   .rota-phone-team summary { color: var(--muted); font-size: var(--fs-sm); cursor: pointer; margin-top: var(--sp-2); }
 }
+.report-block { margin-bottom: var(--sp-5); } .report-block h2 { font-size: var(--fs-md); margin: 0 0 var(--sp-2); } .table tr.subtotal td, .table tfoot td { font-weight: 700; background: var(--ground); }
