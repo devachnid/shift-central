@@ -8,6 +8,8 @@
  *    while the post is in flight. A 200 replaces the dialog with the response
  *    (a form shown again with its errors); a JSON {"redirect": url} follows it, and
  *    {"refresh": true} closes the dialog and fires shift-central:refresh.
+ *  - Any HTML shown that contains [data-dialog-refresh] also fires
+ *    shift-central:refresh (the outcome of Notify staff, a paste that skipped rows).
  *  - Failures never put an error page in the dialog. A redirect to the log-in
  *    page (the session ended) or a non-2xx answer shows a "Something went
  *    wrong" dialog for a fetch, or a flash at the top of the form (which stays
@@ -37,7 +39,14 @@
   }
   // Islands (the colour picker) inside new dialog HTML mount on this event.
   function mounted() { document.dispatchEvent(new CustomEvent("shift-central:mounted", { detail: dialog })); }
-  function show(html) { dialog.innerHTML = html; mounted(); focusFirst(); }
+  // A dialog that did something to the rota (the outcome of Notify staff, a
+  // paste that skipped rows) carries [data-dialog-refresh]; the grid reloads.
+  function show(html) {
+    dialog.innerHTML = html;
+    mounted();
+    if (dialog.querySelector("[data-dialog-refresh]")) { document.dispatchEvent(new CustomEvent("shift-central:refresh")); }
+    focusFirst();
+  }
 
   var UNREACHABLE = "The server couldn't be reached. Check your connection and try again.";
 

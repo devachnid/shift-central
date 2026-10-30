@@ -225,6 +225,7 @@ def test_a_paste_that_skips_rows_says_so_instead_of_refreshing(lead):
     r = c.post(f"/rota/templates/{t.pk}/apply/", {"cell": f"{nina.pk}:2027-03-01", "row_order": str(nina.pk)})
     body = r.content.decode()
     assert "flash-warning" in body and "1 row couldn&#x27;t be pasted onto" in body
+    assert "data-dialog-refresh" in body   # the grid reloads for the rows that did paste
     assert Entry.objects.get().text == "a"
 
 

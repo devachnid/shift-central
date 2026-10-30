@@ -189,3 +189,14 @@ def template_delete(request, pk):
         raise PermissionDenied
     template_service.delete(request.user, get_object_or_404(Template, pk=pk))
     return JsonResponse(REFRESH)
+
+
+@login_required
+@access.manager_required
+def notify_view(request):
+    from shifts.services import notify
+    outcome = None
+    if request.method == "POST":
+        ids = [int(p) for p in request.POST.getlist("people") if p.isdigit()]
+        outcome = notify.send(request.user, ids)
+    return render(request, "shifts/notify_dialog.html", {"pending": notify.pending(request.user), "outcome": outcome})

@@ -19,6 +19,7 @@ urlpatterns = [
     path("rota/options/", dialogs.options_view, name="rota-options"),
     path("rota/filters/", dialogs.filters, name="rota-filters"),
     path("rota/replace/", dialogs.replace, name="rota-replace"),
+    path("rota/notify/", dialogs.notify_view, name="rota-notify"),
     path("rota/templates/", dialogs.templates_list, name="rota-templates"),
     path("rota/templates/save/", dialogs.template_save, name="rota-template-save"),
     path("rota/templates/<int:pk>/apply/", dialogs.template_apply, name="rota-template-apply"),
