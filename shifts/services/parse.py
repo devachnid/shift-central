@@ -11,13 +11,18 @@ from datetime import time
 
 from shifts.models import Entry
 
-_SIDE = r"(?P<{p}h>\d{{1,2}})(?:[:.]?(?P<{p}m>\d{{2}}))?\s*(?P<{p}ap>am|pm)?"
+_SIDE = r"(?P<{p}h>\d{{1,2}})(?:[:.]?(?P<{p}m>\d{{2}}))?\s*(?P<{p}ap>(?:am|pm)(?!\w))?"
 RANGE = re.compile(
-    r"(?<![\d:.])" + _SIDE.format(p="a") + r"\s*(?:-|–|—|to|until)\s*" + _SIDE.format(p="b") + r"(?![\d:.])",
+    r"(?<![\d:.])" + _SIDE.format(p="a") + r"\s*(?:-|–|—|to|until)\s*" + _SIDE.format(p="b") + r"(?!\d)(?![:.]\d)",
     re.IGNORECASE)
 SEPARATOR = re.compile(r"^\s*-{3,}\s*$")
+# The word 'break' is required on the hour and minute forms, so '1 hour
+# training' stays a comment; the bare 'N m' / 'Nm' shorthand needs none.
 BREAK = re.compile(
-    r"(?<!\w)(?:(?P<h>\d+)\s*(?:hours?|hrs?|h)(?:\s+break)?|(?P<m>\d+)\s*(?:minutes?|mins?|m)(?:\s+break)?|break\s+(?P<n>\d+))(?!\w)",
+    r"(?<!\w)(?:(?P<h>\d+)\s*(?:hours?|hrs?|h)\s+break"
+    r"|(?P<m>\d+)\s*(?:minutes?|mins?)\s+break"
+    r"|break\s+(?P<n>\d+)"
+    r"|(?P<s>\d+)\s*m)(?!\w)",
     re.IGNORECASE)
 WFH = re.compile(r"(?<!\w)wfh(?!\w)", re.IGNORECASE)
 TOIL = re.compile(r"(?<!\w)toil(?!\w)", re.IGNORECASE)
@@ -38,18 +43,35 @@ def _time(h, m, ap):
 
 def _range(match):
     """The two times, or None. A finish with no am/pm that is not after a
-    start of noon or earlier is read as pm (8-4 is 08:00–16:00); a start
-    already in the afternoon, such as 16:00-08:00, is 24-hour, so the line
-    is not a shift. If it still is not after the start, it is not a shift."""
+    start before 13:00 is read as pm (8-4 is 08:00–16:00, 12:30-1 is
+    12:30–13:00); a start at or after 13:00 is 24-hour, so 16:00-08:00 is
+    not a shift. A start with no marker, before noon, under a pm finish is
+    read as pm too when that still ends before the finish (1-5pm is
+    13:00–17:00; 8-4pm stays 08:00–16:00). If the finish still is not after
+    the start, it is not a shift either."""
     start = _time(match["ah"], match["am"], match["aap"])
     finish = _time(match["bh"], match["bm"], match["bap"])
     if start is None or finish is None:
         return None
-    if not match["bap"] and start.hour <= 12 and finish <= start and finish.hour < 12:
+    if not match["bap"] and start.hour < 13 and finish <= start and finish.hour < 12:
         finish = time(finish.hour + 12, finish.minute)
+    if match["bap"] and not match["aap"] and start.hour < 12:
+        pm_start = time(start.hour + 12, start.minute)
+        if pm_start < finish:
+            start = pm_start
     if finish <= start:
         return None
     return start, finish
+
+
+def _first_range(text):
+    """The first range in the text that reads as a shift, with its times,
+    or None. Ranges that do not read are left in the text as comment."""
+    for m in RANGE.finditer(text):
+        times = _range(m)
+        if times is not None:
+            return m, times
+    return None
 
 
 def _break(rest):
@@ -57,7 +79,11 @@ def _break(rest):
     unchanged when the length is not one ROTA-01 allows (a '20 min break'
     stays in the comment for a manager to see)."""
     for m in BREAK.finditer(rest):
-        minutes = int(m["h"]) * 60 if m["h"] else int(m["m"] or m["n"])
+        groups = m.groupdict()
+        if groups["h"]:
+            minutes = int(groups["h"]) * 60
+        else:
+            minutes = int(groups["m"] or groups["n"] or groups["s"])
         if minutes in Entry.BREAKS:
             return minutes, rest[:m.start()] + " " + rest[m.end():]
     return 0, rest
@@ -74,17 +100,19 @@ def _department(rest, departments):
 
 
 def _comment(text):
-    return " ".join(text.split())[:200]
+    """Whitespace collapsed, cut at 200 characters, and the punctuation
+    left at either end of it (from '9-5.' or '9-5, wfh') dropped."""
+    return " ".join(text.split())[:200].strip(" ,.:;")
 
 
 def line(text, departments):
     """One line of cell text as an item dict."""
     if SEPARATOR.match(text):
         return {"kind": "separator"}
-    m = RANGE.search(text)
-    times = _range(m) if m else None
-    if times is None:
+    found = _first_range(text)
+    if found is None:
         return {"kind": "comment", "text": _comment(text)}
+    m, times = found
     rest = text[:m.start()] + " " + text[m.end():]
     break_minutes, rest = _break(rest)
     wfh = bool(WFH.search(rest))

@@ -26,6 +26,16 @@
     {"line": "25:00-26:00", "expect": {"kind": "comment", "text": "25:00-26:00"}},
     {"line": "08:60-09:00", "expect": {"kind": "comment", "text": "08:60-09:00"}},
     {"line": "  spaced   out   08:00 -  12:00  ", "expect": {"kind": "shift", "start": "08:00", "finish": "12:00", "break_minutes": 0, "department": null, "text": "spaced out", "wfh": false, "overtime": ""}},
-    {"line": "call 01234 567890 at 09:00-10:00", "expect": {"kind": "shift", "start": "09:00", "finish": "10:00", "break_minutes": 0, "department": null, "text": "call 01234 567890 at", "wfh": false, "overtime": ""}}
+    {"line": "call 01234 567890 at 09:00-10:00", "expect": {"kind": "shift", "start": "09:00", "finish": "10:00", "break_minutes": 0, "department": null, "text": "call 01234 567890 at", "wfh": false, "overtime": ""}},
+    {"line": "08:00-12:00 1 hour training", "expect": {"kind": "shift", "start": "08:00", "finish": "12:00", "break_minutes": 0, "department": null, "text": "1 hour training", "wfh": false, "overtime": ""}},
+    {"line": "08:00-12:00 30m", "expect": {"kind": "shift", "start": "08:00", "finish": "12:00", "break_minutes": 30, "department": null, "text": "", "wfh": false, "overtime": ""}},
+    {"line": "9-5 PMC", "expect": {"kind": "shift", "start": "09:00", "finish": "17:00", "break_minutes": 0, "department": null, "text": "PMC", "wfh": false, "overtime": ""}},
+    {"line": "9-5.", "expect": {"kind": "shift", "start": "09:00", "finish": "17:00", "break_minutes": 0, "department": null, "text": "", "wfh": false, "overtime": ""}},
+    {"line": "9-5: wfh", "expect": {"kind": "shift", "start": "09:00", "finish": "17:00", "break_minutes": 0, "department": null, "text": "", "wfh": true, "overtime": ""}},
+    {"line": "25:00-26:00 08:00-09:00", "expect": {"kind": "shift", "start": "08:00", "finish": "09:00", "break_minutes": 0, "department": null, "text": "25:00-26:00", "wfh": false, "overtime": ""}},
+    {"line": "12:30-1", "expect": {"kind": "shift", "start": "12:30", "finish": "13:00", "break_minutes": 0, "department": null, "text": "", "wfh": false, "overtime": ""}},
+    {"line": "13:00-2", "expect": {"kind": "comment", "text": "13:00-2"}},
+    {"line": "1-5pm", "expect": {"kind": "shift", "start": "13:00", "finish": "17:00", "break_minutes": 0, "department": null, "text": "", "wfh": false, "overtime": ""}},
+    {"line": "8-4pm", "expect": {"kind": "shift", "start": "08:00", "finish": "16:00", "break_minutes": 0, "department": null, "text": "", "wfh": false, "overtime": ""}}
   ]
 }
