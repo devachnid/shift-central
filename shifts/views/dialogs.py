@@ -195,8 +195,12 @@ def template_delete(request, pk):
 @access.manager_required
 def notify_view(request):
     from shifts.services import notify
-    outcome = None
+    outcome = warning = None
     if request.method == "POST":
-        ids = [int(p) for p in request.POST.getlist("people") if p.isdigit()]
-        outcome = notify.send(request.user, ids)
-    return render(request, "shifts/notify_dialog.html", {"pending": notify.pending(request.user), "outcome": outcome})
+        ids = [int(p) for p in request.POST.getlist("people") if p.isascii() and p.isdigit()]
+        if ids:
+            outcome = notify.send(request.user, ids, request.build_absolute_uri("/"))
+        else:
+            warning = "Nothing ticked."
+    return render(request, "shifts/notify_dialog.html",
+                  {"pending": notify.pending(request.user), "outcome": outcome, "warning": warning})

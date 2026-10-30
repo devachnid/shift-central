@@ -17,6 +17,7 @@ from tests.factories import make_department, make_person, make_team, make_team_m
 
 pytestmark = pytest.mark.django_db
 MON, TUE = date(2027, 3, 1), date(2027, 3, 2)
+BASE = "https://shift.example"
 
 
 @pytest.fixture
@@ -48,7 +49,7 @@ def test_a_change_undone_sends_nothing_and_its_row_goes(world):
     entries.set_cell_text(u, nina, MON, "")
     assert notify.lines(nina) == []
     assert notify.pending(u)[0]["reason"] == "changes cancel out"
-    out = notify.send(u, [nina.pk])
+    out = notify.send(u, [nina.pk], BASE)
     assert out["skipped"] == [nina] and not DayChange.objects.exists() and not mail.outbox
 
 
@@ -56,12 +57,12 @@ def test_send_emails_one_summary_deletes_the_rows_and_audits(world):
     u, nina = world["user"], world["nina"]
     entries.set_cell_text(u, nina, MON, "08:00-12:00")
     entries.set_cell_text(u, nina, TUE, "13:00-17:00")
-    out = notify.send(u, [nina.pk])
+    out = notify.send(u, [nina.pk], BASE)
     assert out["sent"] == [nina] and len(mail.outbox) == 1
     body = mail.outbox[0].body
     assert mail.outbox[0].subject == "Your rota has changed"
     assert "Mon 1 Mar 2027: 08:00-12:00 (was no shift)" in body and "Tue 2 Mar 2027: 13:00-17:00 (was no shift)" in body
-    assert "/rota/?from=2027-03-01" in body
+    assert "https://shift.example/rota/?from=2027-03-01" in body
     assert not DayChange.objects.exists()
     row = AuditEntry.objects.get(model="shifts.entry", field="notified")
     assert row.object_id == nina.pk and row.after == "2" and row.actor == u
@@ -71,7 +72,7 @@ def test_a_failed_send_keeps_the_rows(world, monkeypatch):
     u, nina = world["user"], world["nina"]
     entries.set_cell_text(u, nina, MON, "08:00-12:00")
     monkeypatch.setattr("messaging.services.send_mail", lambda *a, **kw: (_ for _ in ()).throw(OSError("down")))
-    out = notify.send(u, [nina.pk])
+    out = notify.send(u, [nina.pk], BASE)
     assert out["failed"] == [nina] and DayChange.objects.count() == 1
 
 
@@ -80,7 +81,7 @@ def test_people_without_an_email_are_listed_with_the_reason_and_skipped(world):
     quiet = make_person(first_name="Quiet", team=world["team"], email="")
     entries.set_cell_text(u, quiet, MON, "08:00-12:00")
     assert notify.pending(u)[0]["reason"] == "no email"
-    assert notify.send(u, [quiet.pk])["skipped"] == [quiet]
+    assert notify.send(u, [quiet.pk], BASE)["skipped"] == [quiet]
 
 
 def test_pending_is_scoped_to_the_viewers_teams(world):
@@ -90,7 +91,7 @@ def test_pending_is_scoped_to_the_viewers_teams(world):
     DayChange.objects.create(person=world["nina"], day=MON, before="no shift")
     assert [p["person"] for p in notify.pending(u)] == [world["nina"]]
     with pytest.raises(PermissionDenied):
-        notify.send(u, [other.pk])
+        notify.send(u, [other.pk], BASE)
 
 
 def test_the_dialog_lists_ticks_and_sends(world):
@@ -102,12 +103,60 @@ def test_the_dialog_lists_ticks_and_sends(world):
     assert "Nina Patel" in body and "Mon 1 Mar" in body and f'name="people" value="{nina.pk}" checked' in body
     body = c.post("/rota/notify/", {"people": [nina.pk]}).content.decode()
     assert "Sent to Nina Patel" in body and len(mail.outbox) == 1
+    assert "http://testserver/rota/?from=2027-03-01" in mail.outbox[0].body and "data-dialog-refresh" in body
+
+
+def test_a_cancelled_out_person_is_ticked_and_sending_clears_them_without_mail(world):
+    u, nina = world["user"], world["nina"]
+    entries.set_cell_text(u, nina, MON, "08:00-12:00")
+    entries.set_cell_text(u, nina, MON, "")
+    DayChange.objects.update(at=timezone.now() - timedelta(days=8))
+    assert notify.old_count(u) == 0
+    c = Client()
+    c.force_login(u)
+    body = c.get("/rota/notify/").content.decode()
+    assert f'name="people" value="{nina.pk}" checked' in body and "changes cancel out" in body
+    c.post("/rota/notify/", {"people": [nina.pk]})
+    assert not DayChange.objects.exists() and not mail.outbox
+
+
+def test_a_person_without_an_email_is_not_ticked(world):
+    u = world["user"]
+    quiet = make_person(first_name="Quiet", team=world["team"], email="")
+    entries.set_cell_text(u, quiet, MON, "08:00-12:00")
+    c = Client()
+    c.force_login(u)
+    body = c.get("/rota/notify/").content.decode()
+    assert f'name="people" value="{quiet.pk}" disabled' in body
+
+
+def test_posting_nothing_ticked_says_so_and_does_not_refresh(world):
+    u, nina = world["user"], world["nina"]
+    entries.set_cell_text(u, nina, MON, "08:00-12:00")
+    c = Client()
+    c.force_login(u)
+    body = c.post("/rota/notify/", {"people": ["²", "x"]}).content.decode()
+    assert "Nothing ticked." in body and "data-dialog-refresh" not in body and not mail.outbox
+
+
+def test_a_change_saved_while_the_mail_was_built_is_kept(world, monkeypatch):
+    u, nina = world["user"], world["nina"]
+    entries.set_cell_text(u, nina, MON, "08:00-12:00")
+    real = notify.send_mail
+
+    def send_and_edit(person, subject, body):
+        entries.set_cell_text(u, person, TUE, "13:00-17:00")
+        return real(person, subject, body)
+
+    monkeypatch.setattr(notify, "send_mail", send_and_edit)
+    notify.send(u, [nina.pk], BASE)
+    assert list(DayChange.objects.values_list("day", flat=True)) == [TUE]
 
 
 def test_the_health_card_counts_old_unnotified_changes(world):
     u, nina = world["user"], world["nina"]
-    row = DayChange.objects.create(person=nina, day=MON, before="no shift")
-    DayChange.objects.filter(pk=row.pk).update(at=timezone.now() - timedelta(days=8))
+    entries.set_cell_text(u, nina, MON, "08:00-12:00")   # a real change, not one that cancels out
+    DayChange.objects.update(at=timezone.now() - timedelta(days=8))
     assert notify.old_count(u) == 1
     c = Client()
     c.force_login(u)

@@ -5,7 +5,6 @@ the rows for next time."""
 
 from datetime import timedelta
 
-from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils import timezone
@@ -24,21 +23,22 @@ def _day_label(day):
     return f"{day:%a} {day.day} {day:%b %Y}"
 
 
-def lines(person):
+def _changed(person, changes):
+    """[(day, now, was)] for the rows whose day is not back to what it was."""
     out = []
-    for change in DayChange.objects.filter(person=person).order_by("day"):
+    for change in changes:
         now = render.day_text(person, change.day)
-        if now == change.before:
-            continue
-        out.append(f"{_day_label(change.day)}: {now} (was {change.before})")
+        if now != change.before:
+            out.append((change.day, now, change.before))
     return out
 
 
-def _first_changed(person):
-    for change in DayChange.objects.filter(person=person).order_by("day"):
-        if render.day_text(person, change.day) != change.before:
-            return change.day
-    return None
+def _lines(rows):
+    return [f"{_day_label(day)}: {now} (was {was})" for day, now, was in rows]
+
+
+def lines(person):
+    return _lines(_changed(person, DayChange.objects.filter(person=person).order_by("day")))
 
 
 def pending(user):
@@ -57,14 +57,17 @@ def pending(user):
     return out
 
 
-def _body(person, first):
-    host = settings.CSRF_TRUSTED_ORIGINS[0] if settings.CSRF_TRUSTED_ORIGINS else ""
-    link = f"{host}/rota/?from={monday(first).isoformat()}"
-    return "\n".join(["Your rota has changed. Here is what is different:", "", *lines(person), "",
+def _body(rows, base_url):
+    link = f"{base_url.rstrip('/')}/rota/?from={monday(rows[0][0]).isoformat()}"
+    return "\n".join(["Your rota has changed. Here is what is different:", "", *_lines(rows), "",
                       f"See your rota: {link}", ""])
 
 
-def send(user, person_ids):
+def send(user, person_ids, base_url):
+    """Mail each ticked person their summary; `base_url` is the site's root
+    (the view's build_absolute_uri("/")) for the link in the email. Only the
+    rows read before the mail was built are deleted, so a change saved in
+    the meantime is kept for next time."""
     person_ids = list(dict.fromkeys(person_ids))
     allowed = {p.pk: p for p in access.managed_people(user).filter(pk__in=person_ids)}
     if set(person_ids) - set(allowed):
@@ -72,27 +75,30 @@ def send(user, person_ids):
     out = {"sent": [], "failed": [], "skipped": []}
     for pk in person_ids:
         person = allowed[pk]
-        first = _first_changed(person)
-        if first is None:
-            DayChange.objects.filter(person=person).delete()
+        changes = list(DayChange.objects.filter(person=person).order_by("day"))
+        rows = _changed(person, changes)
+        if not rows:
+            DayChange.objects.filter(pk__in=[c.pk for c in changes]).delete()
             out["skipped"].append(person)
             continue
         if not person.email:
             out["skipped"].append(person)
             continue
-        count = len(lines(person))
-        row = send_mail(person, SUBJECT, _body(person, first))
+        row = send_mail(person, SUBJECT, _body(rows, base_url))
         if row.sent_at is None:
             out["failed"].append(person)
             continue
         with transaction.atomic():
-            DayChange.objects.filter(person=person).delete()
-            audit.record_as(user, "shifts.entry", person.pk, {"notified": ("", str(count))},
+            DayChange.objects.filter(pk__in=[c.pk for c in changes]).delete()
+            audit.record_as(user, "shifts.entry", person.pk, {"notified": ("", str(len(rows)))},
                             note=f"rota changes sent · {person.name}")
         out["sent"].append(person)
     return out
 
 
 def old_count(user):
-    return (DayChange.objects.filter(person__in=access.managed_people(user), at__lt=timezone.now() - OLD)
-            .values("person").distinct().count())
+    """People with a real change (not one that cancelled out) left unsent
+    for over a week."""
+    old = (DayChange.objects.filter(person__in=access.managed_people(user), at__lt=timezone.now() - OLD)
+           .values_list("person", flat=True).distinct())
+    return sum(1 for person in access.managed_people(user).filter(pk__in=old) if lines(person))

@@ -1,6 +1,7 @@
 {% extends "ui/_dialog.html" %}
 {% block dialog_title %}Notify staff{% endblock %}
 {% block dialog_body %}
+{% if warning %}<p class="flash flash-warning">{{ warning }}</p>{% endif %}
 {% if outcome %}
   <span data-dialog-refresh hidden></span>
   {% for p in outcome.sent %}<p class="flash">Sent to {{ p.name }}.</p>{% endfor %}
@@ -13,7 +14,7 @@
   <p class="field-help">Each person gets one email listing the days that changed since they were last told.</p>
   <table class="table"><tbody>
   {% for row in pending %}
-  <tr><td><label><input type="checkbox" name="people" value="{{ row.person.pk }}"{% if not row.reason %} checked{% else %} disabled{% endif %}> {{ row.person.name }}</label></td>
+  <tr><td><label><input type="checkbox" name="people" value="{{ row.person.pk }}"{% if row.reason == "no email" %} disabled{% else %} checked{% endif %}> {{ row.person.name }}</label></td>
       <td>{% for d in row.days %}{{ d|date:"D j M" }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
       <td class="muted">{{ row.reason }}</td></tr>
   {% endfor %}
