@@ -233,3 +233,16 @@ def test_reorder_takes_ids_as_strings(world):
     profiles.reorder(world["boss"], [str(nurse.pk), str(nina.pk)])
     nina.refresh_from_db(), nurse.refresh_from_db()
     assert (nurse.display_order, nina.display_order) == (10, 20)
+
+
+def test_reorder_skips_people_the_manager_does_not_manage_including_themselves(world):
+    from people.services import profiles
+    lead, nina, nurse = world["lead"], world["nina"], world["nurse"]
+    tom = make_person(first_name="Tom", team=world["reception"])
+    before = {p.pk: p.display_order for p in (lead, nurse)}
+    profiles.reorder(world["u_lead"], [nurse.pk, tom.pk, lead.pk, nina.pk])
+    for p in (lead, nina, nurse, tom):
+        p.refresh_from_db()
+    assert (tom.display_order, nina.display_order) == (10, 20)
+    assert {p.pk: p.display_order for p in (lead, nurse)} == before
+    assert not AuditEntry.objects.filter(model="people.person", object_id__in=[lead.pk, nurse.pk]).exists()

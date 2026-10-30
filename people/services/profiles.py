@@ -92,15 +92,18 @@ def set_notes(actor, person, notes):
 
 def reorder(actor, ids):
     """The grid's "sort staff": display_order 10, 20, 30… for the ids in the
-    order given; people not listed keep theirs. Managers only; one
-    transaction, so a failure leaves the order as it was."""
+    order given; people not listed keep theirs. Managers only. An id the
+    actor may not manage (another team's person, or the actor themselves,
+    as everywhere in the Foundation) is skipped, not refused: the numbering
+    counts only the people kept. One transaction, so a failure leaves the
+    order as it was."""
     if not access.is_manager(actor):
         raise PermissionDenied("only a manager can sort the staff")
     ids = [int(pk) for pk in ids]
     from people.models import Person
     people = {p.pk: p for p in Person.objects.filter(pk__in=ids)}
+    kept = [people[pk] for pk in dict.fromkeys(ids)
+            if pk in people and access.can_manage(actor, people[pk])]
     with transaction.atomic():
-        for n, pk in enumerate(ids, start=1):
-            person = people.get(pk)
-            if person is not None:
-                _apply(actor, person, {"display_order": n * 10})
+        for n, person in enumerate(kept, start=1):
+            _apply(actor, person, {"display_order": n * 10})
