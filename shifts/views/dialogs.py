@@ -8,7 +8,7 @@ from datetime import date
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, render
 
 from people.models import Department, Person, Team
@@ -44,7 +44,10 @@ def shift(request, person_pk, day, entry_pk=None):
     person = get_object_or_404(Person, pk=person_pk)
     if not access.can_manage(request.user, person):
         raise PermissionDenied
-    day = date.fromisoformat(day)
+    try:
+        day = date.fromisoformat(day)
+    except ValueError:
+        raise Http404("not a date") from None
     entry = get_object_or_404(Entry, pk=entry_pk, person=person, day=day) if entry_pk else None
     if request.method == "POST":
         form = ShiftForm(request.POST)
@@ -114,12 +117,15 @@ def replace(request):
     return render(request, "shifts/replace_dialog.html", {"form": form})
 
 
+def _templates_dialog(request, cell, row_order, **flash):
+    return render(request, "shifts/templates_dialog.html", {
+        "templates": Template.objects.all(), "cell": cell, "row_order": row_order, **flash})
+
+
 @login_required
 @access.manager_required
 def templates_list(request):
-    return render(request, "shifts/templates_dialog.html", {
-        "templates": Template.objects.all(), "cell": request.GET.get("cell", ""),
-        "row_order": request.GET.get("row_order", "")})
+    return _templates_dialog(request, request.GET.get("cell", ""), request.GET.get("row_order", ""))
 
 
 @login_required
@@ -145,9 +151,17 @@ def template_apply(request, pk):
     template = get_object_or_404(Template, pk=pk)
     if request.method != "POST":
         raise PermissionDenied
-    anchor = _cells(request.POST.get("cell"))[0]
-    entries.paste(request.user, anchor, template.block, options.for_user(request.user)["paste"],
-                  _row_order(request.POST.get("row_order")))
+    cell, row_order = request.POST.get("cell", ""), request.POST.get("row_order", "")
+    try:
+        result = entries.paste(request.user, _cells(cell)[0], template.block,
+                               options.for_user(request.user)["paste"], _row_order(row_order))
+    except ValueError as e:
+        return _templates_dialog(request, cell, row_order, error=str(e))
+    if result.skipped:
+        # Shown in place of the refresh: the island picks the paste up on its next window load.
+        noun = "row" if result.skipped == 1 else "rows"
+        return _templates_dialog(request, cell, row_order,
+                                 warning=f"{result.skipped} {noun} couldn't be pasted onto.")
     return JsonResponse(REFRESH)
 
 

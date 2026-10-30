@@ -34,6 +34,8 @@ def test_the_rota_page_mounts_the_island_with_its_window(lead):
     assert "Notify staff" in body and "Templates" in body and "Options" in body and "Filters" in body
     assert '<h1 class="topbar-title">Rota</h1>' in body
     assert 'data-nav="rota"' in body and 'href="/rota/today/"' in body
+    assert f'data-me="{lead.pk}"' in body and 'data-reorder=""' in body and 'data-bar="rota-bar"' in body
+    assert 'data-filters="from=2027-03-01&amp;weeks=2&amp;team=1"' in body
 
 
 def test_home_is_the_rota_and_staff_see_no_manager_actions():
@@ -129,6 +131,93 @@ def test_download_is_a_csv_of_the_window(lead):
     text = r.content.decode()
     assert text.splitlines()[0].startswith("Name,Team,Mon 1 Mar")
     assert "Nina Patel,Reception,08:00-16:15" in text
+
+
+def test_weeks_that_are_not_a_number_fall_back_to_one(lead):
+    assert 'data-weeks="1"' in _client(lead).get("/rota/?weeks=abc").content.decode()
+
+
+def test_done_sorting_leaves_reorder_mode_and_no_link_carries_it(lead):
+    body = _client(lead).get("/rota/?from=2027-03-01&weeks=1&reorder=1").content.decode()
+    assert 'data-reorder="1"' in body
+    assert 'href="/rota/?from=2027-03-01&amp;weeks=1">Done sorting' in body
+    assert 'data-filters="from=2027-03-01&amp;weeks=1"' in body
+    assert "reorder=1" not in body.split("</header>")[0] and "reorder=1" not in body.split("<main")[1]
+
+
+def test_the_shift_dialog_404s_on_a_day_that_is_not_a_date(lead):
+    nina = make_person(first_name="Nina", team=lead.team)
+    c = _client(lead)
+    assert c.get(f"/rota/shift/{nina.pk}/not-a-day/").status_code == 404
+    assert c.post(f"/rota/shift/{nina.pk}/2027-13-45/", {}).status_code == 404
+
+
+def test_the_shift_dialog_shows_errors_under_each_field(lead):
+    nina = make_person(first_name="Nina", team=lead.team)
+    body = _client(lead).post(f"/rota/shift/{nina.pk}/2027-03-01/", {
+        "start": "08:00", "finish": "16:00", "break_minutes": "7", "department": "9999", "overtime": "bogus"}).content.decode()
+    assert body.count('class="field-error"') == 3
+
+
+def test_find_and_replace_shows_field_errors_and_survives_a_bad_cell_date(lead):
+    c = _client(lead)
+    body = c.post("/rota/replace/", {"cells": "1:2027-03-01", "find": "", "replace": "x"}).content.decode()
+    assert "This field is required." in body
+    r = c.post("/rota/replace/", {"cells": "1:not-a-date", "find": "a", "replace": "b"})
+    assert r.status_code == 200 and "flash-error" in r.content.decode()
+
+
+def test_staff_cannot_open_the_manager_dialogs():
+    c = _client(make_person())
+    for url in ("/rota/replace/", "/rota/templates/", "/rota/templates/save/"):
+        assert c.get(url).status_code == 403
+
+
+def test_template_names_must_be_present_and_unique_on_rename(lead):
+    c = _client(lead)
+    block = json.dumps({"days": 1, "rows": [[[{"kind": "comment", "text": "x"}]]]})
+    c.post("/rota/templates/save/", {"name": "One", "block": block})
+    c.post("/rota/templates/save/", {"name": "Two", "block": block})
+    one = Template.objects.get(name="One")
+    body = c.post(f"/rota/templates/{one.pk}/rename/", {"name": "Two"}).content.decode()
+    assert "already exists" in body and Template.objects.get(pk=one.pk).name == "One"
+    body = c.post(f"/rota/templates/{one.pk}/rename/", {"name": " "}).content.decode()
+    assert "This field is required." in body and Template.objects.get(pk=one.pk).name == "One"
+
+
+def test_template_apply_and_delete_refuse_a_get(lead):
+    c = _client(lead)
+    c.post("/rota/templates/save/", {"name": "One", "block": json.dumps({"rows": []})})
+    t = Template.objects.get()
+    assert c.get(f"/rota/templates/{t.pk}/apply/").status_code == 403
+    assert c.get(f"/rota/templates/{t.pk}/delete/").status_code == 403
+    assert Template.objects.filter(pk=t.pk).exists()
+
+
+@pytest.mark.parametrize("block", ["{}", "[]", "not json"])
+def test_saving_a_template_without_rows_is_a_field_error(lead, block):
+    r = _client(lead).post("/rota/templates/save/", {"name": "Bad", "block": block})
+    assert r.status_code == 200 and "field-error" in r.content.decode() and not Template.objects.exists()
+
+
+def test_applying_a_template_to_a_bad_cell_re_renders_the_dialog_with_the_reason(lead):
+    c = _client(lead)
+    c.post("/rota/templates/save/", {"name": "One", "block": json.dumps({"rows": [[[{"kind": "comment", "text": "x"}]]]})})
+    t = Template.objects.get()
+    for post in ({}, {"cell": "garbage"}, {"cell": "1:not-a-date"}, {"cell": "999:2027-03-01", "row_order": "1"}):
+        r = c.post(f"/rota/templates/{t.pk}/apply/", post)
+        assert r.status_code == 200 and "flash-error" in r.content.decode(), post
+
+
+def test_a_paste_that_skips_rows_says_so_instead_of_refreshing(lead):
+    nina = make_person(first_name="Nina", team=lead.team)
+    c = _client(lead)
+    block = {"days": 1, "rows": [[[{"kind": "comment", "text": "a"}]], [[{"kind": "comment", "text": "b"}]]]}
+    t = Template.objects.create(name="Two rows", block=block)
+    r = c.post(f"/rota/templates/{t.pk}/apply/", {"cell": f"{nina.pk}:2027-03-01", "row_order": str(nina.pk)})
+    body = r.content.decode()
+    assert "flash-warning" in body and "1 row couldn&#x27;t be pasted onto" in body
+    assert Entry.objects.get().text == "a"
 
 
 def test_modal_js_honours_refresh():

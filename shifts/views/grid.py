@@ -24,6 +24,7 @@ def _start(request):
 def _query(request, first, weeks):
     q = request.GET.copy()
     q["from"], q["weeks"] = first.isoformat(), str(weeks)
+    q.pop("reorder", None)   # reorder mode is the page's own state (data-reorder), never carried on links
     return q.urlencode()
 
 

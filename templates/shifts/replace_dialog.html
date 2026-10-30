@@ -2,10 +2,10 @@
 {% block dialog_title %}Find &amp; replace{% endblock %}
 {% block dialog_body %}
 <form method="post" action="{% url 'rota-replace' %}" data-dialog-form>
-  {% csrf_token %}{{ form.cells }}
+  {% csrf_token %}{{ form.cells }}{% for e in form.cells.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
   {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
-  <div class="field"><label for="id_find">Find</label>{{ form.find }}</div>
-  <div class="field"><label for="id_replace">Replace with</label>{{ form.replace }}</div>
+  <div class="field{% if form.find.errors %} has-error{% endif %}"><label for="id_find">Find</label>{{ form.find }}{% for e in form.find.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  <div class="field{% if form.replace.errors %} has-error{% endif %}"><label for="id_replace">Replace with</label>{{ form.replace }}{% for e in form.replace.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
   <div class="field"><label><input type="checkbox" name="match_case"{% if form.match_case.value %} checked{% endif %}> Match case</label></div>
   <p class="field-help">Over the selected cells. A changed line is read again, so replacing a department name re-tags the shift.</p>
   <button class="btn btn-dark">Replace all</button>
