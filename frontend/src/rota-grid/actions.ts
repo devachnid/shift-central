@@ -13,10 +13,11 @@ export function selectionActions(g: GridState) {
 
   /** Where a paste or a template lands: the selection's top-left (as in a
    *  spreadsheet; the focus is the far corner after a drag or Shift-click),
-   *  or the focused cell when nothing is selected. */
+   *  or the focused cell when nothing is selected and it may be edited. */
   const anchorCell = (): CellKey | null => {
     const b = bounds(g.sel, g.people, g.days);
-    return b ? key(g.people[b.r0], g.days[b.d0]) : g.focus;
+    if (b) return key(g.people[b.r0], g.days[b.d0]);
+    return g.focus && g.selectable(g.focus) ? g.focus : null;
   };
 
   const clear = async () => {
@@ -48,12 +49,13 @@ export function selectionActions(g: GridState) {
     const targets = new Set<CellKey>();
     blk.rows.forEach((cells, r) => cells.forEach((_, c) => {
       const p = g.people[row + r];
-      if (p !== undefined) targets.add(key(p, addDays(date, c)));
+      if (p !== undefined && cells[c] !== null) targets.add(key(p, addDays(date, c)));
     }));
-    // Only what is on screen can be put back by Undo; the server skips rows
-    // the viewer may not edit and says how many.
-    const visible = [...targets].filter((k) => g.days.includes(split(k)[1]) && g.selectable(k));
-    const res = await g.mutate("paste/", { anchor: [person, date], block: blk, mode: g.win.options.paste, row_order: g.people }, g.snapshot(visible));
+    // Undo covers every target in the window, hidden weekdays too (the server
+    // writes them); the server skips rows the viewer may not edit and says how many.
+    const inWindow = new Set(g.win.days.map((d) => d.date));
+    const undoable = [...targets].filter((k) => inWindow.has(split(k)[1]) && g.selectable(k));
+    const res = await g.mutate("paste/", { anchor: [person, date], block: blk, mode: g.win.options.paste, row_order: g.people }, g.snapshot(undoable));
     if (res && res.skipped) g.showBar(`${res.skipped} row${res.skipped === 1 ? "" : "s"} couldn't be pasted onto.`);
   };
 

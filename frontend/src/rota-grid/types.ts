@@ -41,7 +41,10 @@ export interface WindowJson {
 }
 
 export interface Changed { cells: Record<string, Record<string, EntryJson[]>>; skipped: number; unnotified: number }
-export interface Block { days: number; rows: Item[][][] }
+/** A block cell is its items, or null for a day the copy did not see (hidden
+ *  in the grid): pasting leaves the target there alone, where [] clears it. */
+export type BlockCell = Item[] | null;
+export interface Block { days: number; rows: BlockCell[][] }
 
 export const toItem = (e: EntryJson): Item => ({
   kind: e.kind, start: e.start ?? undefined, finish: e.finish ?? undefined, break_minutes: e.break_minutes,

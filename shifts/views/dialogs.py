@@ -142,7 +142,10 @@ def template_save(request):
                 form.add_error("name", str(e))
     else:
         form = TemplateForm()
-    return render(request, "shifts/template_save_dialog.html", {"form": form, "block": request.POST.get("block") or request.GET.get("block", "")})
+    return render(request, "shifts/template_save_dialog.html", {
+        "form": form,
+        # not "block": inside a {% block %} that name is the template engine's own
+        "block_json": request.POST.get("block") or request.GET.get("block", "")})
 
 
 @login_required

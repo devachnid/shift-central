@@ -147,6 +147,16 @@ def test_paste_writes_a_block_at_the_anchor_replacing_or_adding(world):
     assert len(_lines(nina, MON)) == 2
 
 
+def test_paste_leaves_a_null_cell_alone_but_an_empty_one_clears(world):
+    nina = world["nina"]
+    make_entry(nina, MON, text="keep")
+    make_entry(nina, TUE, text="clear")
+    block = {"days": 2, "rows": [[None, []]]}
+    entries.paste(world["boss"], (nina.pk, MON), block, "replace", [nina.pk])
+    assert [e.text for e in _lines(nina, MON)] == ["keep"]
+    assert _lines(nina, TUE) == []
+
+
 def test_paste_skips_rows_beyond_the_grid_or_outside_the_viewers_teams(world):
     nina, nurse = world["nina"], world["nurse"]
     block = {"days": 1, "rows": [[[{"kind": "comment", "text": "a"}]], [[{"kind": "comment", "text": "b"}]],

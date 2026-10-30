@@ -106,6 +106,14 @@ def test_find_and_replace_dialog_posts_to_the_service(lead):
     assert Entry.objects.get().text == "new text"
 
 
+def test_save_template_dialog_has_an_empty_block_field_for_the_grid_to_fill(lead):
+    c = _client(lead)
+    body = c.get("/rota/templates/save/").content.decode()
+    assert 'name="block" value=""' in body
+    given = c.get("/rota/templates/save/", {"block": '{"days": 1}'}).content.decode()
+    assert 'name="block" value="{&quot;days&quot;: 1}"' in given
+
+
 def test_templates_save_apply_rename_delete(lead):
     nina = make_person(first_name="Nina", team=lead.team)
     c = _client(lead)

@@ -265,7 +265,8 @@ def move(user, cells, days, rows, copy, row_order):
 def paste(user, anchor, block, mode, row_order):
     """Write a clipboard block with its top-left at the anchor. Rows below
     the end of the grid, or the user may not edit, are skipped and counted;
-    nothing else about the paste is refused."""
+    nothing else about the paste is refused. A null cell is left untouched,
+    an empty list clears."""
     if mode not in ("replace", "add"):
         raise ValueError("paste mode must be replace or add")
     anchor_pk, anchor_day = _cells([anchor])[0]
@@ -288,6 +289,8 @@ def paste(user, anchor, block, mode, row_order):
             skipped += 1
             continue
         for d, items in enumerate(cells if isinstance(cells, list) else []):
+            if items is None:
+                continue  # a day the copy did not see (hidden in the grid): leave the target alone
             planned.append((person, anchor_day + timedelta(days=d), [_clean_item(i, departments) for i in items]))
     changed = Changed(skipped=skipped)
     with transaction.atomic():

@@ -14,7 +14,6 @@ export function menuItems(g: GridState, act: Actions, k: CellKey, editCell: (k: 
   const colours = swatches();
   const selectCells = (keys: CellKey[]) => g.setSel(g.keepSelectable(keys));
   const column = (day: string) => g.people.map((pp) => key(pp, day));
-  const block = act.block()?.block;
   const first = g.rowOf(p)?.name.split(" ")[0] ?? "";
   const palette = (pick: (hex: string | undefined) => void, none: string): MenuItem[] => [
     ...colours.map((hex) => ({ label: hex, swatch: hex, action: () => pick(hex) })),
@@ -49,7 +48,8 @@ export function menuItems(g: GridState, act: Actions, k: CellKey, editCell: (k: 
       { label: "Font size", children: SIZES.map(([size, label]) => ({ label, action: () => act.appearance({ size }) })) },
       { label: "Reset appearance", action: act.resetAppearance },
     ] },
-    { label: "Find & Replace…", href: `/rota/replace/?cells=${encodeURIComponent(act.selKeys().join(","))}` },
+    // The dialogs open on a short URL; the grid fills in the selection (see fillDialog in grid.tsx).
+    { label: "Find & Replace…", href: "/rota/replace/" },
     { label: "Cut", action: act.cut },
     { label: "Copy", action: () => { act.copy(); } },
     { label: "Paste", action: act.pasteFromMenu },
@@ -60,7 +60,7 @@ export function menuItems(g: GridState, act: Actions, k: CellKey, editCell: (k: 
       { label: "Week", action: () => selectCells(weekOf(g.days, d).flatMap(column)) },
       { label: "All", action: () => selectCells(g.days.flatMap(column)) },
     ] },
-    { label: "Save selection as template…", href: `/rota/templates/save/?block=${encodeURIComponent(JSON.stringify(block ?? { days: 0, rows: [] }))}` },
+    { label: "Save selection as template…", href: "/rota/templates/save/" },
     { label: "Print", action: () => window.print() },
     { label: `Message ${first}`.trim(), disabled: true, note: "coming later" },
   ];

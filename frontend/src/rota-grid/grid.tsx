@@ -269,6 +269,24 @@ export function RotaGrid(props: GridProps) {
     return () => document.removeEventListener("click", on, true);
   }, [anchor, people]);
 
+  // Those two dialogs act on the selection but open on a short URL (a whole
+  // block in a query string overflows the server's request line): when a
+  // dialog arrives with its hidden field empty, fill it from the selection.
+  const fillDialog = useRef<(dialog: Element) => void>(() => {});
+  fillDialog.current = (dialog) => {
+    const fill = (name: string, value: () => string | undefined) => {
+      const input = dialog.querySelector<HTMLInputElement>(`input[name="${name}"]`);
+      if (input && !input.value) input.value = value() ?? "";
+    };
+    fill("block", () => { const made = act.block(); return made ? JSON.stringify(made.block) : undefined; });
+    fill("cells", () => act.selKeys().join(","));
+  };
+  useEffect(() => {
+    const on = (e: Event) => fillDialog.current((e as CustomEvent<Element>).detail);
+    document.addEventListener("shift-central:mounted", on);
+    return () => document.removeEventListener("shift-central:mounted", on);
+  }, []);
+
   const openMenu = (k: CellKey, x: number, y: number) => {
     if (!canEdit || !g.selectable(k)) return;
     if (!sel.has(k)) g.select(k, "set");
@@ -341,8 +359,12 @@ export function RotaGrid(props: GridProps) {
                         title={overlaps(entries) ? "These shifts overlap" : undefined}
                         onMouseDown={sort.on ? undefined : (e) => mouse.onDown(k, e)}
                         onMouseEnter={sort.on ? undefined : () => mouse.onEnter(k)}
-                        onContextMenu={sort.on ? undefined : (e) => { e.preventDefault(); openMenu(k, e.clientX, e.clientY); }}
-                        onDblClick={sort.on ? undefined : () => startEdit(k)}>
+                        onContextMenu={sort.on ? undefined : (e) => {
+                          // inside the editor (or while one is open) the browser's own menu is the right one
+                          if (editingRef.current || (e.target as Element).closest("textarea")) return;
+                          e.preventDefault(); openMenu(k, e.clientX, e.clientY);
+                        }}
+                        onDblClick={sort.on ? undefined : (e) => { if (!(e.target as Element).closest("textarea")) startEdit(k); }}>
                       {sessions.map((s, i) => <SessionTile key={i} session={s} />)}
                       {isEditing ? (
                         <CellEditor text={editing!.text} onText={(text) => setEdit({ key: k, text })}
