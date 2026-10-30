@@ -10,6 +10,7 @@ from django.core.exceptions import PermissionDenied
 from django.test import Client
 from django.utils import timezone
 
+import messaging.services as messaging
 from people.models import AuditEntry
 from shifts.models import DayChange
 from shifts.services import entries, notify
@@ -144,9 +145,9 @@ def test_a_change_saved_while_the_mail_was_built_is_kept(world, monkeypatch):
     entries.set_cell_text(u, nina, MON, "08:00-12:00")
     real = notify.send_mail
 
-    def send_and_edit(person, subject, body):
+    def send_and_edit(person, subject, body, connection=None):
         entries.set_cell_text(u, person, TUE, "13:00-17:00")
-        return real(person, subject, body)
+        return real(person, subject, body, connection=connection)
 
     monkeypatch.setattr(notify, "send_mail", send_and_edit)
     notify.send(u, [nina.pk], BASE)
@@ -161,3 +162,106 @@ def test_the_health_card_counts_old_unnotified_changes(world):
     c = Client()
     c.force_login(u)
     assert "Unnotified rota changes over a week old" in c.get("/staff/").content.decode()
+
+
+def test_a_day_re_edited_while_its_mail_was_built_keeps_the_newer_change(world, monkeypatch):
+    u, nina = world["user"], world["nina"]
+    entries.set_cell_text(u, nina, MON, "08:00-12:00")
+    real = notify.send_mail
+
+    def send_and_edit(person, subject, body, connection=None):
+        entries.set_cell_text(u, person, MON, "09:00-13:00")
+        return real(person, subject, body, connection=connection)
+
+    monkeypatch.setattr(notify, "send_mail", send_and_edit)
+    assert notify.send(u, [nina.pk], BASE)["sent"] == [nina]
+    change = DayChange.objects.get()
+    assert (change.day, change.before) == (MON, "08:00-12:00"), "measured against what was mailed"
+    assert notify.lines(nina) == ["Mon 1 Mar 2027: 09:00-13:00 (was 08:00-12:00)"]
+
+
+def _three(world):
+    u = world["user"]
+    people = [make_person(first_name=n, team=world["team"]) for n in ("Ann", "Bea", "Cal")]
+    for p in people:
+        entries.set_cell_text(u, p, MON, "08:00-12:00")
+    return u, people
+
+
+def test_a_batch_is_sent_on_one_connection(world, monkeypatch):
+    u, people = _three(world)
+    opened, used = [], []
+    real_get = notify.get_connection
+
+    def get_connection(*a, **kw):
+        opened.append(real_get(*a, **kw))
+        return opened[-1]
+
+    real_send = messaging.send_mail
+
+    def spy(*a, connection=None, **kw):
+        used.append(connection)
+        return real_send(*a, connection=connection, **kw)
+
+    monkeypatch.setattr(notify, "get_connection", get_connection)
+    monkeypatch.setattr("messaging.services.send_mail", spy)
+    out = notify.send(u, [p.pk for p in people], BASE)
+    assert out["sent"] == people and len(mail.outbox) == 3
+    assert len(opened) == 1 and used == [opened[0]] * 3
+
+
+def test_a_relay_failure_fails_the_rest_of_the_batch_without_trying_them(world, monkeypatch):
+    import smtplib
+    u, people = _three(world)
+    calls = []
+
+    def down(*a, **kw):
+        calls.append(1)
+        raise smtplib.SMTPServerDisconnected("gone")
+
+    monkeypatch.setattr("messaging.services.send_mail", down)
+    out = notify.send(u, [p.pk for p in people], BASE)
+    assert out["failed"] == people and out["sent"] == [] and len(calls) == 1
+    assert DayChange.objects.count() == 3
+
+
+def test_a_relay_that_cannot_be_reached_is_not_tried_for_anyone(world, monkeypatch):
+    u, people = _three(world)
+
+    class Refusing:
+        def open(self):
+            raise OSError("connection refused")
+
+        def close(self):
+            pass
+
+    sent = []
+    monkeypatch.setattr(notify, "get_connection", lambda *a, **kw: Refusing())
+    monkeypatch.setattr("messaging.services.send_mail", lambda *a, **kw: sent.append(1))
+    out = notify.send(u, [p.pk for p in people], BASE)
+    assert out["failed"] == people and not sent and DayChange.objects.count() == 3
+
+
+def test_a_refused_recipient_does_not_stop_the_batch(world, monkeypatch):
+    import smtplib
+    u, people = _three(world)
+    calls = []
+
+    def first_refused(*a, **kw):
+        calls.append(1)
+        if len(calls) == 1:
+            raise smtplib.SMTPRecipientsRefused({"x": (550, b"no")})
+
+    monkeypatch.setattr("messaging.services.send_mail", first_refused)
+    out = notify.send(u, [p.pk for p in people], BASE)
+    assert out["failed"] == people[:1] and out["sent"] == people[1:] and len(calls) == 3
+
+
+def test_with_no_mail_relay_nothing_is_tried_and_the_changes_are_kept(world, settings):
+    from messaging.models import Outbox
+    settings.EMAIL_HOST = ""
+    u, nina = world["user"], world["nina"]
+    entries.set_cell_text(u, nina, MON, "08:00-12:00")
+    out = notify.send(u, [nina.pk], BASE)
+    assert out["failed"] == [nina] and not mail.outbox and DayChange.objects.count() == 1
+    assert Outbox.objects.get().error == "mail not configured"

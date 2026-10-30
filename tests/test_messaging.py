@@ -31,3 +31,18 @@ def test_a_person_without_an_email_gets_a_row_that_says_so():
     p = make_person(email="")
     row = send(p, "Subject", "the body")
     assert row.sent_at is None and row.error == "no email address"
+
+
+def test_with_no_relay_configured_nothing_is_tried_and_the_row_says_so(settings, monkeypatch):
+    settings.EMAIL_HOST = ""
+    monkeypatch.setattr("messaging.services.send_mail", lambda *a, **kw: pytest.fail("tried to send"))
+    row = send(make_person(), "Subject", "the body")
+    assert row.sent_at is None and row.error == "mail not configured" and not mail.outbox
+
+
+def test_a_message_goes_on_the_connection_it_is_given(monkeypatch):
+    from django.core.mail import get_connection
+    connection, seen = get_connection(), []
+    monkeypatch.setattr("messaging.services.send_mail", lambda *a, connection=None, **kw: seen.append(connection))
+    assert send(make_person(), "Subject", "the body", connection=connection).sent_at
+    assert seen == [connection]

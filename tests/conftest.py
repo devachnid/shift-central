@@ -5,6 +5,14 @@ from django.test import Client
 User = get_user_model()
 
 
+@pytest.fixture(autouse=True)
+def mail_relay(settings):
+    """A relay is configured, as on the practice's box; the test runner's
+    locmem backend still catches every message. A test of the unconfigured
+    case sets EMAIL_HOST back to empty."""
+    settings.EMAIL_HOST = "smtp.example.org"
+
+
 @pytest.fixture
 def superuser(db):
     return User.objects.create_superuser(email="root@example.org", password="pw")
