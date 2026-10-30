@@ -130,16 +130,21 @@ def _write(user, person, day, items, keep_appearance=True):
     with the same kind survives a rewrite (a retyped time keeps its colour).
     Audits the cell as one row. Call inside a transaction, after _check."""
     old = list(Entry.objects.filter(person=person, day=day).select_related("department").order_by("position"))
-    before = " / ".join(render.line(e) for e in old) or "no shift"
-    _touch(person, day)
-    Entry.objects.filter(person=person, day=day).delete()
-    rows = []
+    planned = []
     for position, item in enumerate(items):
         fields = dict(item)
         if keep_appearance and not fields.get("appearance") and position < len(old) \
                 and old[position].kind == fields["kind"]:
             fields["appearance"] = old[position].appearance
-        rows.append(Entry(person=person, day=day, position=position, created_by=user, **fields))
+        planned.append(fields)
+    if [(f["kind"], render.line(f), f.get("appearance") or {}) for f in planned] \
+            == [(e.kind, render.line(e), e.appearance or {}) for e in old]:
+        return old   # nothing changes: no DayChange, no new rows, no audit
+    before = " / ".join(render.line(e) for e in old) or "no shift"
+    _touch(person, day)
+    Entry.objects.filter(person=person, day=day).delete()
+    rows = [Entry(person=person, day=day, position=position, created_by=user, **fields)
+            for position, fields in enumerate(planned)]
     Entry.objects.bulk_create(rows)
     rows = list(Entry.objects.filter(person=person, day=day).select_related("department").order_by("position"))
     after = " / ".join(render.line(e) for e in rows) or "no shift"
@@ -310,7 +315,7 @@ def replace(user, cells, find, replacement, match_case):
             items, touched = [], False
             for e in old:
                 line = render.line(e)
-                new = pattern.sub(replacement, line)
+                new = pattern.sub(lambda match: replacement, line)
                 if new == line:
                     items.append(_snapshot(e))
                     continue

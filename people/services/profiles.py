@@ -5,10 +5,12 @@ exists needs a typed reason to change (LEAVE-31)."""
 from datetime import date
 from decimal import Decimal
 
+from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.utils import timezone
 
 from people.models import Allowance
-from people.services import audit
+from people.services import access, audit
 
 DISPLAY_FIELDS = ("job_title", "name_colour", "display_order", "display_on_rota",
                   "show_to_other_staff", "can_see_other_staff")
@@ -90,11 +92,15 @@ def set_notes(actor, person, notes):
 
 def reorder(actor, ids):
     """The grid's "sort staff": display_order 10, 20, 30… for the ids in the
-    order given; people not listed keep theirs. Managers only — the view
-    checks; this audits each change."""
+    order given; people not listed keep theirs. Managers only; one
+    transaction, so a failure leaves the order as it was."""
+    if not access.is_manager(actor):
+        raise PermissionDenied("only a manager can sort the staff")
+    ids = [int(pk) for pk in ids]
     from people.models import Person
     people = {p.pk: p for p in Person.objects.filter(pk__in=ids)}
-    for n, pk in enumerate(ids, start=1):
-        person = people.get(pk)
-        if person is not None:
-            _apply(actor, person, {"display_order": n * 10})
+    with transaction.atomic():
+        for n, pk in enumerate(ids, start=1):
+            person = people.get(pk)
+            if person is not None:
+                _apply(actor, person, {"display_order": n * 10})

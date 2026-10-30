@@ -181,3 +181,45 @@ def test_replace_with_a_department_name_retags_the_shift(world):
     make_entry(nina, MON, department=world["pmc"])
     entries.replace(world["u_lead"], [(nina.pk, MON)], "Reception PMC", "Nursing", match_case=False)
     assert _lines(nina, MON)[0].department.name == "Nursing"
+
+
+def test_replace_inserts_the_replacement_verbatim(world):
+    nina = world["nina"]
+    make_entry(nina, MON, kind="comment", text="cover")
+    entries.replace(world["u_lead"], [(nina.pk, MON)], "cover", r"C:\temp \1", match_case=True)
+    assert _lines(nina, MON)[0].text == r"C:\temp \1"
+
+
+def test_clearing_an_empty_cell_records_nothing(world):
+    entries.clear(world["u_lead"], [(world["nina"].pk, MON)])
+    assert not DayChange.objects.exists() and not AuditEntry.objects.filter(model="shifts.entry").exists()
+
+
+def test_retyping_identical_text_keeps_the_entries(world):
+    first = entries.set_cell_text(world["u_lead"], world["nina"], MON, "08:00-12:00")
+    again = entries.set_cell_text(world["u_lead"], world["nina"], MON, "08:00-12:00")
+    assert [e.pk for e in again] == [e.pk for e in first]
+    assert AuditEntry.objects.filter(model="shifts.entry").count() == 1
+
+
+def test_moving_an_empty_cell_writes_nothing_for_the_target(world):
+    nina, nurse = world["nina"], world["nurse"]
+    entries.move(world["boss"], [(nina.pk, MON)], days=1, rows=1, copy=True, row_order=[nina.pk, nurse.pk])
+    assert not DayChange.objects.exists() and not AuditEntry.objects.filter(model="shifts.entry").exists()
+
+
+def test_reorder_is_for_managers_only(world):
+    from people.services import profiles
+    staff = make_user_for(make_person(first_name="Staff", team=world["reception"]))
+    with pytest.raises(PermissionDenied):
+        profiles.reorder(staff, [world["nurse"].pk, world["nina"].pk])
+    world["nina"].refresh_from_db()
+    assert world["nina"].display_order != 20
+
+
+def test_reorder_takes_ids_as_strings(world):
+    from people.services import profiles
+    nina, nurse = world["nina"], world["nurse"]
+    profiles.reorder(world["boss"], [str(nurse.pk), str(nina.pk)])
+    nina.refresh_from_db(), nurse.refresh_from_db()
+    assert (nurse.display_order, nina.display_order) == (10, 20)
