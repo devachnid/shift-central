@@ -43,20 +43,55 @@ def _parse(record, position):
 
 
 def _apply(payload, start, end, now):
+    """Rows outside start..end are skipped (the window delete would never
+    clear them) and a repeated (person, day, part) keeps its first record
+    (the table is unique on it); both are counted, not stored."""
     gps = {p.email.lower(): p for p in Person.objects.filter(is_gp=True).exclude(email="")}
-    rows, unmatched, matched = [], set(), set()
+    rows, slots = [], set()
+    unmatched, matched = set(), set()
+    duplicates = outside = 0
     for position, record in enumerate(payload["sessions"], start=1):
         email, fields = _parse(record, position)
+        if not start <= fields["day"] <= end:
+            outside += 1
+            continue
         person = gps.get(email)
         if person is None:
             unmatched.add(email)
             continue
+        slot = (person.pk, fields["day"], fields["part"])
+        if slot in slots:
+            duplicates += 1
+            continue
+        slots.add(slot)
         matched.add(person.pk)
         rows.append(GpSession(person=person, synced_at=now, **fields))
     with transaction.atomic():
         GpSession.objects.filter(day__range=(start, end)).delete()
         GpSession.objects.bulk_create(rows)
-    return len(matched), sorted(unmatched), int(payload.get("without_email") or 0)
+    detail = {"unmatched": sorted(unmatched), "without_email": int(payload.get("without_email") or 0)}
+    if duplicates:
+        detail["duplicates"] = duplicates
+    if outside:
+        detail["outside_window"] = outside
+    return len(matched), detail
+
+
+def _plural(n, noun):
+    return f"{n} {noun}{'' if n == 1 else 's'}"
+
+
+def _message(detail):
+    notes = []
+    if detail["unmatched"]:
+        notes.append(f"{_plural(len(detail['unmatched']), 'email')} unmatched")
+    if detail["without_email"]:
+        notes.append(f"{_plural(detail['without_email'], 'clinician')} without an email")
+    if detail.get("duplicates"):
+        notes.append(_plural(detail["duplicates"], "duplicate session"))
+    if detail.get("outside_window"):
+        notes.append(f"{_plural(detail['outside_window'], 'session')} outside the window")
+    return "; ".join(notes)
 
 
 def sync(client=None, now=None):
@@ -67,15 +102,10 @@ def sync(client=None, now=None):
     run = SyncRun.objects.create(source=SOURCE)
     try:
         payload = client.sessions(start, end)
-        seen, unmatched, without_email = _apply(payload, start, end, now)
+        seen, detail = _apply(payload, start, end, now)
         run.ok, run.people_seen = True, seen
-        run.detail = {"unmatched": unmatched, "without_email": without_email}
-        notes = []
-        if unmatched:
-            notes.append(f"{len(unmatched)} email{'s' if len(unmatched) != 1 else ''} unmatched")
-        if without_email:
-            notes.append(f"{without_email} clinician{'s' if without_email != 1 else ''} without an email")
-        run.message = "; ".join(notes)
+        run.detail = detail
+        run.message = _message(detail)
     except (GpError, BadRecord) as e:
         run.message = str(e)[:300]
         log.warning("gp_sync failed: %s", run.message)

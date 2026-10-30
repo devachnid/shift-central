@@ -65,6 +65,36 @@ def test_the_window_is_replaced_in_full_and_nothing_outside_it_is_touched(doc):
     assert GpSession.objects.filter(person=doc).count() == 4
 
 
+def _feed_with(*extra):
+    payload = json.loads(FIXTURE.read_text())
+    payload["sessions"] = payload["sessions"] + list(extra)
+    return payload
+
+
+def test_duplicate_entries_for_one_slot_keep_the_first_and_are_counted(doc):
+    again = {"email": "Doc@example.org", "day": "2027-01-04", "part": "AM", "type": "Other", "site": "X", "note": ""}
+    run = gp_sync.sync(FakeClient(_feed_with(again, again)), now=NOW)
+    assert run.ok and run.people_seen == 1
+    assert GpSession.objects.filter(person=doc).count() == 3
+    first = GpSession.objects.get(person=doc, day=date(2027, 1, 4), part="AM")
+    assert (first.label, first.site) == ("Surgery", "AG")
+    assert run.detail["duplicates"] == 2
+    assert run.message == "2 emails unmatched; 1 clinician without an email; 2 duplicate sessions"
+    assert gp_sync.sync(FakeClient(_feed_with(again)), now=NOW).ok
+
+
+def test_a_record_outside_the_window_is_skipped_and_the_next_run_still_succeeds(doc):
+    past_end = date(2027, 1, 5) + timedelta(weeks=52, days=1)
+    late = {"email": "doc@example.org", "day": past_end.isoformat(), "part": "AM", "type": "Surgery", "site": "", "note": ""}
+    run = gp_sync.sync(FakeClient(_feed_with(late)), now=NOW)
+    assert run.ok and run.detail["outside_window"] == 1
+    assert run.message == "2 emails unmatched; 1 clinician without an email; 1 session outside the window"
+    assert not GpSession.objects.filter(day=past_end).exists()
+    assert GpSession.objects.filter(person=doc).count() == 3
+    again = gp_sync.sync(FakeClient(_feed_with(late)), now=NOW)
+    assert again.ok and GpSession.objects.filter(person=doc).count() == 3
+
+
 def test_a_failed_fetch_keeps_the_data_and_never_logs_an_address(doc, caplog):
     make_gp_session(doc, date(2027, 1, 7), "AM")
     with caplog.at_level(logging.WARNING):
