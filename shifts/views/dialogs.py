@@ -49,9 +49,11 @@ def shift(request, person_pk, day, entry_pk=None):
         raise Http404("not a date") from None
     from leave.services import costing as leave_costing
     covered = leave_costing.active_day(person, day)
-    if covered is not None and entry_pk is None:
-        return render(request, "shifts/shift_dialog.html", {"person": person, "day": day, "covered": covered})
     entry = get_object_or_404(Entry, pk=entry_pk, person=person, day=day) if entry_pk else None
+    if covered is not None and entry is None:
+        # A day of approved leave: the form sets the shift the person would have worked. It edits
+        # the first shift the leave covers, if any; saving re-costs a whole day (LEAVE-06).
+        entry = Entry.objects.filter(person=person, day=day, kind=Entry.Kind.SHIFT, covered_by=covered).order_by("position").first()
     if request.method == "POST":
         form = ShiftForm(request.POST)
         if form.is_valid():
@@ -79,7 +81,7 @@ def shift(request, person_pk, day, entry_pk=None):
             initial = {"start": entry.start, "finish": entry.finish, "break_minutes": entry.break_minutes,
                        "department": entry.department, "text": entry.text, "wfh": entry.wfh, "overtime": entry.overtime}
         form = ShiftForm(initial=initial)
-    return render(request, "shifts/shift_dialog.html", {"form": form, "person": person, "day": day, "entry": entry})
+    return render(request, "shifts/shift_dialog.html", {"form": form, "person": person, "day": day, "entry": entry, "covered": covered})
 
 
 @login_required

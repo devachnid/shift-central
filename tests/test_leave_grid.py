@@ -101,12 +101,66 @@ def test_the_download_and_phone_list_show_the_leave(sam, lead):
     assert "tile-leave" in body and "Holiday" in body
 
 
-def test_the_shift_dialog_on_a_covered_day_shows_the_leave_instead_of_the_form(sam, lead):
+def test_the_shift_dialog_on_a_covered_day_shows_the_form_with_the_leave_note(sam, lead):
     b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
     c = Client()
     c.force_login(lead.user)
     body = c.get(f"/rota/shift/{sam.pk}/{MON}/").content.decode()
-    assert "Holiday" in body and f"/time-off/{b.pk}/" in body and 'name="start"' not in body
+    assert "Sam Patel is off this day (Holiday). The shift you set here is what they would have worked" in body
+    assert "stays hidden on the grid" in body
+    assert f"/time-off/{b.pk}/" in body and 'name="start"' in body
+    assert 'value="09:00"' in body       # prefilled from the covered shift
+    assert f"/rota/shift/{sam.pk}/{MON}/{Entry.objects.get(person=sam, day=MON).pk}/" in body
+
+
+def test_setting_the_shift_behind_a_placeholder_day_re_costs_it(sam, lead):
+    from messaging.models import Outbox
+    week = date(2027, 3, 15)           # a week with no rota: costed on the average day (7 h 30 min)
+    bookings.book(lead.user, sam, make_type("Holiday"), week, week, "whole")
+    bd = BookingDay.objects.get(booking__person=sam, day=week)
+    assert bd.placeholder and bd.cost_seconds == 27000
+    c = Client()
+    c.force_login(lead.user)
+    assert 'name="start"' in c.get(f"/rota/shift/{sam.pk}/{week}/").content.decode()
+    r = c.post(f"/rota/shift/{sam.pk}/{week}/", {"start": "08:00", "finish": "16:00", "break_minutes": "0", "overtime": ""})
+    assert r.json() == {"refresh": True}
+    bd.refresh_from_db()
+    assert (bd.source, bd.placeholder, bd.cost_seconds) == ("rota", False, 8 * 3600)
+    shift = Entry.objects.get(person=sam, day=week)
+    assert shift.covered_by_id == bd.pk                       # hidden on the grid, behind the leave
+    assert "Leave cost to check" in " ".join(Outbox.objects.values_list("subject", flat=True))
+
+
+def test_editing_the_shift_behind_leave_replaces_it_and_keeps_it_covered(sam, lead):
+    bd_booking = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    c = Client()
+    c.force_login(lead.user)
+    r = c.post(f"/rota/shift/{sam.pk}/{MON}/", {"start": "10:00", "finish": "16:00", "break_minutes": "0", "overtime": ""})
+    assert r.json() == {"refresh": True}
+    rows = Entry.objects.filter(person=sam, day=MON)
+    assert rows.count() == 1 and rows.first().start == time(10) and rows.first().covered_by is not None
+    assert BookingDay.objects.get(booking=bd_booking).cost_seconds == 6 * 3600
+
+
+def test_only_a_manager_can_set_the_shift_behind_leave(sam, lead):
+    bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    c = Client()
+    c.force_login(sam.user)
+    assert c.get(f"/rota/shift/{sam.pk}/{MON}/").status_code == 403
+    assert c.post(f"/rota/shift/{sam.pk}/{MON}/", {"start": "08:00", "finish": "16:00", "break_minutes": "0"}).status_code == 403
+    other = make_person(first_name="Other", team=make_team("Admin"))
+    make_user_for(other)
+    c2 = Client()
+    c2.force_login(other.user)
+    assert c2.get(f"/rota/shift/{sam.pk}/{MON}/").status_code == 403
+
+
+def test_the_note_on_a_part_day_says_the_cost_is_not_changed(sam, lead):
+    bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "am")
+    c = Client()
+    c.force_login(lead.user)
+    body = c.get(f"/rota/shift/{sam.pk}/{MON}/").content.decode()
+    assert "does not change what this leave costs" in body and 'name="start"' in body
 
 
 def test_clear_and_cut_never_touch_a_covered_source_day(sam, lead):

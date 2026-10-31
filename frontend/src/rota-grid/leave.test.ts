@@ -28,7 +28,9 @@ it("a free day offers Time off…, leave offers View and, on an editable row, Ca
   expect(leaveMenuItems(base, true, 7, "2026-11-03")).toEqual([
     { label: "View time off", href: "/time-off/1/" },
     { label: "Cancel time off", href: "/time-off/1/cancel/" },
+    { label: "Shift behind the leave…", href: "/rota/shift/7/2026-11-03/" },
   ]);
+  expect(leaveMenuItems({ ...base, status: "pending" }, true, 7, "2026-11-03").map((i) => i.label)).toEqual(["View time off", "Cancel time off"]);
   expect(leaveMenuItems(base, false, 7, "2026-11-03")).toEqual([{ label: "View time off", href: "/time-off/1/" }]);
 });
 
@@ -41,6 +43,13 @@ it("menuItems gives leave cells that cannot be selected the leave items alone", 
   const grid = (leave: LeaveJson | undefined, selectable: boolean, editable: boolean) =>
     ({ leaveAt: () => leave, selectable: () => selectable, rowOf: () => ({ editable }) }) as unknown as GridState;
   const labels = (g: GridState) => menuItems(g, {} as Actions, key(7, "2026-11-03"), () => undefined).map((i) => i.label);
-  expect(labels(grid(base, false, true))).toEqual(["View time off", "Cancel time off"]); // approved
+  expect(labels(grid(base, false, true))).toEqual(["View time off", "Cancel time off", "Shift behind the leave…"]); // approved
   expect(labels(grid(pending, false, false))).toEqual(["View time off"]); // pending, read-only row
+});
+
+it("approved leave on an editable row offers the shift behind it, at the shift dialog's address", () => {
+  const labels = (l: LeaveJson, editable: boolean) => leaveMenuItems(l, editable, 7, "2026-11-03").map((i) => i.label);
+  expect(leaveMenuItems(base, true, 7, "2026-11-03")[2]).toEqual({ label: "Shift behind the leave…", href: "/rota/shift/7/2026-11-03/" });
+  expect(labels(base, false)).not.toContain("Shift behind the leave…");
+  expect(labels({ ...base, status: "pending" }, true)).not.toContain("Shift behind the leave…");
 });

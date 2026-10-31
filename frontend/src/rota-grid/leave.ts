@@ -16,11 +16,14 @@ export function selectableWithLeave(editable: boolean, l: LeaveJson | undefined)
 }
 
 /** The leave entries of the right-click menu: "Time off…" on a free day,
- *  View (and, on a row the viewer may edit, Cancel) where leave is booked. */
+ *  View (and, on a row the viewer may edit, Cancel, and for approved leave the shift behind it) where leave is booked. */
 export function leaveMenuItems(leave: LeaveJson | undefined, rowEditable: boolean, person: number, day: string): MenuItem[] {
   if (!leave) return [{ label: "Time off…", href: `/time-off/add/?person=${person}&day=${day}` }];
   return [
     { label: "View time off", href: `/time-off/${leave.id}/` },
     ...(rowEditable ? [{ label: "Cancel time off", href: `/time-off/${leave.id}/cancel/` }] : []),
+    // The shift the person would have worked: writing it re-costs a leave day that was costed
+    // on an average day. Approved leave only; a pending cell is edited as usual.
+    ...(rowEditable && leave.status === "approved" ? [{ label: "Shift behind the leave…", href: `/rota/shift/${person}/${day}/` }] : []),
   ];
 }
