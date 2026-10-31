@@ -14,6 +14,7 @@ from people.models import Person
 from people.services import access
 from shifts.models import DayChange, Entry, GridOptions
 from shifts.services import options, window
+from tests import clock
 from tests.factories import (make_department, make_entry, make_gp_session, make_person, make_team,
                              make_team_manager, make_user_for)
 
@@ -164,6 +165,7 @@ def test_patch_move_clear_and_order_answer_with_their_cells(world):
     assert nina.display_order == 10
 
 
+@pytest.mark.today(clock.LATE_2026)     # "common" counts the shifts of the weeks around today
 def test_options_common_and_recent_ride_the_window(world):
     GridOptions.objects.create(user=world["lead"].user, data={"job_titles": True})
     make_entry(world["nina"], MON, department=world["pmc"], created_by=world["lead"].user)

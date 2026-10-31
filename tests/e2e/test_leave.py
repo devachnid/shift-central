@@ -4,9 +4,10 @@ it, see the shift back. Signs in with a password as test_grid does."""
 import pytest
 from playwright.sync_api import expect
 
+from tests import clock
 from tests.factories import make_allowance, make_entry, make_person, make_team, make_team_manager, make_type, make_user_for
 
-pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.e2e]
+pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.e2e, pytest.mark.today(clock.LATE_2026)]
 MON = "2027-03-01"
 
 

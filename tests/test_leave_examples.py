@@ -17,9 +17,10 @@ from messaging.models import Outbox
 from people.models import AuditEntry
 from people.services import profiles
 from shifts.models import Entry
+from tests import clock
 from tests.factories import make_allowance, make_entry, make_gp_session, make_person, make_type, make_user_for
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.today(clock.LATE_2026)]    # set on the 2026-27 calendar
 Y26 = date(2026, 1, 1)
 Y27 = date(2027, 1, 1)
 BH_2026 = [date(2026, 1, 1), date(2026, 4, 3), date(2026, 4, 6), date(2026, 5, 4), date(2026, 5, 25), date(2026, 8, 31), date(2026, 12, 25), date(2026, 12, 28)]

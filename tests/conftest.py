@@ -1,8 +1,44 @@
+import datetime as dt
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import Client
+from django.utils import timezone
+
+from tests import clock
 
 User = get_user_model()
+
+
+def _ticking_from(instant):
+    real = timezone.now
+    started = real()
+
+    def now():
+        return instant.astimezone(dt.timezone.utc) + (real() - started)
+    return now
+
+
+def _at_nine(day):
+    return dt.datetime.combine(day, dt.time(9, 0), tzinfo=clock.LONDON)
+
+
+@pytest.fixture(autouse=True)
+def pinned_clock(request, monkeypatch):
+    """django.utils.timezone.now (and so localdate, localtime and every
+    auto_now field) reads tests.clock.PIN, ticking on from it, or 09:00 on
+    the day a test's @pytest.mark.today(day) names."""
+    marker = request.node.get_closest_marker("today")
+    instant = _at_nine(marker.args[0]) if marker else clock.PIN
+    monkeypatch.setattr(timezone, "now", _ticking_from(instant))
+
+
+@pytest.fixture
+def today(monkeypatch):
+    """Move the clock in the middle of a test: today(date(2027, 2, 1))."""
+    def pin(day):
+        monkeypatch.setattr(timezone, "now", _ticking_from(_at_nine(day)))
+    return pin
 
 
 @pytest.fixture(autouse=True)

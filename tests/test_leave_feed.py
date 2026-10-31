@@ -9,6 +9,7 @@ import pytest
 from django.core.cache import cache
 
 from leave.services import bookings, feed
+from tests import clock
 from tests.factories import make_allowance, make_booking, make_entry, make_gp_session, make_person, make_type, make_user_for
 
 pytestmark = pytest.mark.django_db
@@ -57,6 +58,7 @@ def test_range_cap_is_1100_days_inclusive_of_the_limit(api):
     assert api("/api/v1/leave").status_code == 400
 
 
+@pytest.mark.today(clock.LATE_2026)     # books leave in 2027 through the service
 def test_gps_approved_leave_with_parts_and_nothing_else(api, boss):
     doc = make_person(first_name="Doc", email="Doc@Example.org", is_gp=True, start_date=date(2020, 1, 6))
     make_allowance(doc, date(2027, 1, 1), 150, 0)

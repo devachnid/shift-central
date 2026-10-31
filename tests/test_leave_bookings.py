@@ -16,10 +16,11 @@ from messaging.models import Outbox
 from people.models import AuditEntry
 from shifts.models import DayChange, Entry
 from shifts.services import entries
+from tests import clock
 from tests.factories import (make_allowance, make_bank_holiday, make_entry, make_person, make_team, make_team_manager,
                              make_type, make_user_for)
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.today(clock.LATE_2026)]    # set on the 2026-27 calendar
 MON, TUE, WED = date(2027, 3, 1), date(2027, 3, 2), date(2027, 3, 3)
 Y27 = date(2027, 1, 1)
 

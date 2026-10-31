@@ -11,9 +11,10 @@ from django.utils import timezone
 from leave.models import BankHoliday, Blackout, Booking, LeaveSetting, LeaveType
 from leave.services import adjustments, bookings
 from people.services import health
+from tests import clock
 from tests.factories import make_allowance, make_entry, make_person, make_team, make_team_manager, make_type, make_user_for
 
-pytestmark = pytest.mark.django_db
+pytestmark = [pytest.mark.django_db, pytest.mark.today(clock.LATE_2026)]    # set on the 2026-27 calendar
 MON, TUE = date(2027, 3, 1), date(2027, 3, 2)
 Y27 = date(2027, 1, 1)
 
