@@ -11,6 +11,12 @@ const SIZES = [["sm", "Small"], ["md", "Normal"], ["lg", "Large"]] as const;
 
 export function menuItems(g: GridState, act: Actions, k: CellKey, editCell: (k: CellKey, seed: string) => void): MenuItem[] {
   const [p, d] = split(k);
+  const leave = g.leaveAt(k);
+  const leaveItems = leaveMenuItems(leave, !!g.rowOf(p)?.editable, p, d);
+  // Leave on a cell the viewer cannot select (approved leave, or any leave on
+  // a read-only row) gets only the leave items: nothing else may act on it.
+  if (leave && !g.selectable(k)) return leaveItems;
+
   const win = g.win!;
   const colours = swatches();
   const selectCells = (keys: CellKey[]) => g.setSel(g.keepSelectable(keys));
@@ -20,11 +26,6 @@ export function menuItems(g: GridState, act: Actions, k: CellKey, editCell: (k: 
     ...colours.map((hex) => ({ label: hex, swatch: hex, action: () => pick(hex) })),
     { label: none, action: () => pick(undefined) },
   ];
-
-  const leave = g.leaveAt(k);
-  const leaveItems = leaveMenuItems(leave, !!g.rowOf(p)?.editable, p, d);
-  // Approved leave owns the cell, so nothing that edits it is offered.
-  if (leave?.status === "approved") return leaveItems;
 
   return [
     ...leaveItems,
