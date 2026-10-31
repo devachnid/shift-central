@@ -4,5 +4,6 @@ from .blackout import Blackout
 from .booking import Booking, BookingDay
 from .setting import LeaveSetting
 from .types import LeaveType
+from .yearend import YearEnd
 
-__all__ = ["Adjustment", "BankHoliday", "Blackout", "Booking", "BookingDay", "LeaveSetting", "LeaveType"]
+__all__ = ["Adjustment", "BankHoliday", "Blackout", "Booking", "BookingDay", "LeaveSetting", "LeaveType", "YearEnd"]

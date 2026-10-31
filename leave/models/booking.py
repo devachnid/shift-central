@@ -40,6 +40,11 @@ class Booking(models.Model):
     staff_note = models.CharField(max_length=300, blank=True, default="")
     manager_note = models.CharField(max_length=300, blank=True, default="")
     reminded_at = models.DateTimeField(null=True, blank=True)
+    # Spec 4. A past schedule entry (MIG-05): approved, dates only, no
+    # costed days, covering nothing. return_flagged_at: the return email
+    # has gone (LEAVE-29).
+    dates_only = models.BooleanField(default=False)
+    return_flagged_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-first_day", "-pk"]
@@ -51,6 +56,7 @@ class Booking(models.Model):
                 condition=(Q(part="times", start__isnull=False, finish__isnull=False, start__lt=F("finish"))
                            | (~Q(part="times") & Q(start__isnull=True, finish__isnull=True))),
                 name="times_have_start_before_finish"),
+            models.CheckConstraint(condition=Q(dates_only=False) | Q(part="whole"), name="dates_only_is_whole_days"),
         ]
 
     @property

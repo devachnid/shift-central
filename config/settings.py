@@ -58,6 +58,8 @@ INSTALLED_APPS = [
     "shifts",
     "messaging",
     "leave",
+    "absence",
+    "payroll",
     "ui",
 ]
 

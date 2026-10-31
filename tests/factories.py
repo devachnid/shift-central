@@ -77,6 +77,14 @@ def make_booking(person, first, last=None, **kw):
     return Booking.objects.create(person=person, first_day=first, last_day=last or first, **kw)
 
 
+def make_sick(person, first, last=None, dates_only=False, **kw):
+    """An approved Sick leave booking, the seeded type (so it counts as
+    sickness); dates_only for a past schedule entry."""
+    kw.setdefault("type", make_type("Sick leave", requestable=False, sickness=True))
+    kw.setdefault("status", "approved")
+    return Booking.objects.create(person=person, first_day=first, last_day=last or first, part="whole", dates_only=dates_only, **kw)
+
+
 def make_bank_holiday(day, name="Bank holiday"):
     row, _ = BankHoliday.objects.get_or_create(day=day, defaults={"name": name})
     return row

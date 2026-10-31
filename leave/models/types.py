@@ -28,6 +28,11 @@ class LeaveType(models.Model):
     display_order = models.PositiveIntegerField(default=100)
     archived = models.BooleanField(default=False)
     seeded = models.BooleanField(default=False)
+    # Spec 4. A type that counts as sickness makes instances of absence
+    # (LEAVE-40); a type that flags the return emails the managers when a
+    # booking of it ends (LEAVE-29). Both are a manager's to set.
+    sickness = models.BooleanField(default=False)
+    flag_return = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["display_order", "name"]
