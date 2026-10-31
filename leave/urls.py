@@ -7,7 +7,11 @@ urlpatterns = [
     path("time-off/add/", views.add, name="time-off-add"),
     path("time-off/request/", views.request_time_off, name="time-off-request"),
     path("time-off/mine/", views.mine, name="time-off-mine"),
+    path("time-off/approve/", views.waiting, name="time-off-approve"),
     path("time-off/<int:pk>/", views.view, name="time-off-view"),
     path("time-off/<int:pk>/edit/", views.edit, name="time-off-edit"),
     path("time-off/<int:pk>/cancel/", views.cancel, name="time-off-cancel"),
+    path("time-off/<int:pk>/decide/", views.decide, name="time-off-decide"),
+    path("staff/<int:pk>/leave/adjust/", views.adjust, name="leave-adjust"),
+    path("staff/<int:pk>/leave/hours-change/", views.hours_change, name="leave-hours-change"),
 ]

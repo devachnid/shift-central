@@ -105,3 +105,32 @@ class BookingForm(forms.Form):
 
 class CancelForm(forms.Form):
     note = forms.CharField(max_length=300, required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Note")
+
+
+class DecideForm(forms.Form):
+    decision = forms.ChoiceField(choices=[("approve", "Approve"), ("decline", "Decline")])
+    note = forms.CharField(max_length=300, required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Note")
+
+
+class AdjustForm(forms.Form):
+    leave_year = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"))
+    account = forms.ChoiceField(choices=[("annual", "Annual leave"), ("bank_holiday", "Bank holiday allowance"), ("toil", "TOIL")])
+    hours = forms.CharField(max_length=12, help_text="Hours to add, e.g. 15:00; a minus sign takes hours away")
+    reason = forms.CharField(max_length=300)
+
+    def clean_hours(self):
+        text = self.cleaned_data["hours"].strip()
+        sign = -1 if text[:1] in ("-", "−") else 1
+        seconds = parse_hours(text[1:] if text[:1] in ("-", "−", "+") else text)
+        if not seconds:
+            raise forms.ValidationError("Type the hours")
+        return sign * seconds
+
+
+class HoursChangeForm(forms.Form):
+    from_day = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"), label="From")
+    weekly_hours = forms.DecimalField(max_digits=5, decimal_places=2, min_value=0)
+    days_per_week = forms.IntegerField(min_value=1, max_value=7)
+    annual_hours = forms.DecimalField(max_digits=6, decimal_places=2, min_value=0, label="New annual leave allowance (full year, hours)")
+    bank_holiday_hours = forms.DecimalField(max_digits=6, decimal_places=2, min_value=0, label="New bank holiday allowance (full year, hours)")
+    note = forms.CharField(max_length=300, label="Reason")

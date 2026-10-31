@@ -8,6 +8,8 @@
  *    while the post is in flight. A 200 replaces the dialog with the response
  *    (a form shown again with its errors); a JSON {"redirect": url} follows it, and
  *    {"refresh": true} closes the dialog and fires shift-central:refresh.
+ *  - <form method="get" data-dialog-get> inside (the statement's year picker)
+ *    fetches its action with the fields as the query and shows the result.
  *  - Any HTML shown that contains [data-dialog-refresh] also fires
  *    shift-central:refresh (the outcome of Notify staff, a paste that skipped rows).
  *  - Failures never put an error page in the dialog. A redirect to the log-in
@@ -145,6 +147,13 @@
         return r.text().then(show);
       })
       .catch(function () { setBusy(false); failInForm(form, { message: UNREACHABLE }); });
+  });
+
+  document.addEventListener("submit", function (e) {
+    var form = e.target.closest && e.target.closest("form[data-dialog-get]");
+    if (!form) { return; }
+    e.preventDefault();
+    get(form.getAttribute("action") + "?" + new URLSearchParams(new FormData(form)).toString());
   });
 
   document.addEventListener("keydown", function (e) {

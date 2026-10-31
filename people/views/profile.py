@@ -7,6 +7,7 @@ from django.db import transaction
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 
+from leave.views.statement import statement_context
 from people.forms import DisplayForm, HoursForm, NotesForm
 from people.models import AuditEntry, Person
 from people.services import access, profiles
@@ -55,7 +56,8 @@ def _display(request, person, context):
 
 def _stored(person, years):
     """The hours form's initial values: what is stored now."""
-    initial = {"weekly_hours": person.weekly_hours, "days_per_week": person.days_per_week}
+    initial = {"weekly_hours": person.weekly_hours, "days_per_week": person.days_per_week,
+               "leave_year_start": person.leave_year_start}
     for a in person.allowances.filter(leave_year__in=years):
         initial[f"annual_{a.leave_year.year}"] = a.annual_hours
         initial[f"bank_holiday_{a.leave_year.year}"] = a.bank_holiday_hours
@@ -68,8 +70,12 @@ def _hours(request, person, context):
     if request.method == "POST":
         form = HoursForm(request.POST, years=years, is_gp=person.is_gp)
         if form.is_valid():
+            field = "leave_year_start"
             try:
                 with transaction.atomic():      # a refused allowance leaves the hours unchanged too
+                    if form.cleaned_data["leave_year_start"]:
+                        profiles.update_leave_year_start(request.user, person, form.cleaned_data["leave_year_start"])
+                    field = "note"
                     if not person.is_gp:
                         profiles.update_hours(request.user, person, form.cleaned_data["weekly_hours"],
                                               form.cleaned_data["days_per_week"])
@@ -79,11 +85,12 @@ def _hours(request, person, context):
                 context["saved"] = True
             except ValueError as e:
                 person.refresh_from_db()
-                form.add_error("note", str(e))
+                form.add_error(field, str(e))
     if form is None or context["saved"]:
         form = HoursForm(initial=_stored(person, years), years=years, is_gp=person.is_gp)
     existing = {a.leave_year: a for a in person.allowances.filter(leave_year__in=years)}
     context.update({"form": form, "allowance_rows": [(y, existing.get(y)) for y in years]})
+    context.update(statement_context(person, request.GET.get("year"), manages=context["manages"], in_dialog=True))
 
 
 def _notes(request, person, context):
@@ -104,6 +111,7 @@ def history(request, pk):
         raise PermissionDenied
     allowance_ids = list(person.allowances.values_list("pk", flat=True))
     entries = AuditEntry.objects.filter(model="people.person", object_id=person.pk) | \
-        AuditEntry.objects.filter(model="people.allowance", object_id__in=allowance_ids)
+        AuditEntry.objects.filter(model="people.allowance", object_id__in=allowance_ids) | \
+        AuditEntry.objects.filter(model__in=("leave.booking", "leave.adjustment"), object_id=person.pk)
     return render(request, "people/history_dialog.html",
                   {"person": person, "entries": entries.order_by("-at")[:200]})

@@ -3,7 +3,7 @@
 {% block title %}My leave · AMG Shift Central{% endblock %}
 {% block topbar_actions %}<a class="topbar-action is-primary" href="{% url 'time-off-request' %}">Request time off +</a>{% endblock %}
 {% block content %}
-{% include "leave/_balances.html" %}
+{% include "leave/_statement.html" %}
 <table class="table">
   <thead><tr><th>Status</th><th>Type</th><th>Dates</th><th>Part</th><th>Allowance used</th><th>Note</th><th></th></tr></thead>
   <tbody>

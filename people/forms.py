@@ -20,6 +20,8 @@ class HoursForm(forms.Form):
     an existing allowance changed (the service enforces it)."""
     weekly_hours = forms.DecimalField(max_digits=5, decimal_places=2, min_value=0, required=False)
     days_per_week = forms.IntegerField(min_value=1, max_value=7, required=False)
+    leave_year_start = forms.RegexField(r"^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$", required=False, initial="01-01",
+                                        label="Leave year starts (MM-DD)", error_messages={"invalid": "Type the month and day as MM-DD, e.g. 04-01"})
     note = forms.CharField(max_length=300, required=False, label="Reason for the change")
 
     def __init__(self, *args, years, is_gp=False, **kwargs):

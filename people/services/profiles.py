@@ -48,6 +48,22 @@ def update_hours(actor, person, weekly_hours, days_per_week, note=""):
     return _apply(actor, person, {"weekly_hours": weekly_hours, "days_per_week": days_per_week}, note=note)
 
 
+def update_leave_year_start(actor, person, text):
+    """The month and day the person's leave year starts (LEAVE-03). It cannot
+    move once the person has an allowance or a live booking: those are filed
+    under the years the old date made."""
+    from leave.models import Booking
+    try:
+        years.parse_start(text)
+    except ValueError:
+        raise ValueError("That is not a date; type the month and day as MM-DD, e.g. 04-01") from None
+    if text == person.leave_year_start:
+        return []
+    if person.allowances.exists() or Booking.objects.filter(person=person).exclude(status__in=("declined", "cancelled")).exists():
+        raise ValueError(f"{person.name} already has allowances or bookings; the leave year cannot move")
+    return _apply(actor, person, {"leave_year_start": text})
+
+
 def set_allowance(actor, person, leave_year, annual_hours, bank_holiday_hours, note=""):
     annual_hours = Decimal(annual_hours).quantize(Decimal("0.01"))
     bank_holiday_hours = Decimal(bank_holiday_hours).quantize(Decimal("0.01"))

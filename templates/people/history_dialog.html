@@ -8,7 +8,7 @@
   <tr>
     <td>{{ entry.at|date:"j M Y H:i" }}</td>
     <td>{{ entry.actor_email }}</td>
-    <td>{{ entry.model|cut:"people." }} {{ entry.field }}</td>
+    <td>{{ entry.model|cut:"people."|cut:"leave." }} {{ entry.field }}</td>
     <td>{{ entry.before }}</td>
     <td>{{ entry.after }}</td>
     <td>{{ entry.note }}</td>

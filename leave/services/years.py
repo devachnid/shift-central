@@ -29,3 +29,8 @@ def next_year(year):
 def years_for(person, today=None):
     this = year_of(person, today or timezone.localdate())
     return [this, next_year(this)]
+
+
+def label(year):
+    """"2027", or "2027/28" for a year that starts after 1 January."""
+    return str(year.year) if (year.month, year.day) == (1, 1) else f"{year.year}/{str(year.year + 1)[2:]}"

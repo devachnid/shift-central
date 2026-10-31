@@ -16,6 +16,12 @@
     {% if person.average_day %}<span class="field-help">Average day: {{ person.average_day }} h</span>{% endif %}
   </div>
   {% endif %}
+  <div class="field{% if form.leave_year_start.errors %} has-error{% endif %}">
+    <label for="id_leave_year_start">{{ form.leave_year_start.label }}</label>
+    {{ form.leave_year_start }}
+    <span class="field-help">Can only change before any allowance or booking is set</span>
+    {% for e in form.leave_year_start.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
   {% for annual, bank in form.year_fields %}
   <div class="field{% if annual.errors %} has-error{% endif %}">
     <label for="{{ annual.id_for_label }}">{{ annual.label }}</label>
@@ -45,9 +51,11 @@
   <dt>Days per week</dt><dd>{{ person.days_per_week|default:"—" }}</dd>
   <dt>Average day</dt><dd>{% if person.average_day %}{{ person.average_day }} h{% else %}—{% endif %}</dd>
   {% endif %}
+  <dt>Leave year starts</dt><dd>{{ person.leave_year_start }}</dd>
   {% for year, allowance in allowance_rows %}
   <dt>Annual leave allowance {{ year.year }}</dt><dd>{% if allowance %}{{ allowance.annual_hours }} h{% else %}—{% endif %}</dd>
   <dt>Bank holiday allowance {{ year.year }}</dt><dd>{% if allowance %}{{ allowance.bank_holiday_hours }} h{% else %}—{% endif %}</dd>
   {% endfor %}
 </dl>
 {% endif %}
+{% include "leave/_statement.html" %}

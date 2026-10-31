@@ -1,12 +1,12 @@
 {% extends "ui/_dialog.html" %}
 {% block dialog_title %}Permissions — {{ person.name }}{% endblock %}
 {% block dialog_body %}
-{% if is_all_teams_person %}
-<p>Manager access: <strong>all teams, set in Practice HR</strong> (Login accounts › Apps › Admin of shift-central).</p>
-{% else %}
 <form method="post" action="{% url 'permissions' person.pk %}" data-dialog-form>
   {% csrf_token %}
   {% if saved %}<div class="flash">Saved.</div>{% endif %}
+  {% if is_all_teams_person %}
+  <p>Manager access: <strong>all teams, set in Practice HR</strong> (Login accounts › Apps › Admin of shift-central).</p>
+  {% else %}
   <div class="field">
     <span>Manager access</span>
     {% for t in teams %}
@@ -17,7 +17,9 @@
     {% endfor %}
     <p class="field-help">Manager access lets this person build and change the team's rota and approve its leave.</p>
   </div>
+  {% endif %}
+  <div class="field"><label><input type="checkbox" name="own_leave_without_approval"{% if person.own_leave_without_approval %} checked{% endif %}> Own leave needs no approval</label>
+    <p class="field-help">For the practice manager (PEOPLE-07): their time off is recorded when they add it. Everyone else's own leave waits for another manager.</p></div>
   <button type="submit" class="btn btn-dark">Update permissions</button>
 </form>
-{% endif %}
 {% endblock %}

@@ -10,6 +10,7 @@ from leave.models import Booking
 from leave.services import balances, blackouts, bookings, years
 from leave.services.common import LeaveError
 from leave.views.add import _preview
+from leave.views.statement import statement_context
 
 
 def _me(request):
@@ -28,10 +29,6 @@ def _staff_preview(form, me):
     return preview
 
 
-def _label(year):
-    return str(year.year) if (year.month, year.day) == (1, 1) else f"{year.year}/{str(year.year + 1)[2:]}"
-
-
 def _balances(me):
     """A statement for each leave year leave can be booked in. The current
     year always; the next once an allowance is set for it (a request in
@@ -40,7 +37,7 @@ def _balances(me):
     for i, year in enumerate(years.years_for(me)):
         statement = balances.statement(me, year)
         if i == 0 or not statement.missing:
-            out.append({"label": _label(year), "statement": statement})
+            out.append({"label": years.label(year), "statement": statement})
     return out
 
 
@@ -71,4 +68,5 @@ def mine(request):
     bookings_ = Booking.objects.filter(person=me).select_related("type").prefetch_related("booking_days").order_by("-first_day")[:100]
     rows = [{"b": b, "cost": sum(bd.cost_seconds for bd in b.booking_days.all()) if b.is_active else None,
              "can_cancel": b.status == Booking.Status.APPROVED and b.last_day >= today} for b in bookings_]
-    return render(request, "leave/mine.html", {"page_title": "My leave", "rows": rows, "balances": _balances(me), "today": today})
+    return render(request, "leave/mine.html", {"page_title": "My leave", "rows": rows, "today": today,
+                                               **statement_context(me, request.GET.get("year"))})

@@ -28,3 +28,11 @@ def set_teams(actor, person, teams):
     for pk, team in current.items():
         if pk not in wanted:
             revoke(actor, person, team)
+
+
+def set_own_leave_flag(actor, person, flag):
+    """The practice manager's own leave needs no approval (PEOPLE-07)."""
+    if person.own_leave_without_approval != flag:
+        person.own_leave_without_approval = flag
+        person.save(update_fields=["own_leave_without_approval"])
+        audit.record(actor, person, {"own_leave_without_approval": (not flag, flag)})

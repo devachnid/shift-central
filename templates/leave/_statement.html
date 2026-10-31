@@ -1,0 +1,40 @@
+{% load leave_extras %}
+{% with s=statement %}
+<section class="statement">
+  <form method="get" class="filters"{% if in_dialog %} action="{% url 'profile' person.pk %}" data-dialog-get{% endif %}>
+    {% if in_dialog %}<input type="hidden" name="tab" value="hours">{% endif %}
+    <label>Leave year <select name="year" data-submit-on-change>
+      {% for iso, label in year_options %}<option value="{{ iso }}"{% if iso == s.year|date:"Y-m-d" %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select></label>
+    <noscript><button class="btn btn-quiet" type="submit">Show</button></noscript>
+  </form>
+  {% if s.missing %}<p class="flash flash-warning">No allowance is set for this leave year yet.</p>{% endif %}
+  <dl class="defs">
+    <dt>Annual leave allowance (pro-rated)</dt><dd>{{ s.annual_allowance|hm }}</dd>
+    <dt>Bank holiday allowance (pro-rated)</dt><dd>{{ s.bank_holiday_allowance|hm }}</dd>
+    <dt>Adjustments</dt><dd>{{ s.adjustments.annual|hm }}{% if s.adjustments.bank_holiday %} · bank holiday {{ s.adjustments.bank_holiday|hm }}{% endif %}</dd>
+    <dt>Taken</dt><dd>annual leave {{ s.taken.annual|hm }} · bank holidays {{ s.taken.bank_holiday|hm }}</dd>
+    <dt>Bank holiday balance</dt><dd>{{ s.bank_holiday_balance|hm }}</dd>
+    <dt><strong>Annual leave remaining</strong></dt><dd><strong>{{ s.annual_remaining|hm }}</strong></dd>
+    {% if s.pending.annual or s.pending.bank_holiday %}<dt>Available to request</dt><dd>{{ s.annual_available|hm }} · {{ s.annual_remaining|hm }} less requests waiting for approval</dd>{% endif %}
+    <dt>TOIL earned</dt><dd>{{ s.toil_earned|hm }}{% if s.toil_adjustments %} · adjustments {{ s.toil_adjustments|hm }}{% endif %}</dd>
+    <dt>TOIL taken</dt><dd>{{ s.toil_taken|hm }}</dd>
+    <dt>TOIL remaining</dt><dd>{{ s.toil_remaining|hm }}{% if s.toil_pending %} · {{ s.toil_pending|hm }} waiting for approval{% endif %}</dd>
+  </dl>
+  <table class="table">
+    <thead><tr><th>How it is worked out</th><th>Hours</th></tr></thead>
+    <tbody>
+    {% for kind, text, seconds in s.lines %}
+    <tr class="statement-{{ kind }}"><td>{% if kind == "remaining" or kind == "toil_remaining" %}<strong>{{ text }}</strong>{% else %}{{ text }}{% endif %}</td>
+      <td>{{ seconds|hm }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% if manages %}
+  <div class="dialog-links">
+    <a href="{% url 'leave-adjust' person.pk %}" data-dialog>Adjust…</a>
+    <a href="{% url 'leave-hours-change' person.pk %}" data-dialog>Add hours change…</a>
+  </div>
+  {% endif %}
+</section>
+{% endwith %}
