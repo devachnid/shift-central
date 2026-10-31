@@ -17,12 +17,12 @@ NOTE = "converted to sickness"
 
 
 def eligible(booking):
-    return (booking.status in Booking.ACTIVE and not booking.dates_only and booking.part == Booking.Part.WHOLE
+    return (booking.status == Booking.Status.APPROVED and not booking.dates_only and booking.part == Booking.Part.WHOLE
             and booking.type.draws_from in CONVERTIBLE)
 
 
 def check(booking, leave_type, first, last):
-    if booking.status not in Booking.ACTIVE:
+    if booking.status != Booking.Status.APPROVED:
         raise LeaveError("status", "Only approved leave can be converted")
     if booking.dates_only or booking.part != Booking.Part.WHOLE:
         raise LeaveError("part", "Only whole days of leave can be converted")

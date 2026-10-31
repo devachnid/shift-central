@@ -40,7 +40,7 @@ def view(request, pk):
         "can_cancel": (access.is_self(request.user, b.person) and b.status == Booking.Status.APPROVED and b.last_day >= timezone.localdate())
                       or (manager and b.status in Booking.LIVE),
         "can_edit": manager and b.status in (Booking.Status.APPROVED, Booking.Status.PENDING),
-        "can_convert": manager and b.status in Booking.ACTIVE and not b.dates_only and b.part == Booking.Part.WHOLE
+        "can_convert": manager and b.status == Booking.Status.APPROVED and not b.dates_only and b.part == Booking.Part.WHOLE
                        and b.type.draws_from in ("annual", "bank_holiday"),
         "long_sickness": b.type.sickness and sickness.is_long(b),
         "after_leaving": b.person.end_date is not None and b.last_day > b.person.end_date})

@@ -118,3 +118,17 @@ def test_the_dialog_previews_then_converts(boss, sam, today):
     staff = Client()
     staff.force_login(sam.user)
     assert staff.get(f"/time-off/{holiday.pk}/convert/").status_code == 403
+
+
+def test_a_booking_with_a_cancellation_requested_is_not_convertible(boss, sam):
+    holiday = bookings.book(boss.user, sam, make_type("Holiday"), MON, MON + timedelta(days=4), "whole")
+    bookings.request_cancel(sam.user, holiday)
+    holiday.refresh_from_db()
+    assert holiday.status == "cancel_requested"
+    assert not convert.eligible(holiday)
+    with pytest.raises(LeaveError):
+        convert.check(holiday, sick(), MON, MON)
+    c = Client()
+    c.force_login(boss.user)
+    body = c.get(f"/time-off/{holiday.pk}/").content.decode()
+    assert f"/time-off/{holiday.pk}/convert/" not in body
