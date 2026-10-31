@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { selectionActions } from "./actions";
 import { ApiError, getWindow, post } from "./api";
-import { overlaps, SessionTile, Tile } from "./cell";
+import { LeaveTile, overlaps, SessionTile, Tile } from "./cell";
 import { CellEditor } from "./editor";
 import { handleKey } from "./keys";
+import { selectableWithLeave } from "./leave";
 import { Menu } from "./menu";
 import { menuItems } from "./menu-items";
 import { useMouse } from "./mouse";
 import { block, key, split, type CellKey } from "./selection";
 import { useSort } from "./sort";
-import { toItem, type Changed, type DayJson, type EntryJson, type Item, type Row, type WindowJson } from "./types";
+import { toItem, type Changed, type DayJson, type EntryJson, type Item, type LeaveJson, type Row, type WindowJson } from "./types";
 
 export interface GridProps { from: string; weeks: number; filters: string; api: string; role: string; me: string; reorder: string; bar: string }
 
@@ -101,6 +102,7 @@ export function useGridState(props: GridProps) {
   const days = useMemo(() => shownDays.map((d) => d.date), [shownDays]);
   const rowOf = (person: number): Row | undefined => win?.rows.find((r) => r.person === person);
   const cellEntries = (k: CellKey): EntryJson[] => { const [p, d] = split(k); return rowOf(p)?.cells[d] ?? []; };
+  const leaveAt = (k: CellKey): LeaveJson | undefined => { const [p, d] = split(k); return rowOf(p)?.leave?.[d]; };
   const editable = (k: CellKey) => !!rowOf(split(k)[0])?.editable;
 
   /** What the given cells hold now, for undo. */
@@ -177,8 +179,9 @@ export function useGridState(props: GridProps) {
   });
 
   /** The selection only ever holds cells the viewer may edit; a read-only
-   *  row or a read-only viewer gets the focus ring and nothing selected. */
-  const selectable = (k: CellKey) => !!win?.can_edit && editable(k);
+   *  row, a read-only viewer or a day of approved leave gets the focus ring
+   *  and nothing selected. */
+  const selectable = (k: CellKey) => !!win?.can_edit && selectableWithLeave(editable(k), leaveAt(k));
   const keepSelectable = (keys: Iterable<CellKey>) => new Set([...keys].filter(selectable));
 
   const select = (k: CellKey, mode: "set" | "extend" | "toggle") => {
@@ -190,7 +193,7 @@ export function useGridState(props: GridProps) {
   };
 
   return { win, sel, setSel, anchor, setAnchor, focus, setFocus, editing, setEditing, people, days, shownDays,
-           rowOf, cellEntries, editable, selectable, keepSelectable, snapshot, pushUndo, mutate, undoLast, load, showBar, hideBar, fail, reorder, select };
+           rowOf, cellEntries, leaveAt, editable, selectable, keepSelectable, snapshot, pushUndo, mutate, undoLast, load, showBar, hideBar, fail, reorder, select };
 }
 
 /** The top bar's "Notify staff (n)" follows the server's count. */
@@ -221,7 +224,7 @@ export function RotaGrid(props: GridProps) {
 
   const setEdit = (next: { key: CellKey; text: string } | null) => { editingRef.current = next; g.setEditing(next); };
   const startEdit = (k: CellKey, seed = "") => {
-    if (!g.editable(k)) return;
+    if (!g.editable(k) || g.leaveAt(k)?.status === "approved") return;
     setEdit({ key: k, text: seed || g.cellEntries(k).map((e) => e.line).join("\n") });
   };
   const cancelEdit = () => { setEdit(null); focusGrid(); };
@@ -349,12 +352,13 @@ export function RotaGrid(props: GridProps) {
                   const k = key(r.person, d.date);
                   const entries = r.cells[d.date] ?? [];
                   const sessions = r.sessions[d.date] ?? [];
+                  const leave = r.leave?.[d.date];
                   const isEditing = editing?.key === k;
                   const picked = sel.has(k) && g.selectable(k);
                   const dropping = mouse.dropCells?.has(k);
                   return (
                     <td key={k} role="gridcell" aria-selected={picked} data-cell={k}
-                        class={[picked && "is-selected", focus === k && "is-focus", d.today && "is-today", overlaps(entries) && "has-overlap",
+                        class={[picked && "is-selected", focus === k && "is-focus", d.today && "is-today", leave && leave.status === "approved" && "is-leave", overlaps(entries) && "has-overlap",
                                 dropping && (mouse.dropOk ? "is-drop" : "is-nodrop")].filter(Boolean).join(" ")}
                         title={overlaps(entries) ? "These shifts overlap" : undefined}
                         onMouseDown={sort.on ? undefined : (e) => mouse.onDown(k, e)}
@@ -365,6 +369,7 @@ export function RotaGrid(props: GridProps) {
                           e.preventDefault(); openMenu(k, e.clientX, e.clientY);
                         }}
                         onDblClick={sort.on ? undefined : (e) => { if (!(e.target as Element).closest("textarea")) startEdit(k); }}>
+                      {leave ? <LeaveTile leave={leave} /> : null}
                       {sessions.map((s, i) => <SessionTile key={i} session={s} />)}
                       {isEditing ? (
                         <CellEditor text={editing!.text} onText={(text) => setEdit({ key: k, text })}

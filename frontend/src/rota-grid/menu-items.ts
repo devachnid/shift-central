@@ -20,7 +20,13 @@ export function menuItems(g: GridState, act: Actions, k: CellKey, editCell: (k: 
     { label: none, action: () => pick(undefined) },
   ];
 
+  const leave = g.leaveAt(k);
+
   return [
+    ...(leave ? [
+      { label: "View time off", href: `/time-off/${leave.id}/` },
+      ...(g.rowOf(p)?.editable ? [{ label: "Cancel time off", href: `/time-off/${leave.id}/cancel/` }] : []),
+    ] : [{ label: "Time off…", href: `/time-off/add/?person=${p}&day=${d}` }]),
     { label: "Add", children: [
       { label: "Shift…", href: `/rota/shift/${p}/${d}/` },
       // A new line in the cell's editor; what is typed there is parsed like any cell.
