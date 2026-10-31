@@ -231,3 +231,8 @@ OIDC_STORE_ID_TOKEN = True
 # card says so.
 ROTA_URL = os.environ.get("ROTA_URL", "").rstrip("/")
 ROTA_API_TOKEN = os.environ.get("ROTA_API_TOKEN", "").strip()
+
+# The GP leave feed the GP rota app reads (leave/views/api.py). Comma-separated
+# bearer tokens; unset means nothing is served. See leave/api_auth.py.
+LEAVE_API_TOKENS = frozenset(t.strip() for t in os.environ.get("LEAVE_API_TOKENS", "").split(",") if t.strip())
+API_RATE_LIMIT_PER_MINUTE = int(os.environ.get("API_RATE_LIMIT_PER_MINUTE", "600"))

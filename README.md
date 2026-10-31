@@ -20,6 +20,8 @@ Health card), and the rota grid release:
   apart, downloadable).
 - **The GP feed**: GPs' sessions are read from the GP rota app every fifteen
   minutes, matched by work email, and drawn as read-only tiles.
+- **The leave feed**: approved GP leave is served to the GP rota app at
+  `/api/v1/leave`, behind a bearer token (see "The leave feed" below).
 
 Leave arithmetic and the rest follow in later specs. Managers' guide:
 [docs/admin/rota.md](docs/admin/rota.md).
@@ -183,6 +185,7 @@ has to read unreadable:
     OIDC_RP_CLIENT_SECRET=<printed by register_oidc_client>
     ROTA_URL=https://rota.example.org
     ROTA_API_TOKEN=<one of ROTA_API_TOKENS in the rota app's /etc/rota.env>
+    LEAVE_API_TOKENS=<token the rota app sends>
     EMAIL_HOST=smtp.example.org
     EMAIL_HOST_USER=<relay user>
     EMAIL_HOST_PASSWORD=<relay password>
@@ -206,6 +209,8 @@ comment syntax after one):
 | `OIDC_RP_CLIENT_ID`, `OIDC_RP_CLIENT_SECRET` | Printed once by `register_oidc_client` in Practice HR. |
 | `ROTA_URL` | The GP rota app's address, `https://rota.example.org`, no trailing path. `gp_sync` reads `/api/v1/sessions` from it. It must be `https`. Unset (with `ROTA_API_TOKEN`), there is no GP feed: the grid has no GP tiles, `gp_sync` refuses to run, and the Health card says "not configured". |
 | `ROTA_API_TOKEN` | The bearer token `gp_sync` sends: one of the GP rota app's `ROTA_API_TOKENS` in its `/etc/rota.env` (comma-separated there; make it with `openssl rand -hex 32`, add it, restart the rota app). |
+| `LEAVE_API_TOKENS` | Comma-separated bearer tokens the GP rota app may send to read `/api/v1/leave` (see "The leave feed"). Make each with `openssl rand -hex 32`. Unset, the feed answers 401 to everyone. |
+| `API_RATE_LIMIT_PER_MINUTE` | Requests per minute one address may make to the leave feed, counted whether or not the token is right. Defaults to 600; `0` switches the limit off. The count is per gunicorn worker. |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL` | The outgoing mail relay, used by Notify staff to tell people their rota changed. `EMAIL_HOST` set is what "mail is configured" means; `DEFAULT_FROM_EMAIL` is the sender staff see. With none of them, the app works and Notify staff keeps every change unsent. `EMAIL_USE_TLS` defaults on. |
 | `TRUSTED_PROXY_IPS` | Comma-separated addresses whose `CF-Connecting-IP` header is believed, for the log-in log's address. Defaults to loopback, which is right behind a Cloudflare tunnel; never set it to a wildcard. |
 | `CSP_REPORT_ONLY` | `1` sends the Content-Security-Policy as report-only, blocking nothing: the way back if it blocks something after a deploy. Unset, it is enforced. |
@@ -240,6 +245,42 @@ is in WAL mode, so a root process that opens it can leave `db.sqlite3-wal` and
 `-shm` files owned by root, and the app then cannot open them. Sourcing the
 settings into a shell (`. /etc/shift-central.env`) also fails on a secret key
 holding `(` or `$`, which Django's generated keys do.
+
+### The leave feed
+
+Shift Central serves approved GP leave to the GP rota app, which shows it as
+time off on its own rota. It is the mirror image of the GP feed above: there
+Shift Central reads from the rota app, here the rota app reads from Shift
+Central.
+
+    GET https://shifts.example.org/api/v1/leave?from=2027-03-01&to=2027-03-31
+    Authorization: Bearer <token>
+
+- **Token.** The `<token>` must be one of `LEAVE_API_TOKENS` in
+  `/etc/shift-central.env` (comma-separated; make one with `openssl rand -hex 32`,
+  add it, restart Shift Central). Anything else, or no tokens configured, is a
+  401. Only `GET` is accepted. Tokens are compared in constant time, every
+  request counts against `API_RATE_LIMIT_PER_MINUTE` per address (429 over it),
+  and every response is `Cache-Control: no-store`. Serve it over https only; the
+  tunnel does.
+- **Pointing the rota app at it.** In the rota app's environment file set
+  `SHIFT_CENTRAL_URL=https://shifts.example.org` and
+  `SHIFT_CENTRAL_TOKEN=<token>`, the same value as one of `LEAVE_API_TOKENS`
+  here. The rota app's timer then reads the feed every fifteen minutes. To
+  retire a token, remove it from `LEAVE_API_TOKENS` and restart.
+- **Range.** `from` and `to` are dates (`YYYY-MM-DD`), `to` not before `from`
+  and at most 1,100 days after it; otherwise a 400.
+- **What is served.** Approved bookings (and ones with a cancellation waiting
+  for a decision) of people marked as GPs, with an email address, whose days
+  overlap the range, oldest first:
+  `{"from", "to", "generated_at", "leave": [{"email", "first_day", "last_day",
+  "part", "type"}]}`. `part` is `whole`, `am` or `pm`; a booking by the hour is
+  `am` if it ends by 13:00, `pm` if it starts at or after 13:00, else `whole`.
+  The email is the match key and the type is its name ("Holiday").
+- **What is never served.** A booking's description, a note, a reason, its
+  id, the person's name, hours or cost, pending, declined or cancelled bookings,
+  and anyone who is not a GP. The response body is never logged, and no log
+  line carries a token, an email or a note.
 
 ### The tunnel
 

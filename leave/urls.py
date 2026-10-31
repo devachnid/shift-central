@@ -3,6 +3,7 @@ from django.urls import path
 from leave import views
 
 urlpatterns = [
+    path("api/v1/leave", views.leave_feed, name="api-leave"),
     path("time-off/", views.time_off, name="time-off"),
     path("time-off/add/", views.add, name="time-off-add"),
     path("time-off/request/", views.request_time_off, name="time-off-request"),
