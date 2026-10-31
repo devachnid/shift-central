@@ -60,8 +60,8 @@ Editable by the managers of the person's team. Everyone can read their own.
 | **Name colour** | The colour of the person's name chip on the Staff list (and, later, on the rota). Pick from the swatches or type a hex value. Exactly `#rrggbb` is accepted; anything else is refused with "Choose a colour." Default is navy. A very pale colour makes the white name text unreadable. |
 | **Display order** | A whole number, 0 or more, default 100. People in the same team are listed by it, lowest first, then by last name, then first. Equal numbers (everyone starts at 100) therefore fall back to alphabetical. |
 | **Display on rota** | Whether the person appears on the [rota](rota.md) grid (and Who's in today). Untick for someone who should not be on it; their shifts and the hours report are unaffected. |
-| **Show to other staff** | Whether other *staff* see this person on the Staff list. Untick for someone who should not be listed to colleagues. Managers always see everyone; the person always sees themselves. |
-| **Can see other staff** | Whether the person may see colleagues on the [rota](rota.md). The requirement is that everyone sees every rota, so leave it ticked unless a manager has a reason to restrict someone: with it off they see only their own row. |
+| **Show to other staff** | Whether other *staff* see this person on the Staff list, the rota, the year planner and the Time off list. Untick for someone who should not be listed to colleagues. Managers always see everyone; the person always sees themselves. |
+| **Can see other staff** | Whether the person may see colleagues on the [rota](rota.md). The requirement is that everyone sees every rota, so leave it ticked unless a manager has a reason to restrict someone: with it off they see only their own row, and only their own time off. |
 
 ## Typed here: the Pay & time off tab
 
@@ -70,8 +70,9 @@ Editable by the managers of the person's team. A person reads their own.
 | Field | What it does, and what goes wrong |
 |---|---|
 | **Weekly hours** | Contracted hours a week, to two decimal places, 0 to 999.99. Not shown for a GP, who shows "Sessions, from the GP rota". Leave blank and the person stays on the Health card's *Needs hours and allowances* list. |
-| **Days per week** | Whole number, 1 to 7. With weekly hours it gives the **average day** (weekly hours divided by days, to two places), shown beneath the field. This is the day length leave will be costed in, so a wrong figure here becomes wrong leave later. |
-| **Annual leave allowance (hours)** and **Bank holiday allowance (hours)** | The full-year figures in hours, to two places, for **each of two leave years: this year and next**. In this release the leave year is the calendar year, starting 1 January. Stored only; the leave arithmetic that reads them comes in a later release. With neither year entered, the person stays on the Health card's *Needs hours and allowances* list. |
+| **Days per week** | Whole number, 1 to 7. With weekly hours it gives the **average day** (weekly hours divided by days, to two places), shown beneath the field. This is the day length leave is costed in for a week whose rota has not been written yet, so a wrong figure here becomes a wrong leave cost (the Health card lists those days as *Leave costs to check*). |
+| **Leave year starts (MM-DD)** | The month and day the person's leave year begins, `01-01` for nearly everyone. It can only be changed **before any allowance or booking exists** for the person, because those are filed under the years it makes; after that the form refuses and says so. Someone whose year starts on 1 April shows their allowances as "from 1 Apr 2027". |
+| **Annual leave allowance (hours)** and **Bank holiday allowance (hours)** | The full-year figures in hours, to two places, for **each of two leave years: the current one and the next**. They are what the person's leave is worked out from: the system pro-rates them by the weeks the person is employed in the year (starters, leavers; [Leave](leave.md#allowances-and-hours-changes) explains the rules), and a change of hours part-way through the year is added with **Add hours change…** under the statement, not here. With neither year entered, the person stays on the Health card's *Needs hours and allowances* list. |
 | **Reason for the change** | Up to 300 characters. **Required to change an allowance that is already set**, and recorded with the change. Not needed the first time a year's allowances are entered, or when only hours and days change. |
 
 Things that surprise people:
@@ -79,8 +80,13 @@ Things that surprise people:
 - Give **both** allowances for a year or **neither**. One without the other is refused.
 - You cannot clear an allowance by blanking it: empty boxes mean "no change". To correct a figure, type the right one and give a reason.
 - The tab saves as a whole. If the allowance change is refused (no reason), the hours and days typed with it are **not** saved either.
-- The two years roll over on 1 January: from then, the tab shows the new current year and the one after; the earlier year's figures are still on record but no longer on the tab.
+- The two years roll over on the first day of the person's leave year (1 January for most): from then, the tab shows the new current year and the one after; the earlier year's figures are still on record but no longer on the tab.
 - A GP's allowances are entered here the same way, even though their hours are not.
+
+**Below the form is the person's leave statement**, which the person sees too: the pro-rated allowances, adjustments, each
+booking's days with their costs, the bank holiday balance, what is remaining and what is available, and TOIL, with a
+**Leave year** box to switch between the previous, current and next leave years. Managers also get **Adjust…** and
+**Add hours change…** there. How to read it is in [Leave](leave.md#the-statement-and-how-to-read-it).
 
 ## Typed here: the Notes tab
 
@@ -103,12 +109,20 @@ managers only; see [Access](access.md#the-permissions-link)) and **History**
 |---|---|---|---|
 | General: name, email, team, start and finish dates | Reads | Reads | Cannot open the profile |
 | Display | Reads | Edits | Cannot open |
-| Pay & time off | Reads their own hours and allowances | Edits | Cannot open |
+| Pay & time off | Reads their own hours, allowances and statement | Edits the form; Adjust and Add hours change | Cannot open |
 | Notes | Tab not shown | Edits | Cannot open |
 
 A manager does not manage themselves, so a manager opens their own profile
 read-only and without Notes; another manager with access to them sets their hours.
 For a practice manager, that means another all-teams manager.
+
+**Permissions** (all-teams managers) holds two things: the team ticks, and **Own leave needs no
+approval**. The tick is for the practice manager, whose own leave is then recorded as soon as
+they add it instead of waiting for another manager; it is off for everyone else. Another
+all-teams manager ticks it: nobody can set it on their own profile. It changes
+nothing else: nobody can approve their own request on the Waiting for approval page, flag or not.
+The grant and its removal are recorded in the Activity log like any other change. See
+[Access](access.md#the-permissions-link).
 
 Saving shows "Saved." in the pop-up. A pop-up left open past the ten-minute
 session says "Your session ended. Sign in again." rather than losing the edit

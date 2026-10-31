@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load leave_extras %}
+{% block title %}Time off · AMG Shift Central{% endblock %}
+{% block topbar_actions %}
+  {% if is_manager %}<a class="topbar-action is-primary" href="{% url 'time-off-add' %}" data-dialog>Add time off +</a>
+  <a class="topbar-action" href="?from={{ start|date:'Y-m-d' }}&amp;to={{ end|date:'Y-m-d' }}&amp;type={{ filters.type|urlencode }}&amp;team={{ filters.team|urlencode }}&amp;status={{ filters.status|urlencode }}&amp;person={{ filters.person|urlencode }}&amp;download=1">Download</a>
+  {% else %}<a class="topbar-action is-primary" href="{% url 'time-off-request' %}">Request time off +</a>{% endif %}
+{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <label>From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
+  <label>To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <label>Type <select name="type"><option value="">All</option>{% for t in types %}<option{% if t.name == filters.type %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></label>
+  <label>Team <select name="team"><option value="">All</option>{% for t in teams %}<option{% if t.name == filters.team %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></label>
+  <label>Status <select name="status"><option value="">All</option>{% for v, l in statuses %}<option value="{{ v }}"{% if v == filters.status %} selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+  {% if filters.person %}<input type="hidden" name="person" value="{{ filters.person }}">{% endif %}
+  <button class="btn btn-quiet" type="submit">Filter</button>
+</form>
+<table class="table">
+  <thead><tr><th>Staff</th><th>First day off</th><th>Last day off</th><th>Days</th><th>Type</th><th>Display</th><th>Pay</th><th>Allowance used</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for r in rows %}{% with b=r.booking %}
+  <tr>
+    <td>{{ b.person.name }}</td><td>{{ b.first_day|date:"j M Y" }}</td><td>{{ b.last_day|date:"j M Y" }}</td><td>{{ r.days }}</td>
+    <td>{{ b.type.name }}</td>
+    <td><span class="chip" style="background:{{ b.type.colour }}">{% if r.detail %}{{ b.label }}{% else %}{{ b.type.name }}{% endif %}</span></td>
+    <td>{% if r.detail and b.paid is not None %}{% if b.paid %}Paid{% else %}Unpaid{% endif %}{% endif %}</td>
+    <td>{% if r.cost is not None %}{{ r.cost|hm }}{% endif %}</td>
+    <td>{{ r.status }}</td>
+    <td><a href="{% url 'time-off-view' b.pk %}" data-dialog>View</a>
+        {% if r.manage %} <a href="{% url 'time-off-edit' b.pk %}" data-dialog>Edit</a> <a href="{% url 'time-off-cancel' b.pk %}" data-dialog>Cancel</a>{% endif %}</td>
+  </tr>
+  {% endwith %}{% empty %}<tr><td colspan="10">No time off in this range.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

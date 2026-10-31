@@ -1,0 +1,16 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}Add hours change — {{ person.name }}{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% url 'leave-hours-change' person.pk %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <p class="field-help">A change of contract part-way through a leave year. Allowances are worked out week by week, so give the full-year figures for the new hours.</p>
+  {% for f in form %}
+  <div class="field{% if f.errors %} has-error{% endif %}">
+    <label for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}
+    {% for e in f.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  {% endfor %}
+  <button class="btn btn-dark">Add hours change</button>
+</form>
+{% endblock %}

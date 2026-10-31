@@ -1,6 +1,7 @@
 /** The right-click menu's contents, in FindMyShift's order. */
 import { shapeItem, type Actions } from "./actions";
 import type { GridState } from "./grid";
+import { leaveMenuItems } from "./leave";
 import { departmentItems, shapeItems, swatches, type MenuItem } from "./menu";
 import { key, split, weekOf, type CellKey } from "./selection";
 
@@ -10,6 +11,12 @@ const SIZES = [["sm", "Small"], ["md", "Normal"], ["lg", "Large"]] as const;
 
 export function menuItems(g: GridState, act: Actions, k: CellKey, editCell: (k: CellKey, seed: string) => void): MenuItem[] {
   const [p, d] = split(k);
+  const leave = g.leaveAt(k);
+  const leaveItems = leaveMenuItems(leave, !!g.rowOf(p)?.editable, p, d);
+  // Leave on a cell the viewer cannot select (approved leave, or any leave on
+  // a read-only row) gets only the leave items: nothing else may act on it.
+  if (leave && !g.selectable(k)) return leaveItems;
+
   const win = g.win!;
   const colours = swatches();
   const selectCells = (keys: CellKey[]) => g.setSel(g.keepSelectable(keys));
@@ -21,6 +28,7 @@ export function menuItems(g: GridState, act: Actions, k: CellKey, editCell: (k: 
   ];
 
   return [
+    ...leaveItems,
     { label: "Add", children: [
       { label: "Shift…", href: `/rota/shift/${p}/${d}/` },
       // A new line in the cell's editor; what is typed there is parsed like any cell.

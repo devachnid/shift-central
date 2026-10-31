@@ -2,7 +2,9 @@
 
 **Where:** the Health card at the top of the Staff page (managers); `deploy/manage
 hr_sync` on the server; `shift-central-hr-sync.timer`. The GP rota app's sessions
-are read in the same way, and are [at the end of this page](#gp-sessions-from-the-rota-app).
+are read in the same way, and are [further down](#gp-sessions-from-the-rota-app). The
+other direction, GP leave served to the rota app, is
+[at the end of this page](#the-gp-rota-app-reads-gp-leave-from-here).
 
 ## The mental model
 
@@ -73,7 +75,11 @@ itself on the next run; the card goes back to green and shows the new count.
 ## The Health card
 
 Managers see it at the top of the Staff page. It is built from the people the
-viewer manages, so a team manager's card is about their team. There are four boxes.
+viewer manages, so a team manager's card is about their team. Its boxes are described
+below: Practice HR, Needs hours and allowances, Not in Practice HR's feed, Leaving in the next
+30 days and the three leave boxes (Requests waiting, Leave costs to check, Negative leave
+balances). The GP rota's two are
+[under the GP sessions](#the-health-lines).
 
 **Practice HR** is the last run: "*N* people, 29 Oct 14:30" in the normal colour
 when it worked; "failed 29 Oct 14:30" and the message in red when it did not;
@@ -93,8 +99,9 @@ no hours here.
   at least one of the two leave years' allowances. A person drops off the list once
   all three are there; a person's Pay & time off tab shows a dash for any year not
   entered, so check the other year there.
-- Wrong: ignoring it. A person with no hours cannot be costed for leave once leave
-  arrives.
+- Wrong: ignoring it. A person with no hours is costed at nothing on a day with no rota,
+  and a person with no allowance shows "not set" and cannot request annual leave (a type that takes
+  its days from nothing, such as Training, and TOIL can still be requested).
 
 **Not in Practice HR's feed for a day** lists people the last good run left out
 and who have not been in the feed for over a day. It is measured against the last
@@ -113,9 +120,38 @@ has dropped is not news).
 **Leaving in the next 30 days** lists current people whose finish date falls
 between today and thirty days away, with the date.
 
-- *What to do:* nothing in this release except to know they are going. A later
-  release raises the leaver flags (final pay, leave owed) from this date. A date
-  that looks wrong is wrong in Practice HR; fix it there.
+- *What to do:* nothing except to know they are going: their leave allowance is cut at
+  that date automatically. A later release raises the leaver flags (final pay, leave
+  owed). A date that looks wrong is wrong in Practice HR; fix it there.
+
+**Requests waiting** is the number of leave requests and cancellation requests waiting for a
+decision from the people the viewer manages, the viewer's own not counted (another manager
+decides those), with the age of the oldest and a **Decide** link to
+[Waiting for approval](leave.md#approving).
+
+- *What to do:* decide them. A request the managers have not answered for the number of
+  working days set on Leave settings (3 to begin with) also emails them a reminder, once.
+
+**Leave costs to check** is the number of approved leave days that were costed on an *average
+day* because the person's rota for that week was not written yet, with the first five as links to
+their booking.
+
+- *What to do:* for a whole day, set the shift behind it: right-click the day on the rota grid ›
+  **Shift behind the leave…**, enter the shift the person would have worked and save. The shift stays
+  hidden under the leave, the day is re-costed from it, the managers are emailed and the line goes.
+  Writing the person's other days does not do it. For a **half day** the shift behind it never clears
+  the line: type the figure into the booking's **Allowance used** box (Edit). That box is also the way
+  for a whole day: if the average day is right, type that figure to clear the line. See
+  [what a day costs](leave.md#what-a-day-costs).
+
+**Negative leave balances** lists the first five people whose annual leave remaining (bank holidays
+included) is below zero in their current or next leave year, each a link to their statement. A year with
+no allowance entered is *Needs hours and allowances*, not a deficit. GPs are never listed here, whatever
+their balance.
+
+- *What to do:* it is allowed (a manager can book past the balance, and an hours change can
+  leave one negative), so decide whether to correct it with an adjustment, in which case the line
+  goes, or to leave it. See [the statement](leave.md#the-statement-and-how-to-read-it).
 
 ## Sync now
 
@@ -236,3 +272,49 @@ id, matching on it removes that failure. The practice manager's answer to the
 requirements' amendment 2 (GP sessions shown read-only) also decides whether this stays
 as it is: if the answer is no, this section is what changes.
 
+## The GP rota app reads GP leave from here
+
+**Where:** `GET /api/v1/leave`; `LEAVE_API_TOKENS` in `/etc/shift-central.env`; on the rota app's side,
+`SHIFT_CENTRAL_URL` and `SHIFT_CENTRAL_TOKEN` and its own guide (`docs/admin/shift-central.md` in that repository).
+
+**Shift Central owns every GP's leave; the GP rota app only shows it.** GPs request and are approved here
+like everyone else ([Leave](leave.md#gps)). The rota app calls this address every fifteen minutes
+(its `rota-shift-central.timer`, a year back to two years ahead) so its grid shows who is off and assisted
+fill never assigns them. It replaces the FindMyShift reader the rota app had, which never went live, so
+nothing was migrated. Nothing is ever written to or by this feed in the other direction.
+
+    GET https://<this site>/api/v1/leave?from=2027-03-01&to=2027-03-31
+    Authorization: Bearer <token>
+
+- **The token** is one of `LEAVE_API_TOKENS`, comma-separated, each made with `openssl rand -hex 32`.
+  The rota app has one of them as `SHIFT_CENTRAL_TOKEN`. To change it, add the new one, restart Shift Central,
+  point the rota app at it, then remove the old and restart. Unset, every call is a 401. Keep it out of any
+  file in either repository, and out of chat and tickets.
+- **The range** is `from` and `to`, dates, `to` no earlier than `from` and at most 1,100 days after it.
+- **What is sent**: the approved bookings, and those with a cancellation waiting for a decision, of people
+  marked GP who have an email, whose days overlap the range, as an email, a first and last day, a part
+  (`whole`, `am` or `pm`) and the leave type's name. A booking by the hour is `am` when it ends by 13:00,
+  `pm` when it starts at 13:00 or later, and `whole` if it straddles midday. A leaver's finish date is not
+  looked at; the rota app's own active flag decides.
+- **What is never sent**: the description, any note or reason, the pay, hours or cost, the person's name, an id,
+  waiting, declined or cancelled bookings, or anyone who is not a GP. The response body is never logged.
+- **The match is by work email**, ignoring capitals, as for the sessions. An address that matches no clinician in the rota
+  app is listed on its status page; the fix is to make the two systems' emails agree.
+- **The type's name is the rota app's key.** It turns each name (Holiday, Sick leave…) into its own category
+  with a mapping page; a leave type you add here shows there as its default category until a row is added.
+  Renaming a type here therefore changes what the rota app sees.
+
+| The rota app sees | Meaning |
+|---|---|
+| 401 | The token is missing, wrong, or not in `LEAVE_API_TOKENS` (restart Shift Central after changing it). |
+| 400 | `from` or `to` is missing, not a date, in the wrong order, or the range is over 1,100 days. |
+| 405 | Anything but GET. |
+| 429 | The rate limit: `API_RATE_LIMIT_PER_MINUTE` (600) calls a minute from one address, **counted per gunicorn worker**, and counting calls with a wrong token. `0` turns it off. |
+
+**The rate limit counts the caller's address.** Behind the Cloudflare tunnel that is the real address only if the proxy is in
+`TRUSTED_PROXY_IPS`; if it is not, every caller shares one address and one allowance (README, the settings table).
+
+Shift Central keeps no record of whether the rota app has read the feed: the proof is the rota app's
+Time off from Shift Central status page, or `curl` with the token against the URL above, which
+returns the JSON. Nothing about the feed is on the Health card. Run it by hand with a token from
+`LEAVE_API_TOKENS` in place of `<token>` and never paste a real one into a ticket.

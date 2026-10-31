@@ -17,6 +17,13 @@
   {% endif %}
   <div class="health-item{% if health.needs_setup %} is-warning{% endif %}">Needs hours and allowances<strong>{{ health.needs_setup.count }}</strong>
     {% for p in health.needs_setup|slice:":5" %}<a href="{% url 'profile' p.pk %}" data-dialog>{{ p.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+  <div class="health-item{% if health.waiting %} is-warning{% endif %}">Requests waiting<strong>{{ health.waiting }}</strong>
+    {% if health.waiting %}the oldest for {{ health.waiting_oldest_days }} day{{ health.waiting_oldest_days|pluralize }} · <a href="{% url 'time-off-approve' %}">Decide</a>{% endif %}</div>
+  <div class="health-item{% if health.placeholder_count %} is-warning{% endif %}">Leave costs to check<strong>{{ health.placeholder_count }}</strong>
+    {% for d in health.placeholders|slice:":5" %}<a href="{% url 'time-off-view' d.booking_id %}" data-dialog>{{ d.booking.person.name }}, {{ d.day|date:"j M" }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+    {% if health.placeholder_count > 5 %}and {{ health.placeholder_count|add:"-5" }} more{% endif %}</div>
+  <div class="health-item{% if health.negative %} is-bad{% endif %}">Negative leave balances<strong>{{ health.negative|length }}</strong>
+    {% for p in health.negative|slice:":5" %}<a href="{% url 'profile' p.pk %}?tab=hours" data-dialog>{{ p.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>
   <div class="health-item{% if health.not_seen %} is-bad{% endif %}">Not in Practice HR's feed for a day<strong>{{ health.not_seen.count }}</strong>
     {% for p in health.not_seen|slice:":5" %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
   <div class="health-item{% if health.leaving_soon %} is-warning{% endif %}">Leaving in the next 30 days<strong>{{ health.leaving_soon.count }}</strong>

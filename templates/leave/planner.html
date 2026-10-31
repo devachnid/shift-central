@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Year planner · AMG Shift Central{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <a href="?year={{ previous }}&amp;type={{ type|urlencode }}&amp;team={{ team|urlencode }}" aria-label="Previous year">‹</a>
+  <label>Year <input type="number" name="year" min="2000" max="2100" value="{{ year }}" data-submit-on-change></label>
+  <a href="?year={{ next }}&amp;type={{ type|urlencode }}&amp;team={{ team|urlencode }}" aria-label="Next year">›</a>
+  <label>Type <select name="type" data-submit-on-change><option value="">All</option>{% for t in types %}<option{% if t.name == type %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></label>
+  <label>Team <select name="team" data-submit-on-change><option value="">All</option>{% for t in teams %}<option{% if t.name == team %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></label>
+  <noscript><button class="btn btn-quiet" type="submit">Show</button></noscript>
+</form>
+<div class="planner-scroll">
+<table class="planner">
+  <thead><tr><th scope="col"><span class="visually-hidden">Month</span></th>{% for letter, weekend in columns %}<th scope="col"{% if weekend %} class="is-weekend"{% endif %}>{{ letter }}</th>{% endfor %}</tr></thead>
+  <tbody>
+  {% for month in months %}
+  <tr>
+    <th scope="row">{{ month.name }}</th>
+    {% for _ in month.lead %}<td class="is-blank"></td>{% endfor %}
+    {% for d in month.days %}<td data-day="{{ d.day|date:'Y-m-d' }}" class="{% if d.weekend %}is-weekend{% endif %}{% if d.holiday %} is-holiday{% endif %}"{% if d.holiday %} title="{{ d.holiday }}"{% endif %}><span class="day-num">{{ d.day.day }}</span>{% for c in d.cells %}<span class="planner-chip{% if c.pending %} is-pending{% endif %}" style="background:{{ c.colour }}" title="{{ c.title }}">{{ c.initials }}</span>{% endfor %}</td>{% endfor %}
+    {% for _ in month.trail %}<td class="is-blank"></td>{% endfor %}
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<p class="muted">Shaded days are weekends; the tinted days are bank holidays; hatched chips are requests still waiting for approval.</p>
+{% endblock %}

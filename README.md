@@ -10,7 +10,7 @@ typed in twice.
 Built so far: the foundation (sign-in, people fed from Practice HR every
 fifteen minutes, teams, departments, who may manage whom, staff profiles with
 hours and leave allowances, the activity and log-in logs, and the Staff list's
-Health card), and the rota grid release:
+Health card), the rota grid release, and leave:
 
 - **The rota grid**: a spreadsheet-style grid of days and people that managers
   type shifts into, drag, copy, template, mark as overtime and print, with
@@ -20,16 +20,31 @@ Health card), and the rota grid release:
   apart, downloadable).
 - **The GP feed**: GPs' sessions are read from the GP rota app every fifteen
   minutes, matched by work email, and drawn as read-only tiles.
+- **Leave**, in hours, for everyone (GPs included): allowances pro-rated by the weeks a
+  person is employed, with dated changes of hours; what a day costs read from the rota
+  (an average day where the week has no rota); requests, approvals, cancellations and
+  manager bookings, whole days, half days or by the hour, for all fifteen leave types;
+  bank holidays (one, or booked for everyone), blackouts, TOIL, adjustments and a
+  statement that explains every figure; a leave tile on the grid and the shifts it covers
+  hidden; the time off list, the year planner and the leave report; and emails to the
+  managers and the person, with a reminder for requests left waiting
+  (`shift-central-leave-reminders.timer`). Balances are worked out, never stored.
+- **The leave feed**: approved GP leave is served to the GP rota app at
+  `/api/v1/leave`, behind a bearer token (see "The leave feed" below). The rota app
+  reads it every fifteen minutes in place of FindMyShift.
 
-Leave arithmetic and the rest follow in later specs. Managers' guide:
-[docs/admin/rota.md](docs/admin/rota.md).
+Sickness records, the payroll report, the leaver and year-end flags and the phone
+app's push notifications follow in later specs. Managers' guides:
+[docs/admin/leave.md](docs/admin/leave.md) and [docs/admin/rota.md](docs/admin/rota.md).
 
 The practice manager's requirements, approved on 29 October 2026, are in
 [docs/requirements/](docs/requirements/README.md): thirteen documents from
 `00-overview.md` to `12-decisions-and-open-questions.md`. Start with the
 overview, then the leave policy (`05`) and its worked examples (`06`), which
-become the leave calculation's tests. This release's design is in
-[docs/superpowers/specs/2026-10-29-foundation-design.md](docs/superpowers/specs/2026-10-29-foundation-design.md);
+become the leave calculation's tests. The foundation's design is in
+[docs/superpowers/specs/2026-10-29-foundation-design.md](docs/superpowers/specs/2026-10-29-foundation-design.md)
+and the leave release's, with the deviations recorded while it was built, in
+[docs/superpowers/specs/2026-10-31-leave-design.md](docs/superpowers/specs/2026-10-31-leave-design.md);
 later specs and the plans go in `docs/superpowers/specs/` and
 `docs/superpowers/plans/`, as in the rota and HR repositories.
 
@@ -45,7 +60,7 @@ the requirements README.
     pytest
     cd frontend && npm test
 
-The browser test (the grid, driven in Chromium) is skipped unless asked for:
+The browser tests (the grid, and booking and cancelling leave from its menu, driven in Chromium) are skipped unless asked for:
 `pip install -r requirements-dev.txt` (Playwright and its pytest plugin, kept
 out of `requirements.txt` so the VPS never installs them), then
 `python -m playwright install chromium`, then `E2E=1 python -m pytest -q tests/e2e`.
@@ -183,6 +198,7 @@ has to read unreadable:
     OIDC_RP_CLIENT_SECRET=<printed by register_oidc_client>
     ROTA_URL=https://rota.example.org
     ROTA_API_TOKEN=<one of ROTA_API_TOKENS in the rota app's /etc/rota.env>
+    LEAVE_API_TOKENS=<token the rota app sends>
     EMAIL_HOST=smtp.example.org
     EMAIL_HOST_USER=<relay user>
     EMAIL_HOST_PASSWORD=<relay password>
@@ -206,8 +222,10 @@ comment syntax after one):
 | `OIDC_RP_CLIENT_ID`, `OIDC_RP_CLIENT_SECRET` | Printed once by `register_oidc_client` in Practice HR. |
 | `ROTA_URL` | The GP rota app's address, `https://rota.example.org`, no trailing path. `gp_sync` reads `/api/v1/sessions` from it. It must be `https`. Unset (with `ROTA_API_TOKEN`), there is no GP feed: the grid has no GP tiles, `gp_sync` refuses to run, and the Health card says "not configured". |
 | `ROTA_API_TOKEN` | The bearer token `gp_sync` sends: one of the GP rota app's `ROTA_API_TOKENS` in its `/etc/rota.env` (comma-separated there; make it with `openssl rand -hex 32`, add it, restart the rota app). |
+| `LEAVE_API_TOKENS` | Comma-separated bearer tokens the GP rota app may send to read `/api/v1/leave` (see "The leave feed"). Make each with `openssl rand -hex 32`. Unset, the feed answers 401 to everyone. |
+| `API_RATE_LIMIT_PER_MINUTE` | Requests per minute one address may make to the leave feed, counted whether or not the token is right. Defaults to 600; `0` switches the limit off. The count is per gunicorn worker. |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL` | The outgoing mail relay, used by Notify staff to tell people their rota changed. `EMAIL_HOST` set is what "mail is configured" means; `DEFAULT_FROM_EMAIL` is the sender staff see. With none of them, the app works and Notify staff keeps every change unsent. `EMAIL_USE_TLS` defaults on. |
-| `TRUSTED_PROXY_IPS` | Comma-separated addresses whose `CF-Connecting-IP` header is believed, for the log-in log's address. Defaults to loopback, which is right behind a Cloudflare tunnel; never set it to a wildcard. |
+| `TRUSTED_PROXY_IPS` | Comma-separated addresses whose `CF-Connecting-IP` header is believed, for the log-in log's address. Defaults to loopback, which is right behind a Cloudflare tunnel; never set it to a wildcard. The leave feed's rate limit is per client address, so if the proxy's address is not trusted here every caller shares one bucket. |
 | `CSP_REPORT_ONLY` | `1` sends the Content-Security-Policy as report-only, blocking nothing: the way back if it blocks something after a deploy. Unset, it is enforced. |
 
 Then:
@@ -216,7 +234,7 @@ Then:
     deploy/manage migrate
     deploy/manage createsuperuser
     cp deploy/gunicorn.service /etc/systemd/system/shift-central.service
-    cp deploy/shift-central-backup.* deploy/shift-central-clearsessions.* deploy/shift-central-hr-sync.* deploy/shift-central-gp-sync.* /etc/systemd/system/
+    cp deploy/shift-central-backup.* deploy/shift-central-clearsessions.* deploy/shift-central-hr-sync.* deploy/shift-central-gp-sync.* deploy/shift-central-leave-reminders.* /etc/systemd/system/
     systemctl daemon-reload
     systemctl enable --now shift-central shift-central-backup.timer shift-central-clearsessions.timer
     deploy/manage hr_sync
@@ -228,8 +246,17 @@ Then:
 enabled, so that a wrong URL or token shows up as a message on your screen
 rather than as a failed run on the Health card an hour later. A fresh database
 has no people until `hr_sync` succeeds, and `gp_sync` needs the GPs to be there
-(and `ROTA_URL` and `ROTA_API_TOKEN` set); leave the last two lines out until
+(and `ROTA_URL` and `ROTA_API_TOKEN` set); leave the two `gp_sync` lines out until
 the GP rota app has its sessions feed.
+
+Switch the leave reminders on only once mail works (`EMAIL_HOST` set and a test
+message delivered):
+
+    deploy/manage leave_reminders
+    systemctl enable --now shift-central-leave-reminders.timer
+
+Enabled before that, each reminder is recorded as "mail not configured" and not
+sent, and the request counts as reminded, so it is not reminded again.
 
 **Run every management command through `deploy/manage`**, as root:
 `deploy/manage createsuperuser`, `deploy/manage check --deploy`, `deploy/manage
@@ -240,6 +267,42 @@ is in WAL mode, so a root process that opens it can leave `db.sqlite3-wal` and
 `-shm` files owned by root, and the app then cannot open them. Sourcing the
 settings into a shell (`. /etc/shift-central.env`) also fails on a secret key
 holding `(` or `$`, which Django's generated keys do.
+
+### The leave feed
+
+Shift Central serves approved GP leave to the GP rota app, which shows it as
+time off on its own rota. It is the mirror image of the GP feed above: there
+Shift Central reads from the rota app, here the rota app reads from Shift
+Central.
+
+    GET https://shifts.example.org/api/v1/leave?from=2027-03-01&to=2027-03-31
+    Authorization: Bearer <token>
+
+- **Token.** The `<token>` must be one of `LEAVE_API_TOKENS` in
+  `/etc/shift-central.env` (comma-separated; make one with `openssl rand -hex 32`,
+  add it, restart Shift Central). Anything else, or no tokens configured, is a
+  401. Only `GET` is accepted. Tokens are compared in constant time, every
+  request counts against `API_RATE_LIMIT_PER_MINUTE` per address (429 over it),
+  and every response is `Cache-Control: no-store`. Serve it over https only; the
+  tunnel does.
+- **Pointing the rota app at it.** In the rota app's environment file set
+  `SHIFT_CENTRAL_URL=https://shifts.example.org` and
+  `SHIFT_CENTRAL_TOKEN=<token>`, the same value as one of `LEAVE_API_TOKENS`
+  here. The rota app's timer then reads the feed every fifteen minutes. To
+  retire a token, remove it from `LEAVE_API_TOKENS` and restart.
+- **Range.** `from` and `to` are dates (`YYYY-MM-DD`), `to` not before `from`
+  and at most 1,100 days after it; otherwise a 400.
+- **What is served.** Approved bookings (and ones with a cancellation waiting
+  for a decision) of people marked as GPs, with an email address, whose days
+  overlap the range, oldest first:
+  `{"from", "to", "generated_at", "leave": [{"email", "first_day", "last_day",
+  "part", "type"}]}`. `part` is `whole`, `am` or `pm`; a booking by the hour is
+  `am` if it ends by 13:00, `pm` if it starts at or after 13:00, else `whole`.
+  The email is the match key and the type is its name ("Holiday").
+- **What is never served.** A booking's description, a note, a reason, its
+  id, the person's name, hours or cost, pending, declined or cancelled bookings,
+  and anyone who is not a GP. The response body is never logged, and no log
+  line carries a token, an email or a note.
 
 ### The tunnel
 
@@ -252,7 +315,10 @@ later and sign-in stops until all three agree.
 
 `shift-central-hr-sync.timer` runs `hr_sync` every fifteen minutes,
 `shift-central-gp-sync.timer` runs `gp_sync` every fifteen minutes at seven past
-the quarter hour (so the two never coincide), and
+the quarter hour (so the two never coincide),
+`shift-central-leave-reminders.timer` runs `leave_reminders` at 08:20 on weekdays
+(it emails the managers about leave requests left waiting longer than the Leave
+settings page allows, once per request), and
 `shift-central-clearsessions.timer` clears expired sessions nightly (a session
 lasts ten minutes from the last request, and each sign-in leaves a row).
 
@@ -388,24 +454,30 @@ plaintext. It is optional: a host without it still backs up locally.
 
 From the box's own copy (the usual case: a bad deploy or a mistaken change):
 
-    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer
+    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer
     ls -l /var/lib/shift-central/backups
     cp -p /var/lib/shift-central/db.sqlite3 /root/db-before-restore.sqlite3
     install -o shift-central -g shift-central -m 600 /var/lib/shift-central/backups/db-<date>.sqlite3 /var/lib/shift-central/db.sqlite3
     rm -f /var/lib/shift-central/db.sqlite3-wal /var/lib/shift-central/db.sqlite3-shm
     deploy/manage migrate
-    systemctl start shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer
+    systemctl start shift-central shift-central-hr-sync.timer
+
+Then start `shift-central-gp-sync.timer` and `shift-central-leave-reminders.timer` as well, but
+only the ones that were enabled (`systemctl is-enabled shift-central-gp-sync.timer
+shift-central-leave-reminders.timer` says): a timer started before its settings are in place
+fails every fifteen minutes (the GP sync) or marks requests as reminded when no mail can go
+(the reminders).
 
 Stopping first matters: a copy dropped under a running app leaves the old
 `-wal` file beside it, and SQLite would replay it into the restored database.
-The first line also stops the syncs, so they cannot write into the restored file
+The first line also stops the syncs and the reminders, so they cannot write into the restored file
 before you have looked at it. Keep the `cp -p` of the database you are
 replacing until you are sure. `deploy/manage migrate` brings an older copy up
 to the current code, and the next `hr_sync` (within fifteen minutes) brings
 the people it holds up to date from Practice HR, so a restore never needs HR
 restored with it. What a restore loses is what was typed here after the copy:
-hours, allowances, notes, departments, manager grants, and the audit entries
-for them.
+hours, allowances, notes, departments, manager grants, leave requested or booked, and
+the audit entries for them.
 
 From the PBS (the box is gone): install the same units on a fresh VPS, restore
 the snapshot as in step 5 above using the key you kept off the box, copy the

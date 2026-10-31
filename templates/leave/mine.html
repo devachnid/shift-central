@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% load leave_extras %}
+{% block title %}My leave · AMG Shift Central{% endblock %}
+{% block topbar_actions %}<a class="topbar-action is-primary" href="{% url 'time-off-request' %}">Request time off +</a>{% endblock %}
+{% block content %}
+{% include "leave/_statement.html" %}
+<table class="table">
+  <thead><tr><th>Status</th><th>Type</th><th>Dates</th><th>Part</th><th>Allowance used</th><th>Note</th><th></th></tr></thead>
+  <tbody>
+  {% for r in rows %}{% with b=r.b %}
+  <tr>
+    <td>{{ b.get_status_display }}</td>
+    <td><span class="leave-swatch" style="background:{{ b.type.colour }}"></span> {{ b.label }}</td>
+    <td>{{ b.first_day|date:"j M Y" }}{% if b.last_day != b.first_day %} – {{ b.last_day|date:"j M Y" }}{% endif %}</td>
+    <td>{{ b.get_part_display }}{% if b.part == "times" %} {{ b.start|time:"H:i" }}–{{ b.finish|time:"H:i" }}{% endif %}</td>
+    <td>{% if r.cost is not None %}{{ r.cost|hm }}{% endif %}</td>
+    <td>{{ b.staff_note }}{% if b.manager_note %}{% if b.staff_note %} · {% endif %}Manager: {{ b.manager_note }}{% endif %}</td>
+    <td><a href="{% url 'time-off-view' b.pk %}" data-dialog>View</a>{% if r.can_cancel %} <a href="{% url 'time-off-cancel' b.pk %}" data-dialog>Request cancellation</a>{% endif %}</td>
+  </tr>
+  {% endwith %}{% empty %}<tr><td colspan="7">You have no time off yet.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

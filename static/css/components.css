@@ -134,3 +134,27 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
 }
 .report-block { margin-bottom: var(--sp-5); } .report-block h2 { font-size: var(--fs-md); margin: 0 0 var(--sp-2); } .table tr.subtotal td, .table tfoot td { font-weight: 700; background: var(--ground); }
 .today-date { font-size: var(--fs-lg); margin: 0 0 var(--sp-3); } .today-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--sp-4); } .today-site { background: var(--surface); border: 1px solid var(--hairline); border-radius: 6px; padding: var(--sp-3); } .today-site h3 { margin: 0 0 var(--sp-2); font-size: var(--fs-md); } .today-site h4 { margin: var(--sp-2) 0 4px; font-size: var(--fs-sm); color: var(--muted); } .today-row { padding: 6px 0; border-top: 1px solid var(--hairline); font-size: var(--fs-md); } .muted { color: var(--muted); }
+.tile-leave { color: #fff; font-weight: 700; }
+.leave-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: baseline; }
+.preview-table { margin: var(--sp-3) 0; } .preview-table td input { width: 8ch; padding: 4px 6px; border: 1px solid var(--field-border); border-radius: var(--radius); font: inherit; }
+
+/* --- year planner ---------------------------------------------------------- */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.planner-scroll { overflow-x: auto; margin-bottom: var(--sp-3); }
+.planner { border-collapse: collapse; width: 100%; table-layout: fixed; min-width: 960px; background: var(--surface); }
+.planner th { font-size: var(--fs-xs); color: var(--muted); font-weight: 700; text-align: center; padding: 2px; }
+.planner tbody th { width: 6.5%; text-align: left; padding: 2px 6px; color: var(--ink-soft); }
+.planner td { width: 2.6%; vertical-align: top; font-size: var(--fs-xs); border: 1px solid var(--hairline); padding: 1px 2px; height: 34px; overflow: hidden; }
+.planner .day-num { display: block; color: var(--muted); }
+.planner .is-weekend { background: var(--ground); }
+.planner .is-holiday { background: var(--pale); }
+.planner .is-blank { border-color: transparent; background: none; }
+.planner-chip { display: block; color: #fff; border-radius: 2px; padding: 0 2px; margin-top: 1px; font-weight: 700; line-height: 1.3; overflow: hidden; text-overflow: clip; white-space: nowrap; }
+.planner-chip.is-pending { background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, .5) 0 3px, transparent 3px 6px); }
+
+/* --- leave settings pages -------------------------------------------------- */
+.stack { max-width: 560px; }
+.inline-form { display: inline; }
+.check { display: flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-md); color: var(--ink); }
+fieldset.field { border: 0; padding: 0; } fieldset.field legend { font-size: var(--fs-xs); color: var(--muted); padding: 0; margin-bottom: 2px; }
+.field .check input { width: auto; }

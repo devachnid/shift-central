@@ -24,9 +24,15 @@ export interface DayJson { date: string; label: string; today: boolean; weekend:
 export interface Department { id: number; name: string; colour: string }
 export interface Shape { start: string; finish: string; break_minutes: number; department: number | null; label: string }
 
+export interface LeaveJson {
+  id: number; type: string; colour: string; part: "whole" | "am" | "pm" | "times"; label: string;
+  status: "approved" | "pending"; times?: string; description?: string; paid?: boolean | null; cost?: number | null;
+}
+
 export interface Row {
   person: number; name: string; colour: string; job_title: string; team: string; is_gp: boolean;
   editable: boolean; cells: Record<string, EntryJson[]>; sessions: Record<string, SessionJson[]>;
+  leave: Record<string, LeaveJson>;
 }
 
 export interface Options {
@@ -40,7 +46,7 @@ export interface WindowJson {
   common: Shape[]; recent: Shape[]; options: Options; unnotified: number; can_edit: boolean;
 }
 
-export interface Changed { cells: Record<string, Record<string, EntryJson[]>>; skipped: number; unnotified: number }
+export interface Changed { cells: Record<string, Record<string, EntryJson[]>>; skipped: number; skipped_days?: number; unnotified: number }
 /** A block cell is its items; or a string, text from outside the island
  *  (one item per line) that the server parses; or null for a cell the copy
  *  did not take (a day hidden in the grid, a cell left out of the

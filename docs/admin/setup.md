@@ -50,13 +50,19 @@ early December 2026, so it is the dependency with a date.
    to the log" fallback.
    Without `ROTA_URL` or `ROTA_API_TOKEN` the grid has no GP tiles and the Health card
    says "GP rota: not configured".
+   Add `LEAVE_API_TOKENS` too if the GP rota app is to read GP leave from here: one or
+   more tokens, comma-separated, made with `openssl rand -hex 32`; the rota app gets one
+   of them (see [the GP leave feed](sync.md#the-gp-rota-app-reads-gp-leave-from-here)).
+   Without it the feed answers 401 to everyone, and nothing else is affected.
 
 3. **Migrate**: `deploy/manage migrate`. This creates the database in
-   `/var/lib/shift-central` and puts the seventeen
-   [departments](departments.md) in. Run `deploy/manage collectstatic --noinput`
+   `/var/lib/shift-central` and puts in the seventeen [departments](departments.md),
+   the fifteen [leave types](leave.md#leave-types) and the England and Wales bank
+   holidays for 2026 and 2027. Run `deploy/manage collectstatic --noinput`
    before the first start, and enable the service and the two housekeeping timers
-   as the README shows. The units for both feeds are copied then too; their timers
-   are enabled in step 5.
+   as the README shows. The units for both feeds and for the leave reminders are
+   copied then too; the feeds' timers are enabled in step 5, and the reminders'
+   once mail works (step 11).
 
 4. **Create the superuser**: `deploy/manage createsuperuser`, with a long password.
    It is the break-glass account: it signs in at `/admin/` with a password even
@@ -96,7 +102,8 @@ early December 2026, so it is the dependency with a date.
 9. **Fill in hours, days per week and leave allowances** for everyone, starting
    with whoever the Health card's *Needs hours and allowances* box lists. For each
    person: profile › Pay & time off. Do the two leave years, and remember that
-   allowances are in **hours**. Then Display for job titles and name colours. The
+   allowances are in **hours**; the pro-rating for starters and leavers is done
+   for you ([Leave](leave.md#allowances-and-hours-changes)). Then Display for job titles and name colours. The
    managers of each team do their own team; an all-teams manager does the managers
    themselves, since nobody sets their own. Allowances can be entered without a
    reason the first time, but a reason is demanded for every later change, so
@@ -106,33 +113,71 @@ early December 2026, so it is the dependency with a date.
     distinct (see [Departments](departments.md)), and archive any the practice
     will not use.
 
+11. **Switch the leave reminders on**: with `EMAIL_HOST` set, run
+    `deploy/manage leave_reminders` once (it prints how many reminders it sent) and
+    enable `shift-central-leave-reminders.timer`. Then, for the practice manager only,
+    tick *Own leave needs no approval* under their Permissions link, and look over
+    Settings › Leave types, Bank holidays and Leave settings; see [Leave](leave.md).
+
 When the Health card shows the feed green, no one needing hours, and nobody in "not
 in the feed", the foundation is ready for the rota grid. Then lay the rotas out
 (see [the rota](rota.md)), and press **Notify staff** when each team's is ready.
 
-## Upgrading a box that runs the Foundation
+## Upgrading a box that runs the Foundation or the rota grid
 
-A server already running Shift Central from before the rota grid takes the
-release like any other pull, plus the new settings and the GP feed's units. In
-`/srv/shift-central`, as root:
+A server already running Shift Central takes the release like any other pull, plus the
+new settings and units. This is the checklist for the leave release, and it also
+carries a box from the Foundation through the rota grid's steps (6 and 8 are the
+GP sync's). In `/srv/shift-central`, as root:
 
 1. `git pull`.
 2. `.venv/bin/pip install -r requirements.txt`. Only that file: `requirements-dev.txt`
    is the browser test's (Playwright), and the server never needs it.
-3. `deploy/manage migrate` (the `shifts` and `messaging` tables, and the seventeen
-   departments if they are not there yet).
+3. `deploy/manage migrate`. For leave it creates the `leave` tables and fills them: the
+   fifteen leave types and the bank holidays for 2026 and 2027. It also adds the allowance
+   periods (each existing allowance row gains the first day of its year as its start, and
+   a place for weekly hours, days per week and "hours already copied", so every figure
+   already typed stands as it was) and the column that lets a rota entry be covered by
+   leave. A box from before the rota grid also gets the `shifts` and `messaging` tables and
+   the seventeen departments. Nothing existing is changed or removed.
 4. `deploy/manage collectstatic --noinput`, then `deploy/manage check --deploy`.
-5. **Add the new variables** to `/etc/shift-central.env`: `ROTA_URL` and
-   `ROTA_API_TOKEN` (go-live step 1 makes the token), and the `EMAIL_*` values
-   (go-live step 2). Either can wait; see step 2 for what works without them.
-6. **Copy the GP sync's units**: `cp deploy/shift-central-gp-sync.* /etc/systemd/system/`,
-   and `cp deploy/gunicorn.service /etc/systemd/system/shift-central.service` if
-   it changed.
+5. **Add the new variables** to `/etc/shift-central.env`: `LEAVE_API_TOKENS` (a token for
+   the GP rota app, made with `openssl rand -hex 32`; see go-live step 2), `ROTA_URL` and
+   `ROTA_API_TOKEN` and the `EMAIL_*` values if they are not there yet (go-live steps 1
+   and 2). `API_RATE_LIMIT_PER_MINUTE` is optional. Any can wait; see step 2 for what
+   works without them.
+6. **Copy the units**: `cp deploy/shift-central-gp-sync.* deploy/shift-central-leave-reminders.*
+   /etc/systemd/system/`, and `cp deploy/gunicorn.service /etc/systemd/system/shift-central.service`
+   if it changed.
 7. `systemctl daemon-reload`, then `systemctl restart shift-central`.
 8. **Enable the GP timer only once `ROTA_URL` and `ROTA_API_TOKEN` are set**: run
    `deploy/manage gp_sync` once and check it says how many GPs it read, then
    `systemctl enable --now shift-central-gp-sync.timer`. Enabled without them, the
    timer fails every fifteen minutes and fills the journal with it.
+9. **Enable the leave reminders timer once mail works** (`EMAIL_HOST` set and a test message
+   delivered): run `deploy/manage leave_reminders` once, which prints "0 reminders sent" on a new
+   install, then `systemctl enable --now shift-central-leave-reminders.timer`. It runs at 08:20 on
+   weekdays. Enabled earlier, each reminder is recorded as "mail not configured" and not sent,
+   and the request counts as reminded, so it is not reminded again. With `EMAIL_*` unset, every
+   other leave email is recorded the same way.
+10. **In the GP rota app**, on its own server. A box that ran its old FindMyShift reader first
+    has that timer disabled and removed: its guide's "Moving from FindMyShift" gives the commands
+    (`rota-findmyshift.timer`). Then, as root in `/srv/rota`, pull the release. Set
+    `SHIFT_CENTRAL_URL` (this box's address, `https`) and `SHIFT_CENTRAL_TOKEN` (one of the
+    `LEAVE_API_TOKENS` from step 5) in its environment file, so that `check --deploy` can check
+    them. Follow the rota README's *Redeploying* section: `.venv/bin/pip install -r requirements.txt`,
+    `deploy/manage migrate`, `deploy/manage collectstatic --noinput` (this release changes the
+    rota's CSS, so it is not optional) and `deploy/manage check --deploy`. Copy
+    `deploy/rota-shift-central.service` and `deploy/rota-shift-central.timer` to
+    `/etc/systemd/system/`, run `systemctl daemon-reload`, then `systemctl restart rota`. Then follow its own
+    `docs/admin/shift-central.md` for the rest, in its order: give each clinician a login email, map
+    the leave types, run the first sync, enable the timer. Until then the rota app has no GP leave
+    and nothing here is affected.
+
+Allowances already typed stand as they were. The leave pages start empty; before staff are
+asked to request 2027 leave, check that everyone has a 2027 allowance: the Health card's
+*Needs hours and allowances* box lists anyone without hours or without an allowance for the
+current or the next leave year.
 
 ## Backups
 
@@ -152,8 +197,9 @@ A failed push appears nowhere else. Test the PBS copy by restoring it on another
 machine with only the key and opening it (README, step 5 of the off-site setup); a
 backup never restored is not yet a backup.
 
-What a copy holds: people's names and emails, hours, allowances, managers' notes, the
-audit entries, and session keys that work as login cookies. Treat any copy, wherever
+What a copy holds: people's names and emails, hours, allowances, leave bookings with their
+descriptions and notes, managers' notes, the audit entries, and session keys that work as
+login cookies. Treat any copy, wherever
 it is, as the live database.
 
 ## Restore
@@ -165,13 +211,19 @@ migration that went wrong.
 
 From the box's own copy:
 
-    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer
+    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer
     ls -l /var/lib/shift-central/backups
     cp -p /var/lib/shift-central/db.sqlite3 /root/db-before-restore.sqlite3
     install -o shift-central -g shift-central -m 600 /var/lib/shift-central/backups/db-<date>.sqlite3 /var/lib/shift-central/db.sqlite3
     rm -f /var/lib/shift-central/db.sqlite3-wal /var/lib/shift-central/db.sqlite3-shm
     deploy/manage migrate
-    systemctl start shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer
+    systemctl start shift-central shift-central-hr-sync.timer
+
+Then start `shift-central-gp-sync.timer` and `shift-central-leave-reminders.timer` as well, but
+only the ones that were enabled (`systemctl is-enabled shift-central-gp-sync.timer
+shift-central-leave-reminders.timer` says): a timer started before its settings are in place
+fails every fifteen minutes (the GP sync) or marks requests as reminded when no mail can go
+(the reminders).
 
 Stop first, and remove the old `-wal` and `-shm` files: otherwise SQLite replays a
 stale log into the restored file. `migrate` brings an older copy up to the current
@@ -179,8 +231,9 @@ code. The next sync (within fifteen minutes, or *Sync now*) brings the people
 up to date from Practice HR, so **Practice HR does not need restoring with it**; the
 next GP sync does the same for the GP sessions. What is lost is what was typed here
 after the copy was made: hours, allowances, notes, departments, manager grants and
-their entries in the Activity log, **and any rota changes**: shifts, templates and
-the list of changes not yet notified. Check those against the History links, and
+their entries in the Activity log, **leave requested, approved or booked since**, and any
+adjustments, **and any rota changes**: shifts, templates and the list of changes not yet
+notified. Check those against the History links, and
 look over the rota for the weeks that were being laid out, and re-enter what is missing.
 
 From the Proxmox Backup Server, when the machine is gone: build a fresh server as

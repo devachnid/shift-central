@@ -1,0 +1,29 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}Adjust leave — {{ person.name }}{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% url 'leave-adjust' person.pk %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <div class="field{% if form.leave_year.errors %} has-error{% endif %}">
+    <label for="id_leave_year">Leave year</label>
+    <select name="leave_year" id="id_leave_year">
+      {% for y in years %}<option value="{{ y|date:'Y-m-d' }}"{% if selected == y|date:'Y-m-d' %} selected{% endif %}>Starting {{ y|date:"j M Y" }}</option>{% endfor %}
+    </select>
+    {% for e in form.leave_year.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <div class="field{% if form.account.errors %} has-error{% endif %}">
+    <label for="id_account">Account</label>{{ form.account }}
+    {% for e in form.account.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <div class="field{% if form.hours.errors %} has-error{% endif %}">
+    <label for="id_hours">Hours</label>{{ form.hours }}
+    <span class="field-help">{{ form.hours.help_text }}</span>
+    {% for e in form.hours.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <div class="field{% if form.reason.errors %} has-error{% endif %}">
+    <label for="id_reason">Reason</label>{{ form.reason }}
+    {% for e in form.reason.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <button class="btn btn-dark">Add adjustment</button>
+</form>
+{% endblock %}

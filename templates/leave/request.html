@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load leave_extras %}
+{% block title %}Request time off · AMG Shift Central{% endblock %}
+{% block content %}
+{% include "leave/_balances.html" %}
+<form method="post" action="{% url 'time-off-request' %}" class="request-form">
+  {% csrf_token %}<input type="hidden" name="preview" value="1">
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  {% if preview.error %}<p class="flash flash-error">{{ preview.error }}</p>{% endif %}
+  <div class="field{% if form.type.errors %} has-error{% endif %}"><label for="id_type">Type of time off</label>{{ form.type }}{% for e in form.type.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  <div class="field"><label for="id_description">Display</label>{{ form.description }}</div>
+  <div class="field-row">
+    <div class="field{% if form.first_day.errors %} has-error{% endif %}"><label for="id_first_day">First day off</label>{{ form.first_day }}{% for e in form.first_day.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+    <div class="field{% if form.last_day.errors %} has-error{% endif %}"><label for="id_last_day">Last day off</label>{{ form.last_day }}{% for e in form.last_day.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  </div>
+  <div class="field"><label for="id_part">Days to include</label>{{ form.part }}{% for e in form.part.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  <div class="field-row"><div class="field"><label for="id_start">Start</label>{{ form.start }}</div><div class="field"><label for="id_finish">Finish</label>{{ form.finish }}{% for e in form.finish.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div></div>
+  {% include "leave/_preview.html" with editable=False %}
+  <div class="field"><label for="id_staff_note">Note for your manager</label>{{ form.staff_note }}</div>
+  {% if can_send %}<button class="btn btn-dark" name="preview" value="" data-send>Send request</button>{% else %}<p class="field-help">Choose the dates to see the cost{% if preview.over %}; this is more than you have available{% endif %}.</p>{% endif %}
+</form>
+{% endblock %}

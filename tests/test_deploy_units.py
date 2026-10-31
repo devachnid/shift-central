@@ -61,11 +61,12 @@ def _directives(path):
     return out
 
 
-def test_there_are_six_services():
+def test_there_are_seven_services():
     assert [p.name for p in SERVICES] == [
         "gunicorn.service", "shift-central-backup.service",
         "shift-central-clearsessions.service", "shift-central-gp-sync.service",
-        "shift-central-hr-sync.service", "shift-central-pbs.service"]
+        "shift-central-hr-sync.service", "shift-central-leave-reminders.service",
+        "shift-central-pbs.service"]
 
 
 @pytest.mark.parametrize("unit", SERVICES, ids=lambda p: p.name)
@@ -125,6 +126,13 @@ def test_the_gp_sync_service_runs_gp_sync_on_a_timer_offset_from_the_hr_one():
     assert cmd == "/srv/shift-central/.venv/bin/python manage.py gp_sync"
     text = (DEPLOY / "shift-central-gp-sync.timer").read_text()
     assert "OnCalendar=*-*-* *:7/15:00" in text and "Persistent=true" in text
+
+
+def test_the_leave_reminders_run_each_weekday_morning():
+    (cmd,) = _directives(DEPLOY / "shift-central-leave-reminders.service")["ExecStart"]
+    assert cmd == "/srv/shift-central/.venv/bin/python manage.py leave_reminders"
+    text = (DEPLOY / "shift-central-leave-reminders.timer").read_text()
+    assert "OnCalendar=Mon..Fri *-*-* 08:20:00" in text and "Persistent=true" in text
 
 
 def test_each_timer_names_a_service_that_exists():

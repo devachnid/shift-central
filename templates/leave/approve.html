@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% load leave_extras %}
+{% block title %}Waiting for approval · AMG Shift Central{% endblock %}
+{% block content %}
+<table class="table">
+  <thead><tr><th>Who</th><th>Team</th><th>What</th><th>Waiting</th><th>Cost</th><th>Note</th><th></th></tr></thead>
+  <tbody>
+  {% for b in rows %}
+  <tr>
+    <td>{{ b.person.name }}</td>
+    <td>{{ b.person.team.name|default:"—" }}</td>
+    <td>{% if b.status == "cancel_requested" %}<strong>asked to cancel:</strong> {% endif %}<span class="leave-swatch" style="background:{{ b.type.colour }}"></span> {{ b.label }}
+      {{ b.first_day|date:"j M Y" }}{% if b.last_day != b.first_day %} – {{ b.last_day|date:"j M Y" }}{% endif %},
+      {{ b.get_part_display|lower }}{% if b.part == "times" %} {{ b.start|time:"H:i" }}–{{ b.finish|time:"H:i" }}{% endif %}</td>
+    <td>{{ b.waiting_days }} day{{ b.waiting_days|pluralize }}</td>
+    <td>{{ b.cost|hm }}</td>
+    <td>{{ b.staff_note }}</td>
+    <td><a href="{% url 'time-off-decide' b.pk %}" data-dialog>Decide</a></td>
+  </tr>
+  {% empty %}<tr><td colspan="7">Nothing is waiting for approval.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

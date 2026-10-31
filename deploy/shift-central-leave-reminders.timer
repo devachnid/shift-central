@@ -1,0 +1,10 @@
+[Unit]
+Description=Remind managers of leave requests still waiting, each weekday morning
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 08:20:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

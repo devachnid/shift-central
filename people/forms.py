@@ -16,10 +16,12 @@ class DisplayForm(forms.Form):
 class HoursForm(forms.Form):
     """Weekly hours and days per week, plus the two allowances for each of
     the two leave years. The year fields are added in __init__ from
-    profiles.leave_years(); the note is required only when the view finds
+    years_for(person); the note is required only when the view finds
     an existing allowance changed (the service enforces it)."""
     weekly_hours = forms.DecimalField(max_digits=5, decimal_places=2, min_value=0, required=False)
     days_per_week = forms.IntegerField(min_value=1, max_value=7, required=False)
+    leave_year_start = forms.RegexField(r"^(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$", required=False, initial="01-01",
+                                        label="Leave year starts (MM-DD)", error_messages={"invalid": "Type the month and day as MM-DD, e.g. 04-01"})
     note = forms.CharField(max_length=300, required=False, label="Reason for the change")
 
     def __init__(self, *args, years, is_gp=False, **kwargs):
@@ -28,12 +30,14 @@ class HoursForm(forms.Form):
             del self.fields["weekly_hours"], self.fields["days_per_week"]
         self.years = years
         for year in years:
+            # A year that starts after 1 January is named by its first day.
+            name = year.year if (year.month, year.day) == (1, 1) else f"from {year:%-d %b %Y}"
             self.fields[f"annual_{year.year}"] = forms.DecimalField(
                 max_digits=6, decimal_places=2, min_value=0, required=False,
-                label=f"Annual leave allowance {year.year} (hours)")
+                label=f"Annual leave allowance {name} (hours)")
             self.fields[f"bank_holiday_{year.year}"] = forms.DecimalField(
                 max_digits=6, decimal_places=2, min_value=0, required=False,
-                label=f"Bank holiday allowance {year.year} (hours)")
+                label=f"Bank holiday allowance {name} (hours)")
 
     def clean(self):
         data = super().clean()

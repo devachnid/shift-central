@@ -9,5 +9,6 @@ urlpatterns = [
     path("accounts/", include("accounts.urls")),
     path("", include("shifts.urls")),
     path("", include("people.urls")),
+    path("", include("leave.urls")),
     path("", home, name="home"),
 ]

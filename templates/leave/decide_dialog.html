@@ -1,0 +1,40 @@
+{% extends "ui/_dialog.html" %}
+{% load leave_extras %}
+{% block dialog_title %}{% if b.status == "cancel_requested" %}Cancellation request{% else %}Time off request{% endif %}{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% url 'time-off-decide' b.pk %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <p><span class="leave-swatch" style="background:{{ b.type.colour }}"></span> <strong>{{ b.person.name }}</strong> · {{ b.label }}</p>
+  <dl class="defs">
+    <dt>First day off</dt><dd>{{ b.first_day|date:"D j M Y" }}</dd>
+    <dt>Last day off</dt><dd>{{ b.last_day|date:"D j M Y" }}</dd>
+    <dt>Days to include</dt><dd>{{ b.get_part_display }}{% if b.part == "times" %} {{ b.start|time:"H:i" }}–{{ b.finish|time:"H:i" }}{% endif %}</dd>
+    <dt>Status</dt><dd>{{ b.get_status_display }}</dd>
+    {% if b.staff_note %}<dt>Note</dt><dd>{{ b.staff_note }}</dd>{% endif %}
+  </dl>
+  <table class="table preview-table">
+    <thead><tr><th>Day</th><th>Allowance used</th><th></th></tr></thead>
+    <tbody>
+    {% for day, cost in days %}
+    <tr><td>{{ day|date:"D j M" }}</td><td>{{ cost.seconds|hm }}</td>
+      <td class="field-help">{% if cost.placeholder %}average day{% elif cost.account == "bank_holiday" %}bank holiday allowance{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td>Total</td><td>{{ total|hm }}</td><td></td></tr></tfoot>
+  </table>
+  {% for line in balances %}
+  <p>Balance{% if line.year %} for {{ line.year }}{% endif %} before <strong>{{ line.before|hm }}</strong>{% if line.after is not None %}, after <strong>{{ line.after|hm }}</strong>{% endif %}</p>
+  {% endfor %}
+  {% if others %}
+  <p><strong>Also off in {{ b.person.team.name }} on those days:</strong></p>
+  <ul>{% for o in others %}<li>{{ o.person.name }} · {{ o.label }} · {{ o.first_day|date:"j M" }}{% if o.last_day != o.first_day %} – {{ o.last_day|date:"j M" }}{% endif %}</li>{% endfor %}</ul>
+  {% endif %}
+  <div class="field{% if form.note.errors %} has-error{% endif %}">
+    <label for="id_note">Note</label>{{ form.note }}
+    {% for e in form.note.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
+  <button class="btn btn-dark" name="decision" value="approve">{% if b.status == "cancel_requested" %}Approve cancellation{% else %}Approve{% endif %}</button>
+  <button class="btn btn-quiet" name="decision" value="decline">{% if b.status == "cancel_requested" %}Refuse cancellation{% else %}Decline{% endif %}</button>
+</form>
+{% endblock %}

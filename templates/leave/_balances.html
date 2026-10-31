@@ -1,0 +1,8 @@
+{% load leave_extras %}
+{% for b in balances %}{% with s=b.statement %}
+<dl class="defs">
+  <dt>Annual leave remaining (bank holidays included), leave year {{ b.label }}</dt><dd>{{ s.annual_remaining|hm }}{% if s.missing %} · no allowance is set for this year yet{% endif %}</dd>
+  <dt>Available to request</dt><dd>{{ s.annual_available|hm }}{% if s.pending.annual %} · {{ s.pending.annual|hm }} waiting for approval{% endif %}</dd>
+  {% if forloop.first %}<dt>TOIL remaining</dt><dd>{{ s.toil_remaining|hm }}{% if s.toil_pending %} · {{ s.toil_pending|hm }} waiting for approval{% endif %}</dd>{% endif %}
+</dl>
+{% endwith %}{% endfor %}

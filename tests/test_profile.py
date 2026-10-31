@@ -7,6 +7,7 @@ import pytest
 from django.test import Client
 
 from people.models import Allowance, AuditEntry
+from leave.services import years
 from people.services import profiles
 from tests.factories import make_person, make_team, make_team_manager, make_user_for
 
@@ -17,8 +18,8 @@ pytestmark = pytest.mark.django_db
 def years_2026_2027(monkeypatch):
     """The hours tab's year fields follow today's date; pin them so the
     field names below hold whenever the suite runs."""
-    monkeypatch.setattr(profiles, "leave_years",
-                        lambda today=None: [date(2026, 1, 1), date(2027, 1, 1)])
+    real = years.years_for
+    monkeypatch.setattr(years, "years_for", lambda person, today=None: real(person, today or date(2026, 11, 20)))
 
 
 @pytest.fixture
@@ -90,11 +91,6 @@ def test_a_bad_colour_is_refused(world):
 
 
 # --- hours and allowances ----------------------------------------------------------
-
-def test_leave_years_are_this_year_and_next(monkeypatch):
-    monkeypatch.undo()
-    assert profiles.leave_years(date(2026, 11, 20)) == [date(2026, 1, 1), date(2027, 1, 1)]
-
 
 def test_the_hours_tab_saves_hours_days_and_both_years_allowances(world):
     c, nurse = world["c"]["boss"], world["nurse"]

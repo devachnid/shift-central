@@ -3,7 +3,7 @@
 **From:** the developers
 **To:** the practice manager
 **Date:** 29 October 2026
-**Status:** proposed; awaiting the practice manager's decision
+**Status:** approved by the practice manager, 31 October 2026 (all three amendments and both smaller points)
 
 We have read the whole pack and can build it. Three things need your
 agreement before we start, because each changes something you approved.
@@ -118,3 +118,12 @@ to each GP by their work email. If a GP's email differs between the two
 systems their sessions do not show and the Staff page's Health card lists
 the address. We will revisit the link (by Practice HR's employee id) once
 the GP rota app holds one. Your yes or no to 1, 2 and 3 is still needed.
+
+## Postscript, 31 October 2026 (developers)
+
+Built as approved: leave lives in Shift Central for everyone, GPs included
+(spec 3); the GP rota app reads approved GP leave from Shift Central every
+fifteen minutes and its FindMyShift reader is removed. That reader never
+went live, so it was replaced rather than migrated. The LEAVE-12 total is
+capped at the larger full-year allowance, and a half-minute shows as "½"
+(Q-08).

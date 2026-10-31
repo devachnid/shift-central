@@ -1,5 +1,5 @@
-"""ROTA-12: everyone, by site, with WFH apart and (until spec 3) "off"
-meaning no shift today."""
+"""ROTA-12: everyone, by site, with WFH apart and "off" meaning on
+approved leave today."""
 
 from datetime import date
 
@@ -7,7 +7,7 @@ import pytest
 from django.test import Client
 
 from shifts.services import today
-from tests.factories import make_department, make_entry, make_gp_session, make_person, make_team, make_user_for
+from tests.factories import make_booking, make_department, make_entry, make_gp_session, make_person, make_team, make_user_for
 
 pytestmark = pytest.mark.django_db
 DAY = date(2027, 3, 1)
@@ -38,7 +38,11 @@ def test_the_board_groups_working_wfh_and_off():
     assert [p["person"] for p in sites["AG"]["teams"][0]["people"]] == [a]
     assert sites["PMC"]["teams"][0]["people"][0]["lines"] == ["AM Surgery PMC"]
     assert [x["person"] for x in board["wfh"]] == [w]
-    assert board["off"] == [o]
+    assert board["off"] == []   # no shift is not leave
+    make_booking(o, DAY, status="approved")
+    from leave.models import BookingDay
+    BookingDay.objects.create(booking=o.bookings.get(), day=DAY, cost_seconds=0)
+    assert today.board(DAY)["off"] == [{"person": o, "label": "Holiday"}]
 
 
 def test_the_page_is_for_managers_and_takes_a_day():

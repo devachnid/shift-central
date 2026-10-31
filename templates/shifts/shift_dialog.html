@@ -1,6 +1,16 @@
 {% extends "ui/_dialog.html" %}
 {% block dialog_title %}{{ person.name }} · {{ day|date:"D j M Y" }}{% endblock %}
 {% block dialog_body %}
+{% if covered %}
+{% if covered.booking.part == "times" %}
+<p class="field-help">{{ person.name }} has timed leave {{ covered.booking.start|time:"H:i" }}–{{ covered.booking.finish|time:"H:i" }} this day. Set the shift they would have worked, leave included: the grid shows it shortened around the leave, or hides it when the leave is the whole shift.</p>
+{% elif covered.booking.part == "whole" and covered.source != "override" %}
+<p class="field-help">{{ person.name }} is off this day ({{ covered.booking.type.name }}). The shift you set here is what they would have worked; it sets the leave's cost and stays hidden on the grid.</p>
+{% else %}
+<p class="field-help">{{ person.name }} is off this day ({{ covered.booking.type.name }}). A shift set here stays hidden on the grid; it does not change what this leave costs, which was set another way.</p>
+{% endif %}
+<div class="dialog-links"><a href="/time-off/{{ covered.booking.pk }}/" data-dialog>View time off</a></div>
+{% endif %}
 <form method="post" action="{% if entry %}{% url 'rota-shift-edit' person.pk day|date:'Y-m-d' entry.pk %}{% else %}{% url 'rota-shift' person.pk day|date:'Y-m-d' %}{% endif %}" data-dialog-form>
   {% csrf_token %}
   {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}

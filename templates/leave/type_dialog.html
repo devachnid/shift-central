@@ -1,0 +1,22 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}{% if row %}{{ row.name }}{% else %}Add leave type{% endif %}{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% if row %}{% url 'leave-type-edit' row.pk %}{% else %}{% url 'leave-type-add' %}{% endif %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <div class="field{% if form.name.errors %} has-error{% endif %}"><label for="id_name">Name</label>{{ form.name }}{% for e in form.name.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  <div class="field{% if form.colour.errors %} has-error{% endif %}"><label for="id_colour">Colour</label>{{ form.colour }}{% for e in form.colour.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  {% if form.draws_from %}
+  <div class="field"><label for="id_draws_from">{{ form.draws_from.label }}</label>{{ form.draws_from }}<span class="field-help">Chosen once: it decides the arithmetic.</span></div>
+  <div class="field"><label for="id_on_payroll">{{ form.on_payroll.label }}</label>{{ form.on_payroll }}</div>
+  {% elif row %}
+  <p class="field-help">{% if row.seeded %}This is one of the standard types{% else %}This type has bookings{% endif %}, so what it takes its days from ({{ row.get_draws_from_display }}) and its payroll treatment ({{ row.get_on_payroll_display }}) stay as they are.</p>
+  {% endif %}
+  <div class="field"><label class="check">{{ form.requestable }} {{ form.requestable.label }}</label></div>
+  <div class="field"><label class="check">{{ form.paid_choice }} {{ form.paid_choice.label }}</label></div>
+  <div class="field"><label class="check">{{ form.default_paid }} {{ form.default_paid.label }}</label></div>
+  {% if form.display_order %}<div class="field{% if form.display_order.errors %} has-error{% endif %}"><label for="id_display_order">Order in lists</label>{{ form.display_order }}{% for e in form.display_order.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>{% endif %}
+  {% if form.archived %}<div class="field"><label class="check">{{ form.archived }} {{ form.archived.label }}</label></div>{% endif %}
+  <button class="btn btn-dark">{% if row %}Save changes{% else %}Add leave type{% endif %}</button>
+</form>
+{% endblock %}

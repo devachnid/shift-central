@@ -10,7 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from people.models import Person, SyncRun, Team
-from people.services import audit
+from people.services import audit, profiles
 from people.services.hr_client import HRClient, HRError
 
 log = logging.getLogger("people.hr_sync")
@@ -125,6 +125,14 @@ def sync(client=None):
     finally:
         run.finished_at = timezone.now()
         run.save()
+    if run.ok:
+        try:
+            with transaction.atomic():
+                profiles.apply_due_hours_changes()
+        except Exception:
+            log.exception("hours changes failed")
+            run.message = (run.message + "; " if run.message else "") + "hours changes failed; see the journal"
+            run.save(update_fields=["message"])
     return run
 
 

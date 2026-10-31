@@ -2,23 +2,18 @@
 and 6). Each change is audited per field; an allowance that already
 exists needs a typed reason to change (LEAVE-31)."""
 
-from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from leave.services import years
 from people.models import Allowance
 from people.services import access, audit
 
 DISPLAY_FIELDS = ("job_title", "name_colour", "display_order", "display_on_rota",
                   "show_to_other_staff", "can_see_other_staff")
-
-
-def leave_years(today=None):
-    today = today or timezone.localdate()
-    return [date(today.year, 1, 1), date(today.year + 1, 1, 1)]
 
 
 def _apply(actor, person, fields, note=""):
@@ -40,11 +35,27 @@ def update_display(actor, person, **fields):
     return _apply(actor, person, fields)
 
 
-def update_hours(actor, person, weekly_hours, days_per_week):
+def update_hours(actor, person, weekly_hours, days_per_week, note=""):
     if person.is_gp:
         raise ValueError("a GP's sessions come from the GP rota")
     weekly_hours = Decimal(weekly_hours).quantize(Decimal("0.01")) if weekly_hours is not None else None
-    return _apply(actor, person, {"weekly_hours": weekly_hours, "days_per_week": days_per_week})
+    return _apply(actor, person, {"weekly_hours": weekly_hours, "days_per_week": days_per_week}, note=note)
+
+
+def update_leave_year_start(actor, person, text):
+    """The month and day the person's leave year starts (LEAVE-03). It cannot
+    move once the person has an allowance or a live booking: those are filed
+    under the years the old date made."""
+    from leave.models import Booking
+    try:
+        years.parse_start(text)
+    except ValueError:
+        raise ValueError("That is not a date; type the month and day as MM-DD, e.g. 04-01") from None
+    if text == person.leave_year_start:
+        return []
+    if person.allowances.exists() or Booking.objects.filter(person=person).exclude(status__in=("declined", "cancelled")).exists():
+        raise ValueError(f"{person.name} already has allowances or bookings; the leave year cannot move")
+    return _apply(actor, person, {"leave_year_start": text})
 
 
 def set_allowance(actor, person, leave_year, annual_hours, bank_holiday_hours, note=""):
@@ -107,3 +118,76 @@ def reorder(actor, ids):
     with transaction.atomic():
         for n, person in enumerate(kept, start=1):
             _apply(actor, person, {"display_order": n * 10})
+
+
+def _change_from(person, year, from_day):
+    return Allowance.objects.filter(person=person, leave_year=year, from_day=from_day).exists()
+
+
+def add_hours_change(actor, person, from_day, weekly_hours, days_per_week, annual_hours, bank_holiday_hours, note):
+    """A dated change of contract (PAT-06, LEAVE-12): a second Allowance row
+    for the year from `from_day`, carrying the new full-year figures and the
+    new weekly hours and days. The day is in the person's previous, current
+    or next leave year (years.correctable, as an adjustment's year is); the year's first row must
+    exist; the first day itself is set_allowance's. When the day has
+    arrived the hours go on the person now, unless a later change is already
+    in force (a back-dated change is recorded, and costs its days, but does
+    not undo the later one); otherwise apply_due_hours_changes() copies
+    them on the day."""
+    if not note or not note.strip():
+        raise ValueError("A reason is needed for an hours change")
+    year = years.year_of(person, from_day)
+    if year not in years.correctable(person):
+        raise ValueError("An hours change can start in the previous leave year, this one or the next")
+    if from_day == year:
+        raise ValueError("Set the year's allowance on the Pay & time off tab; a change starts after the year's first day")
+    if not Allowance.objects.filter(person=person, leave_year=year, from_day=year).exists():
+        raise ValueError(f"Set the {year.year} allowance first")
+    weekly_hours = Decimal(weekly_hours).quantize(Decimal("0.01")) if weekly_hours is not None else None
+    today = timezone.localdate()
+    due = from_day <= today
+    superseded = due and Allowance.objects.filter(person=person, weekly_hours__isnull=False,
+                                                  from_day__gt=from_day, from_day__lte=today).exists()
+    copy_now = due and not superseded and not person.is_gp and weekly_hours is not None
+    with transaction.atomic():
+        if _change_from(person, year, from_day):
+            raise ValueError("There is already a change from that day")
+        try:
+            with transaction.atomic():
+                row = Allowance.objects.create(person=person, leave_year=year, from_day=from_day,
+                                               annual_hours=Decimal(annual_hours).quantize(Decimal("0.01")),
+                                               bank_holiday_hours=Decimal(bank_holiday_hours).quantize(Decimal("0.01")),
+                                               weekly_hours=weekly_hours, days_per_week=days_per_week,
+                                               hours_applied=copy_now or superseded)
+        except IntegrityError:          # a double submit: the other one won
+            raise ValueError("There is already a change from that day") from None
+        audit.record(actor, row, {"annual_hours": ("", str(row.annual_hours)), "bank_holiday_hours": ("", str(row.bank_holiday_hours)),
+                                  "weekly_hours": ("", str(weekly_hours or "")), "days_per_week": ("", str(days_per_week or "")),
+                                  "from_day": ("", from_day.isoformat())}, note=note.strip())
+        if copy_now:
+            update_hours(actor, person, weekly_hours, days_per_week, note=note.strip())
+    return row
+
+
+def apply_due_hours_changes(today=None):
+    """Copy each person's latest due hours change onto the person, once. A
+    change is due from its day and is marked hours_applied when copied, so
+    a manager's later edit to the profile is not overwritten by the next
+    sync. Run by hr_sync after each good run; returns how many people changed."""
+    today = today or timezone.localdate()
+    due = {}
+    for row in (Allowance.objects.filter(from_day__lte=today, weekly_hours__isnull=False, hours_applied=False)
+                .select_related("person").order_by("from_day", "pk")):
+        due.setdefault(row.person_id, []).append(row)
+    changed = 0
+    for rows in due.values():
+        latest = rows[-1]
+        person = latest.person
+        if person.is_gp:
+            continue
+        with transaction.atomic():
+            if person.weekly_hours != latest.weekly_hours or person.days_per_week != latest.days_per_week:
+                update_hours(None, person, latest.weekly_hours, latest.days_per_week, note="hours change due")
+                changed += 1
+            Allowance.objects.filter(pk__in=[r.pk for r in rows]).update(hours_applied=True)
+    return changed

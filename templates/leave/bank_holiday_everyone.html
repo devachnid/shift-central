@@ -1,0 +1,28 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}{{ holiday.name }}, {{ day|date:"j M Y" }}{% endblock %}
+{% block dialog_body %}
+{% if done %}
+<p class="flash" data-dialog-refresh>Added for {{ booked }} {{ booked|pluralize:"person,people" }}{% if skipped %} ({{ skipped }} skipped: already booked or not yours){% endif %}.</p>
+{% if outside %}<p class="flash flash-warning">{{ outside }} {{ outside|pluralize:"person,people" }} not added: leave can only be booked in a person's current leave year and the next.</p>{% endif %}
+<p><a href="{% url 'bank-holidays' %}?year={{ day.year }}">Show the list</a></p>
+{% else %}
+<form method="post" action="{% url 'bank-holiday-everyone' day|date:'Y-m-d' %}" data-dialog-form>
+  {% csrf_token %}
+  {% if problem %}<p class="flash flash-error">{{ problem }}</p>{% endif %}
+  <p class="field-help">Each person's hours are the day they most often worked on this weekday in the four weeks before the bank holiday. Change any of them, and untick anyone it doesn't apply to. Anyone already booked for the day is skipped.</p>
+  <table class="table">
+    <thead><tr><th><span class="visually-hidden">Add</span></th><th>Staff</th><th>Hours</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+    <tr>
+      <td><input type="checkbox" name="tick_{{ r.person.pk }}" id="tick_{{ r.person.pk }}"{% if r.ticked %} checked{% endif %} aria-label="Add for {{ r.person.name }}"></td>
+      <td><label for="tick_{{ r.person.pk }}">{{ r.person.name }}</label>{% if r.person.is_gp %} <span class="muted">GP: sessions come from the rota app</span>{% endif %}</td>
+      <td><input type="text" name="hours_{{ r.person.pk }}" value="{{ r.text }}" size="6" inputmode="text" aria-label="Hours for {{ r.person.name }}">{% if r.error %}<p class="field-error">{{ r.error }}</p>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="3">There is nobody to add it for.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <button class="btn btn-dark">Add bank holiday for everyone ticked</button>
+</form>
+{% endif %}
+{% endblock %}

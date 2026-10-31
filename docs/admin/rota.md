@@ -1,8 +1,8 @@
 # The rota
 
-**Where:** sidebar › Rota (`/rota/`). Who's in today is under it, Hours is under
-Reports. Everyone sees the rota; the editing, Templates, Notify staff and Who's
-in today are for managers.
+**Where:** sidebar › Rota (`/rota/`). Who's in today and Time off… are under it, Hours is under
+Reports. Everyone sees the rota; the editing, Templates, Notify staff, Who's
+in today and booking leave are for managers.
 
 ## The mental model
 
@@ -48,6 +48,11 @@ What a cell shows, one tile per line you typed:
 - A **separator**: a hairline across the cell, to keep two groups apart.
 - A **GP session**: a pale grey-blue tile, for example `AM · Surgery · AG`. See
   [GPs](#gps).
+- A **leave tile**: the leave type's colour and name (or the text overtyped in Display), above
+  anything else in the cell, with `½ am`, `½ pm` or the hours for a part day. Approved leave is
+  filled in the type's colour, with white or dark text, whichever reads better on it. A hatched,
+  outlined tile reading "requested", with a thick edge on its left in the type's colour, is leave still
+  waiting for approval. See [Time off on the grid](#time-off-on-the-grid).
 
 If two shifts in one cell overlap, the cell carries a small warning marker.
 
@@ -124,6 +129,11 @@ dark menu. It acts on the **whole selection**, not only the cell you clicked.
 - **Find & Replace…** opens a dialog: text to find, text to put in its place, match
   case or not, over the selected cells or the whole window. Each changed line is
   read again as if typed.
+- **Time off…** (first on the list) opens the Add time off dialog with the person and the day
+  already filled in, for a cell with no leave. On a cell that has leave it is replaced by **View time
+  off** and, for the people you manage, **Cancel time off**; on approved leave there is also
+  **Shift behind the leave…** (a whole or half day) or **Edit the day's shift…** (leave by the hour).
+  See [Time off on the grid](#time-off-on-the-grid).
 - **Cut**, **Copy**, **Paste**, **Delete**. See [Copying weeks](#copying-weeks).
 - **Select ›** Row, Column, Week or All, from the cell you clicked.
 - **Save selection as template…** See [Templates](#templates).
@@ -150,7 +160,10 @@ the same days apart and the same rows below. A copied week pasted onto next
 Monday fills next week.
 
 - Rows that fall below the last row, or on a person you cannot edit, are skipped,
-  and the grid says how many.
+  and the grid says how many. So is any day with **approved leave** on it, whether it is
+  where you are copying from or to: the shifts hidden under the leave are never copied, moved or deleted.
+  The grid counts the two apart: "1 row and 2 leave days couldn't be pasted onto." (rows you
+  cannot edit, and approved-leave days). Waiting leave does not block a paste.
 - A day the copy did not see, such as a weekday hidden in Options, is left alone
   on the target, and so is a cell inside the block that you did not select
   (Ctrl-click a few cells, and only those are pasted). A selected cell that was
@@ -176,8 +189,9 @@ A template is a saved block, usually a week, to lay down again. Select the cells
 right-click, **Save selection as template…**, and name it. **Templates** in the top
 bar lists them with **Apply** (to the cell selected on the grid; it behaves like a
 paste, with your paste behaviour), **Rename** and **Delete**. Templates are shared
-by all managers. Applying one onto a person you cannot edit skips that row and
-tells you how many were skipped.
+by all managers. Applying one onto a person you cannot edit skips that row, and onto a day of
+approved leave skips that day, and it tells you how many of each were skipped ("1 row and 1 leave
+day couldn't be pasted onto.").
 
 ## Overtime
 
@@ -189,8 +203,9 @@ typing `OT` or `TOIL` after the times, or in the shift dialog.
 
 Either way the tile gets an amber edge and a fourth line, and **its hours are no
 longer counted as scheduled hours**: the [hours report](#the-hours-report) shows
-them in their own Overtime column. Later releases read the marks for the TOIL
-balance and for payroll, so mark them as you go.
+them in their own Overtime column. **TOIL** shifts, up to today, are the TOIL a person has
+earned in [Leave](leave.md#the-statement-and-how-to-read-it), and a later release reads
+the marks for payroll, so mark them as you go.
 
 ## Notify staff
 
@@ -232,6 +247,45 @@ changes over a week old* and links to this dialog. A week-old change that staff 
 never told about is the thing to look for there: it means a change was made and the
 person may still be working the old rota.
 
+## Time off on the grid
+
+Leave is booked on the [Time off pages](leave.md); the grid shows it. What changes in the grid:
+
+- **Approved leave owns the cell.** The leave tile is drawn above whatever else is there and the
+  cell cannot be typed into, pasted over, dragged, cleared or changed by Find & Replace: it is
+  skipped like a row you cannot edit. It can still be focused and right-clicked, and right-clicking it
+  empties the selection, as clicking it does, so Delete or Cut afterwards acts on nothing. A shift
+  on that day is not deleted: it is **covered**, hidden from the grid, the hours report, Who's in today,
+  the phone list and Notify staff, and comes back when the leave is cancelled.
+- **Leave by the hour** shortens the shift it falls inside instead of covering it: the shift stays on
+  the grid with its new times, under the tile.
+- **Waiting leave** is hatched with "requested" and covers nothing. The cell stays editable.
+- **The right-click menu** has **Time off…** on any cell you may edit (the person and day filled
+  in), and **View time off** and **Cancel time off** (for people you manage) on a leave tile. On a cell
+  with approved leave, or on a row you cannot edit, that is all it shows. **Rota › Time off…**
+  in the sidebar opens the same dialog without a person or day chosen. On approved leave of a row
+  you may edit the menu also offers **Shift behind the leave…**, or for leave by the hour **Edit the
+  day's shift…** (below). Waiting leave never gets either.
+- **Booking leave moves the grid and leaves a trail.** Adding or cancelling approved leave
+  changes what the person sees for the day, so it appears in **Notify staff** as a change ("Holiday" in
+  place of the shifts), and in the Activity log.
+- **The shift behind the leave.** Right-click a day of approved whole-day or half-day leave and choose
+  **Shift behind the leave…**: the shift dialog opens with a note that the person is off, prefilled
+  from the shift the leave covers if there is one. What you save is what they would have worked; it stays
+  hidden on the grid. If the booking is a whole day costed on an average day (the week had no rota), the
+  day is re-costed from this shift and the managers are emailed ("Leave cost to check"), even if the
+  figure is the same. Writing the person's other days does not change it. A half-day, timed or
+  typed-by-hand cost is left alone, so a half day's placeholder is settled by typing the figure in the
+  **Allowance used** box in the booking's Edit dialog, which is also the other way to put any cost right.
+- **The shift on a day of leave by the hour.** The leave has only shortened the shift, which is still on
+  the grid, so the menu says **Edit the day's shift…** and the dialog edits that shift, opening on the
+  times the person would have worked, leave included (09:00 to 17:00 where the grid shows 09:00 to 14:00),
+  with a note giving the leave's times. It finds the shift the leave shortened, or the one it hides when
+  the leave is the whole of it, or the day's only shift; with none it says **Add shift**. The shift you
+  save must include the leave ("The shift must include the leave, 14:00–15:30"). Saving cuts it around
+  the leave again and remembers the times you typed, so cancelling the leave gives them back. On a day
+  with more than one shift, the others can only be changed once the leave is cancelled.
+
 ## Options and Filters
 
 **Options** is saved for you alone and applies everywhere you open the rota:
@@ -265,7 +319,9 @@ can be bookmarked. **Clear** removes it.
 
 **Download** gives the current window as a CSV file, `rota-<first date>.csv`: a row
 per person, a column per day, several items in a cell joined by ` / `, any GP
-session first. It follows your filters and shows what you can see.
+session first. It follows your filters and shows what you can see. A day of leave reads as the type's name, for
+example `Holiday`, `Holiday (morning)` or `Training 14:00–15:30`, and `(requested)` after it for leave
+still waiting.
 
 **Print** is on the right-click menu and prints the page as it is; use the browser's
 print settings to choose landscape, and Filters or Options to narrow what is shown
@@ -292,15 +348,17 @@ move and Today to come back. People are grouped by **site** (AG, PMC, or Either)
 then by team, each with their times. A shift is at AG or PMC when its department's
 name contains *AG* or *PMC* as a word (*Reception AG*, *Cleaning PMC*), and Either
 otherwise. People working from home are listed in their own section. **Off** lists
-everyone who is current today and has neither a shift nor a GP session. It does not
-yet know about annual leave; that arrives with the leave release.
+everyone with **approved leave** today, with the leave type's name (Holiday, Sick leave, Bank
+holiday…) and nothing more, however much of the day it covers. Someone with no shift and no leave
+is simply not listed. A waiting request does not count.
 
 ## On a phone
 
 Under 768 pixels wide the rota is a read-only list instead of the grid: a card for
 each day of the week with your own shift first (or *No shift*), and, behind
 **Whole team**, everyone else's with their names. ‹, › and Today are in the top bar.
-There is no editing. To edit on a phone, turn it sideways: most phones pass 768
+A day of leave is a coloured line with its label and "morning", "afternoon" or the hours, and
+"requested" for leave still waiting. There is no editing. To edit on a phone, turn it sideways: most phones pass 768
 pixels that way and the grid appears.
 
 ## GPs
@@ -313,6 +371,11 @@ copied or deleted by anything you do in the grid.
 
 A GP's cell can still take shifts and comments typed by a manager, for example an
 extra shift, and the hours report adds both.
+
+**A GP's leave is booked in Shift Central like anyone's**, and the leave tile sits above their
+session, which stays: the session belongs to the GP rota app, which reads the leave back
+(see [the GP leave feed](sync.md#the-gp-rota-app-reads-gp-leave-from-here)) and flags a session that clashes with it. A GP's day of leave
+costs their sessions that day.
 
 **A GP's sessions are matched to the GP by work email.** If the address the GP rota
 app holds differs from the one in Practice HR, even by a typo, the sessions do not

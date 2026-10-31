@@ -7,7 +7,10 @@
  *  - <form data-dialog-form> inside posts by fetch, its buttons disabled
  *    while the post is in flight. A 200 replaces the dialog with the response
  *    (a form shown again with its errors); a JSON {"redirect": url} follows it, and
- *    {"refresh": true} closes the dialog and fires shift-central:refresh.
+ *    {"refresh": true} closes the dialog and fires shift-central:refresh (the
+ *    rota grid reloads its window; on any other page the page reloads).
+ *  - <form method="get" data-dialog-get> inside (the statement's year picker)
+ *    fetches its action with the fields as the query and shows the result.
  *  - Any HTML shown that contains [data-dialog-refresh] also fires
  *    shift-central:refresh (the outcome of Notify staff, a paste that skipped rows).
  *  - Failures never put an error page in the dialog. A redirect to the log-in
@@ -26,7 +29,27 @@
   var csrf = document.querySelector('meta[name="csrf-token"]').content;
 
   function open() { return dialog.childElementCount > 0; }
-  function close() { dialog.innerHTML = ""; if (opener && opener.isConnected) { opener.focus({ preventScroll: true }); } opener = null; }
+  // Only the rota grid listens for shift-central:refresh. On any other page
+  // (the statement, My leave, the bank holidays list) a refresh reloads the
+  // page; a dialog that still has something to say (the outcome of Add for
+  // everyone) reloads when it is closed instead of wiping its message.
+  var reloadOnClose = false;
+  function refresh(afterClose) {
+    if (document.querySelector('[data-component="rota-grid"]')) {
+      document.dispatchEvent(new CustomEvent("shift-central:refresh"));
+    } else if (afterClose) {
+      reloadOnClose = true;
+    } else {
+      // assign, not reload: a page rendered from a POST would otherwise ask to resubmit it
+      window.location.assign(window.location.href);
+    }
+  }
+  function close() {
+    dialog.innerHTML = "";
+    if (reloadOnClose) { reloadOnClose = false; window.location.assign(window.location.href); return; }
+    if (opener && opener.isConnected) { opener.focus({ preventScroll: true }); }
+    opener = null;
+  }
   function focusFirst() {
     // The header's close button is first in the DOM but never the right
     // place to start typing; it is only the fallback.
@@ -44,7 +67,7 @@
   function show(html) {
     dialog.innerHTML = html;
     mounted();
-    if (dialog.querySelector("[data-dialog-refresh]")) { document.dispatchEvent(new CustomEvent("shift-central:refresh")); }
+    if (dialog.querySelector("[data-dialog-refresh]")) { refresh(true); }
     focusFirst();
   }
 
@@ -138,13 +161,20 @@
         if (type.indexOf("application/json") === 0) {
           return r.json().then(function (j) {
             if (j.redirect) { window.location.assign(j.redirect); return; }
-            if (j.refresh) { close(); document.dispatchEvent(new CustomEvent("shift-central:refresh")); return; }
+            if (j.refresh) { close(); refresh(false); return; }
             setBusy(false);
           });
         }
         return r.text().then(show);
       })
       .catch(function () { setBusy(false); failInForm(form, { message: UNREACHABLE }); });
+  });
+
+  document.addEventListener("submit", function (e) {
+    var form = e.target.closest && e.target.closest("form[data-dialog-get]");
+    if (!form) { return; }
+    e.preventDefault();
+    get(form.getAttribute("action") + "?" + new URLSearchParams(new FormData(form)).toString());
   });
 
   document.addEventListener("keydown", function (e) {

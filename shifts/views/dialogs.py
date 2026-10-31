@@ -38,6 +38,20 @@ def _row_order(text):
     return [int(p) for p in (text or "").split(",") if window.is_pk(p)]
 
 
+def _timed_leave_shift(person, day, covered):
+    """The shift a timed booking sits in: the one it shortened, else the one
+    it covers (the leave was all of it), else the day's only visible shift;
+    None when there is no such shift, and the dialog adds one."""
+    if covered.shortened_entry_id is not None:
+        return covered.shortened_entry
+    shifts = Entry.objects.filter(person=person, day=day, kind=Entry.Kind.SHIFT).order_by("position")
+    whole = shifts.filter(covered_by=covered).first()
+    if whole is not None:
+        return whole
+    visible = list(shifts.filter(covered_by__isnull=True)[:2])
+    return visible[0] if len(visible) == 1 else None
+
+
 @login_required
 def shift(request, person_pk, day, entry_pk=None):
     person = get_object_or_404(Person, pk=person_pk)
@@ -47,9 +61,28 @@ def shift(request, person_pk, day, entry_pk=None):
         day = window.parse_day(day)
     except ValueError:
         raise Http404("not a date") from None
+    from leave.services import costing as leave_costing
+    covered = leave_costing.active_day(person, day)
     entry = get_object_or_404(Entry, pk=entry_pk, person=person, day=day) if entry_pk else None
+    timed = covered is not None and covered.booking.part == "times"
+    leaves = None          # the shift a timed booking sits in, which a save must keep around the leave
+    if timed:
+        leaves = _timed_leave_shift(person, day, covered)
+        if entry is None:
+            entry = leaves
+    elif covered is not None and entry is None:
+        # A whole or half day of leave: the form sets the shift the person would have worked
+        # behind it. It edits the first shift the leave covers, if any; saving re-costs a whole
+        # day (LEAVE-06).
+        entry = Entry.objects.filter(person=person, day=day, kind=Entry.Kind.SHIFT, covered_by=covered).order_by("position").first()
+    holds_leave = timed and (entry is None or (leaves is not None and entry.pk == leaves.pk))
     if request.method == "POST":
         form = ShiftForm(request.POST)
+        if form.is_valid() and holds_leave:
+            b = covered.booking
+            item = form.cleaned_data
+            if not (item.get("start") and item.get("finish") and item["start"] <= b.start and item["finish"] >= b.finish):
+                form.add_error(None, f"The shift must include the leave, {b.start:%H:%M}–{b.finish:%H:%M}")
         if form.is_valid():
             cell = list(Entry.objects.filter(person=person, day=day).order_by("position"))
             items = [{"kind": e.kind, "start": e.start and e.start.strftime("%H:%M"),
@@ -74,8 +107,11 @@ def shift(request, person_pk, day, entry_pk=None):
         if entry is not None:
             initial = {"start": entry.start, "finish": entry.finish, "break_minutes": entry.break_minutes,
                        "department": entry.department, "text": entry.text, "wfh": entry.wfh, "overtime": entry.overtime}
+            if timed and entry.pk == covered.shortened_entry_id and covered.original_start is not None:
+                # The times they would have worked, leave included, not what is left on the grid.
+                initial.update(start=covered.original_start, finish=covered.original_finish)
         form = ShiftForm(initial=initial)
-    return render(request, "shifts/shift_dialog.html", {"form": form, "person": person, "day": day, "entry": entry})
+    return render(request, "shifts/shift_dialog.html", {"form": form, "person": person, "day": day, "entry": entry, "covered": covered})
 
 
 @login_required
@@ -165,8 +201,13 @@ def template_apply(request, pk):
         # Shown in place of the refresh: the island picks the paste up on its next window load.
         # Without the cell and row order, so no Apply button is offered: a second click would
         # paste the template again on top of the first.
-        noun = "row" if result.skipped == 1 else "rows"
-        return _templates_dialog(request, "", "", warning=f"{result.skipped} {noun} couldn't be pasted onto.")
+        rows, days = result.skipped - result.skipped_days, result.skipped_days
+        parts = []
+        if rows:
+            parts.append(f"{rows} row" if rows == 1 else f"{rows} rows")
+        if days:
+            parts.append(f"{days} leave day" if days == 1 else f"{days} leave days")
+        return _templates_dialog(request, "", "", warning=f"{' and '.join(parts)} couldn't be pasted onto.")
     return JsonResponse(REFRESH)
 
 

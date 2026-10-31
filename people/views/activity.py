@@ -9,6 +9,16 @@ from people.models import Allowance, AuditEntry
 from people.services import access
 
 
+# Models whose audit rows are filed against the person's pk.
+PERSON_MODELS = ("people.person", "shifts.entry", "leave.booking", "leave.adjustment")
+
+
+# Practice-wide leave settings, shown like departments and templates: not
+# keyed to a person.
+LEAVE_SETTING_MODELS = {"leave.bankholiday": "Bank holiday", "leave.blackout": "Blackout",
+                        "leave.leavetype": "Leave type", "leave.leavesetting": "Leave settings"}
+
+
 def _pk(value):
     """A filter's id, or None. isdigit() alone admits superscripts and
     circled digits that int() refuses."""
@@ -43,18 +53,19 @@ def activity(request):
     # Allowance rows are about a person; show whose, not a bare "allowance".
     allowances = dict(Allowance.objects.filter(person__in=people).values_list("pk", "person_id"))
     # A rota cell is audited against its person under shifts.entry (fields
-    # cell, appearance, notified); templates are shared by every manager.
+    # cell, appearance, notified), a booking or adjustment under leave.booking
+    # and leave.adjustment; templates are shared by every manager.
     entries = AuditEntry.objects.filter(
-        Q(model__in=("people.person", "shifts.entry"), object_id__in=list(names))
+        Q(model__in=PERSON_MODELS, object_id__in=list(names))
         | Q(model="people.allowance", object_id__in=list(allowances))
-        | Q(model__in=("people.department", "shifts.template")))
+        | Q(model__in=("people.department", "shifts.template", *LEAVE_SETTING_MODELS)))
     person = request.GET.get("person")
     if person:
         pk = _pk(person)
         if pk not in names:
             entries = entries.none()
         else:
-            entries = entries.filter(Q(model__in=("people.person", "shifts.entry"), object_id=pk)
+            entries = entries.filter(Q(model__in=PERSON_MODELS, object_id=pk)
                                      | Q(model="people.allowance",
                                          object_id__in=[a for a, p in allowances.items() if p == pk]))
     field = request.GET.get("field")
@@ -63,12 +74,12 @@ def activity(request):
     entries, start, end = _between(entries, request)
     entries = list(entries.select_related("actor")[:500])
     for entry in entries:
-        if entry.model in ("people.person", "shifts.entry"):
+        if entry.model in PERSON_MODELS:
             entry.record = names.get(entry.object_id, "person")
         elif entry.model == "people.allowance":
             entry.record = names.get(allowances.get(entry.object_id), "allowance")
         else:
-            entry.record = entry.model.split(".", 1)[1]
+            entry.record = LEAVE_SETTING_MODELS.get(entry.model) or entry.model.split(".", 1)[1]
     return render(request, "people/activity.html", {
         "page_title": "Activity log", "entries": entries,
         "people": people.order_by("name"), "person": person or "", "field": field or "",

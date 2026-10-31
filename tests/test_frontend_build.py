@@ -10,6 +10,7 @@ def test_the_built_files_exist_and_register_the_colour_picker_and_the_rota_grid(
     js = (ROOT / "static/dist/main.js").read_text()
     assert "colour-picker" in js and "data-component" in js
     assert "rota-grid" in js
+    assert "tile-leave" in js
     assert (ROOT / "static/dist/main.css").exists()
 
 

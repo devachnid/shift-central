@@ -1,0 +1,16 @@
+{% load leave_extras %}
+{% if preview.days %}
+<table class="table preview-table">
+  <thead><tr><th>Day</th><th>Allowance used</th><th></th></tr></thead>
+  <tbody>
+  {% for d in preview.days %}
+  <tr><td>{{ d.day|date:"D j M" }}</td>
+      <td>{% if editable %}<input name="cost_{{ d.day|date:'Y-m-d' }}" value="{{ d.text }}" placeholder="{{ d.cost|hm }}" size="8" aria-label="Allowance used on {{ d.day|date:'D j M' }}">{% else %}{{ d.cost|hm }}{% endif %}</td>
+      <td class="field-help">{% if d.placeholder %}average day — no rota yet{% elif d.account == "bank_holiday" %}bank holiday allowance{% elif d.source == "override" %}set by a manager{% elif d.source == "none" %}no shift{% endif %}{% if not d.hours_known %} — weekly hours not set{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+  <tfoot><tr><td>Total</td><td>{{ preview.total|hm }}</td><td></td></tr></tfoot>
+</table>
+{% for line in preview.balances %}<p>Balance{% if line.year %} for {{ line.year }}{% endif %} before <strong>{{ line.before|hm }}</strong>, after <strong>{{ line.after|hm }}</strong>{% if line.over %} — <span class="field-error">more than the {{ line.available|hm }} available</span>{% endif %}</p>{% endfor %}
+{% if preview.missing_allowance %}<p class="flash flash-warning">No allowance is set for this leave year.</p>{% endif %}
+{% endif %}

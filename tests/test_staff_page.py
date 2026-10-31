@@ -76,17 +76,9 @@ def test_staff_cannot_download():
     assert r["Content-Type"].startswith("text/html")
 
 
-@pytest.fixture(autouse=True)
-def years_2026_2027(monkeypatch):
-    """The Health card asks for an allowance this leave year or next; pin
-    the years as tests/test_profile.py does."""
-    from people.services import profiles
-    monkeypatch.setattr(profiles, "leave_years",
-                        lambda today=None: [date(2026, 1, 1), date(2027, 1, 1)])
-
-
-def _set_up(person, year=2026):
-    Allowance.objects.create(person=person, leave_year=date(year, 1, 1),
+def _set_up(person, years_on=0):
+    """An allowance for this leave year, or `years_on` years from it."""
+    Allowance.objects.create(person=person, leave_year=date(timezone.localdate().year + years_on, 1, 1),
                              annual_hours=Decimal("187.5"), bank_holiday_hours=Decimal("60"))
     return person
 
@@ -131,8 +123,8 @@ def test_hours_and_days_without_an_allowance_still_need_setting_up():
     boss = _set_up(make_person(first_name="Boss", weekly_hours=Decimal("37.5"), days_per_week=5))
     user = make_user_for(boss, is_all_teams_manager=True)
     make_person(first_name="Hours", weekly_hours=Decimal("22.5"), days_per_week=3)
-    _set_up(make_person(first_name="Next", weekly_hours=Decimal("22.5"), days_per_week=3), year=2027)
-    _set_up(make_person(first_name="Old", weekly_hours=Decimal("22.5"), days_per_week=3), year=2025)
+    _set_up(make_person(first_name="Next", weekly_hours=Decimal("22.5"), days_per_week=3), years_on=1)
+    _set_up(make_person(first_name="Old", weekly_hours=Decimal("22.5"), days_per_week=3), years_on=-1)
     assert {p.first_name for p in health.figures(user)["needs_setup"]} == {"Hours", "Old"}
 
 
