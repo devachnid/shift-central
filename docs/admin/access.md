@@ -106,8 +106,8 @@ Untick to take it away. Saving shows "Saved."
   else) it waits for another manager. It is ticked and unticked here by an all-teams manager
   and recorded in the Activity log, but **never by the person on themselves**: on your own
   dialog it shows yes or no, with "Another all-teams manager sets this for you: nobody approves
-  their own leave", and the service refuses the change whatever is posted. Nobody can approve
-  their own request.
+  their own leave"; a tick posted for yourself is ignored (and the service behind it refuses the
+  change as well). Nobody can approve their own request.
 
 ## Sessions and signing out
 

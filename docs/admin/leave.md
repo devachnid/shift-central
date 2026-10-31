@@ -72,7 +72,7 @@ under the statement on the Pay & time off tab (managers; not for yourself):
 
 | Field | What it does |
 |---|---|
-| **From** | The first day of the new arrangement. It must be in the person's current or next leave year ("Choose a day in this leave year or the next"), after the year's first day (the first row is the profile's own allowances) and not the day of an earlier change. |
+| **From** | The first day of the new arrangement. It must be in the person's previous, current or next leave year ("Choose a day in the previous leave year, this one or the next"), so last year's contract can still be put right in January; after the year's first day (the first row is the profile's own allowances) and not the day of an earlier change. |
 | **Weekly hours**, **Days per week** | The new contract. They become the person's hours on that day. |
 | **New annual leave allowance**, **New bank holiday allowance** | The **full-year** figures for the new hours, in hours. The system works the year out week by week from both rows. |
 | **Reason** | Required. It is recorded with the change. |
@@ -131,7 +131,7 @@ used** box (Edit), and it is the only way for a **half day**, whose placeholder 
 behind it never clears. A day a manager has typed a figure for is never re-costed, and the
 shift dialog on a half-day, timed or typed-figure booking changes no cost. On a timed booking
 the grid menu offers **Edit the day's shift…** instead, and the dialog edits the shift the
-leave shortened (see [Booking leave](#booking-leave-managers)).
+leave sits in, opening on the times they would have worked (see [Booking leave](#booking-leave-managers)).
 
 **Which allowance a day draws on.** The leave type decides: Holiday takes annual leave,
 TOIL takes the TOIL balance, Bank holiday takes the bank holiday allowance, and the others
@@ -179,7 +179,8 @@ see other staff* sees only their own rows (as on the grid). **The description, p
 the person and to their managers.** Managers see everyone on the rota, their own people in full and the
 others by type only. A colleague sees a cancellation request as Approved. Filters above the table: **From**,
 **To**, **Type**, **Team** and **Status**. Declined and cancelled bookings are left out unless you choose them
-under Status, and then only the person's own and their managers' show; so with Cancellation requested. A
+under Status, and then only the person's own and their managers' show; so with Cancellation requested.
+For a colleague, **Approved** includes cancellation requests, as they see them as approved. A
 colleague who tries to open the View dialog of a declined or cancelled booking, or of someone the rota
 hides from them, finds nothing there, and never sees who decided. Managers get **Download**, the same rows
 as the screen as CSV, and **Edit** and **Cancel** links on their people's rows. Staff get **Request time
@@ -258,11 +259,14 @@ It redraws as you change a field. The button is **Add time off**.
   is kept and costs its hours with nothing to shorten. A shift set on that day afterwards is
   cut around the leave in the same way, and one that is exactly the leave's times is hidden
   under it. To change the day's shift, right-click the leave and choose **Edit the day's
-  shift…**: the dialog opens on the shift as the grid shows it (with a note giving the leave's
-  times) and saving, say, 09:00 to 17:00 around leave from 14:00 to 15:30 leaves 09:00 to 14:00
-  showing, with 09:00 to 17:00 remembered for when the leave is cancelled. Where the leave is
-  the whole of the shift, nothing shows and the dialog says **Add shift**; a shift added there
-  stays visible.
+  shift…**: the dialog opens on the shift the person would have worked, leave included (09:00
+  to 17:00, not the 09:00 to 14:00 the grid shows), with a note giving the leave's times. It
+  finds the shift the leave shortened, or the one it hides when the leave is the whole of it,
+  or the day's only shift; with none it says **Add shift**. Saving cuts the shift around the
+  leave again: change the start to 08:00 and 08:00 to 14:00 shows, with 08:00 to 17:00
+  remembered for when the leave is cancelled. The shift must include the leave: one that
+  leaves it out is refused ("The shift must include the leave, 14:00–15:30"). Another shift
+  the same day (a split day) is edited as usual.
 - **Booking your own leave** when you do not have *Own leave needs no approval*: the dialog
   says it will wait for another manager, and sends it as a request (so the staff rules,
   blackouts and balance included, apply to it, and only requestable types can be used).
@@ -300,14 +304,21 @@ Friday less bank holidays.
 the Time off list's **Cancel** link, or **Cancel time off** on the rota menu. The shifts come back, the
 costs go, and the person is emailed. Cancelling always undoes the **whole** booking. To end a
 booking early, keeping the days already taken and giving back the rest, **Edit** it and move its
-**Last day off** back instead. For a person's own request, see above.
+**Last day off** back instead; that works on a booking begun last leave year too (29 December to
+5 January, cut short in January). For a person's own request, see above.
 
 **Editing.** **Edit**, on the list or in the booking's View dialog, changes the type, the
 dates, the part, the display text and the paid flag of an approved or waiting booking.
 Changing the dates, part or type is done by undoing the leave and applying it again
 inside one transaction, so the costs are worked out afresh; any figure a manager typed
 for a day that is still in the booking is kept, and a figure you type now becomes an
-override. Changing only the display text or paid flag re-costs nothing. When the type
+override. Changing only the display text or paid flag re-costs nothing. Only the days an edit **adds** are held to
+this leave year and the next: an edit that keeps the booking's days (the display text, the paid
+flag, a typed figure or the type), or that moves the first day later or the last day earlier, can be
+made to a booking from an earlier leave year, while moving the first day earlier or the last day later
+into a year outside the two is refused ("Leave can be booked in this leave year and the next"). The
+overlap check is as for a new booking.
+When the type
 changes, the paid flag is worked out again as for a new booking (the type's own setting, or your
 choice where the type allows one; **—** means the type's default). A booking of a type that has
 since been archived can still be edited, and its type stays on offer for it. Manager notes are not
@@ -321,7 +332,7 @@ An adjustment adds or takes away hours from a balance, and carries the reason, w
 
 | Field | What it does |
 |---|---|
-| **Leave year** | The year's first day: one of the person's two. |
+| **Leave year** | The year's first day: the person's previous, current or next leave year (the current one to begin with). Last year's is there so its statement can be put right in January; leave itself is still booked in this year and the next only. |
 | **Account** | Annual leave, Bank holiday allowance or TOIL. |
 | **Hours** | `15:00` or `7.5` adds; a minus sign (`-4:00`) takes away. At most 2000 hours either way. |
 | **Reason** | Required. |
@@ -408,7 +419,8 @@ staff can request it, and whether the manager chooses paid or unpaid; you can ar
 ## The statement and how to read it
 
 **Where:** the profile's Pay & time off tab for managers; the same figures in My leave for
-the person. A **Leave year** box switches between the person's two years. The summary is
+the person. A **Leave year** box switches between the person's previous, current and next years
+(last year's, which an adjustment can still put right, as well as the two leave is booked in). The summary is
 at the top: annual leave allowance (pro-rated), bank holiday allowance, adjustments, what is
 taken, the bank holiday balance, **annual leave remaining** (bold), what is available to request,
 and TOIL. **How it is worked out** under it lists every line, in order:
@@ -476,8 +488,8 @@ send never stops a booking.
 | An hours change leaves annual leave below zero | The managers | "[Name]'s leave balance is negative" |
 | A request (or a cancellation request) is still waiting after the number of working days set below | The managers, once per request | "Time off request still waiting" |
 
-The managers emailed are those who can manage the person, can sign in and have not left; never
-the person. Subjects name the person and say what happened, never the reason or the note. A
+The managers emailed are those who can manage the person, have an active login, have started
+and have not left; never the person. Subjects name the person and say what happened, never the reason or the note. A
 decision email to the person carries the manager's note. Links in every email are full addresses.
 
 **The reminder** is `deploy/manage leave_reminders`, started by

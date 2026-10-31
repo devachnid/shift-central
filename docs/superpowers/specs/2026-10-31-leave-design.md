@@ -786,8 +786,8 @@ describes the finished behaviour.
 34. **The Edit dialog has no Manager notes box,** because `edit` does not save them. Add keeps it.
 35. **Costs typed in Edit become overrides.** `bookings.edit` gained `costs`: after the booking is re-applied a
     typed figure wins over a kept override; on a change of label or paid flag only, typed figures become
-    overrides on the existing days, and the audit shows "cost <day>: rota → override" even when the figure is
-    unchanged. A stored override shows as the day's default in the preview ("set by a manager"), with the bank
+    overrides on the existing days, and the audit shows "cost <day>: <the figure's real previous source> →
+    override" even when the figure is unchanged (item 83). A stored override shows as the day's default in the preview ("set by a manager"), with the bank
     holiday allowance named first for a bank holiday day. A waiting request's Edit dialog shows no cost boxes,
     since its days do not exist until it is approved. Item 76 gives how Edit opens.
 36. **Typed costs are gated by `may_decide`,** which is `can_manage` by definition, so no extra check was added.
@@ -804,7 +804,8 @@ describes the finished behaviour.
 40. **The statement shows the current leave year, or the next when only it has an allowance,** unless a year is
     chosen. A year picker works inside a pop-up through a new `data-dialog-get` handler in `modal.js`.
 41. **Small additions:** `years.label` names a leave year for the picker; the Adjust form checks that its leave
-    year is one of the person's two; the leave year start on the hours form is optional.
+    year is one of the person's two (item 79 widens it to the previous year too); the leave year start on the
+    hours form is optional.
 42. **A leave year that does not start on 1 January is handled in the profile.** The allowance boxes are keyed
     by `years_for(person)` (so a 1 April person files "from 1 Apr 2027"), a start change is applied first in the
     same save, and `profiles.leave_years()` was deleted. The Health card's "needs hours and allowances" test
@@ -946,7 +947,8 @@ These were decided when the whole branch was read against this spec, the require
     View dialog answers "not found" to a colleague for a declined or cancelled booking and for a person the grid
     hides, never shows a colleague who decided, and shows a cancellation request as Approved, as the list and the
     CSV do (section 5). Filtering by Cancellation requested shows a colleague only their own rows and their
-    people's. This extends item 38.
+    people's, and a colleague's Approved filter includes cancellation requests, so the two views agree. This
+    extends item 38.
 74. **Nobody can tick *Own leave needs no approval* on themselves.** The spec left it to an all-teams manager,
     which allowed the practice manager to tick it on their own profile and so approve their own leave. The
     service now refuses it, and one's own Permissions dialog shows the value and says another all-teams manager
@@ -954,12 +956,16 @@ These were decided when the whole branch was read against this spec, the require
 75. **A shift set on a day of timed leave is cut around the leave, and the shift dialog edits it.** When a shift is
     written on a day that already has timed leave (in a week with no shifts, or through the dialog), it is cut
     around the leave as booking the leave would have cut it: shortened with its original times remembered, or
-    hidden when the leave is the whole of it. The dialog on such a day edits the visible shortened shift ("Update
-    shift") under a note giving the leave's times, so saving 09:00 to 17:00 around leave from 14:00 to 15:30 leaves
-    09:00 to 14:00 showing and 09:00 to 17:00 remembered for when the leave is cancelled. Where the leave is the
-    whole of a shift nothing is showing, so the dialog says "Add shift", and a shift added there stays visible. The
-    grid menu words it **Edit the day's shift…**. This refines item 70 and replaces the note "stays hidden on the
-    grid" for leave by the hour.
+    hidden when the leave is the whole of it; a write that leaves no shift around the leave forgets the
+    remembered times. The dialog on such a day ("Update shift", under a note giving the leave's times) edits the
+    shift the leave sits in: the one it shortened, else the one it hides (the leave was the whole of it), else
+    the day's only visible shift; with none it adds one. It opens on the times the person would have worked,
+    leave included (the remembered original times), and refuses a shift that does not include the leave ("The
+    shift must include the leave, 14:00–15:30"); another shift on a split day is edited freely. So changing the
+    start of 09:00 to 17:00, around leave from 14:00 to 15:30, to 08:00 leaves 08:00 to 14:00 showing and 08:00 to
+    17:00 remembered for when the leave is cancelled, and reopening shows 08:00 to 17:00 again. The grid menu
+    words it **Edit the day's shift…**. This refines item 70 and replaces the note "stays hidden on the grid" for
+    leave by the hour.
 76. **Edit opens with the costs, works the paid flag out again when the type changes, and can edit an archived
     type's booking.** Items 34 and 35 left Edit's cost boxes empty until a change was made. Now Edit opens bound
     to the booking: each day's cost, a figure a manager typed earlier in its box (as hours and minutes), and the
@@ -968,7 +974,11 @@ These were decided when the whole branch was read against this spec, the require
     the type's default where the type offers one, otherwise the type's own setting; "—" means the type's
     default), where it had been kept or cleared. A booking whose type has since been archived keeps that type on
     offer in Edit, though Add does not offer it. Add shows no cost boxes when the staff member is the manager
-    themselves, since their own leave is costed from the rota (item 24).
+    themselves, since their own leave is costed from the rota (item 24). An edit holds only the days it adds to
+    "this leave year and the next": one that keeps the days (a label, the paid flag, a typed figure, the type)
+    works on a booking from an earlier year, and a booking begun last year (29 December to 5 January) can be
+    cut short in January; adding a day in a year outside the two is refused as booking it would be. The
+    overlap and blackout checks are unchanged.
 77. **Leave that draws on no allowance has its own table on the statement.** Sick leave, Training and the other
     types that take their days from nothing had appeared among the annual leave deductions and the "Requested"
     lines. They now appear in a second table headed "Leave that draws on no allowance", approved and requested,
@@ -977,9 +987,13 @@ These were decided when the whole branch was read against this spec, the require
     have not left; a manager who has not started or has no login gets nothing. A link in an email sent from a
     rota write is a full address, from the first trusted origin when no page made the request. A cancellation
     request on a booking that was already reminded is reminded in its own right.
-79. **Hours changes start within the person's two leave years, and a back-dated change does not undo a later one.**
-    As an adjustment must, an hours change must start in the person's current or next leave year ("An hours change
-    can start in this leave year or the next"). A change already due is copied onto the person only when no later
+79. **Adjustments and hours changes may be dated in the previous leave year as well as the current and next, and a
+    back-dated change does not undo a later one.** Putting last year's statement right in January is legitimate,
+    so an adjustment's leave year may be the person's previous, current or next ("An adjustment can be for the
+    previous leave year, this one or the next"), the statement's year switcher offers the three, and an hours
+    change must start in one of them ("An hours change can start in the previous leave year, this one or the
+    next"; the form says "Choose a day in the previous leave year, this one or the next"). Leave is still booked
+    in this year and the next only. A change already due is copied onto the person only when no later
     change is already in force; otherwise it is recorded, works out its own days, and is marked copied so the sync
     never copies it. Posting the same change twice says "There is already a change from that day" and is not a
     server error. This refines items 12 and 43.
@@ -987,7 +1001,8 @@ These were decided when the whole branch was read against this spec, the require
     leave setting join the bookings, days, adjustments and blackouts as view-only in the Django admin, because an
     edit there skipped the audit and the lock on a type's account. A booking cannot be deleted there, as that
     skipped the undo and the audit and never put back a shift the leave had shortened; it is cancelled on the
-    Time off pages.
+    Time off pages. An allowance row cannot be deleted on its own either (a year's first row gone would make the
+    profile's next save edit the hours-change row); it still goes with its person.
 81. **Find and Replace skips a day of leave, and a paste counts leave days apart from rows.** Find and Replace
     leaves a day of approved leave alone, as Clear and Move do (item 27). A paste or a template reports
     "1 row and 2 leave days couldn't be pasted onto.": rows the manager may not edit and days of approved leave

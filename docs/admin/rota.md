@@ -278,10 +278,13 @@ Leave is booked on the [Time off pages](leave.md); the grid shows it. What chang
   typed-by-hand cost is left alone, so a half day's placeholder is settled by typing the figure in the
   **Allowance used** box in the booking's Edit dialog, which is also the other way to put any cost right.
 - **The shift on a day of leave by the hour.** The leave has only shortened the shift, which is still on
-  the grid, so the menu says **Edit the day's shift…** and the dialog edits that shift, showing the times
-  as the grid does, with a note giving the leave's times. Saving cuts the shift around the leave again
-  and remembers the times you typed, so cancelling the leave gives them back. If the leave is the whole
-  of the shift, nothing shows and the dialog says **Add shift**; a shift added there stays visible.
+  the grid, so the menu says **Edit the day's shift…** and the dialog edits that shift, opening on the
+  times the person would have worked, leave included (09:00 to 17:00 where the grid shows 09:00 to 14:00),
+  with a note giving the leave's times. It finds the shift the leave shortened, or the one it hides when
+  the leave is the whole of it, or the day's only shift; with none it says **Add shift**. The shift you
+  save must include the leave ("The shift must include the leave, 14:00–15:30"). Saving cuts it around
+  the leave again and remembers the times you typed, so cancelling the leave gives them back. Another
+  shift on the same day is edited as usual.
 
 ## Options and Filters
 
