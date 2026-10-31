@@ -127,3 +127,9 @@ def test_a_cut_move_of_a_covered_day_leaves_both_days_alone(sam, lead):
     assert Entry.objects.get(person=sam, day=MON).covered_by is not None
     tue = Entry.objects.get(person=sam, day=TUE)
     assert tue.covered_by is None and (tue.start, tue.finish) == (time(9), time(17))
+
+
+def test_a_blank_typed_cell_on_a_covered_day_cannot_delete_the_hidden_shift(sam, lead):
+    bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    assert entries.set_cell_text(lead.user, sam, MON, "") == []
+    assert Entry.objects.get(person=sam, day=MON).covered_by is not None

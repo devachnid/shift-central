@@ -136,6 +136,9 @@ def _write(user, person, day, items, keep_appearance=True):
     """Replace the cell's items. The appearance of an item in the same slot
     with the same kind survives a rewrite (a retyped time keeps its colour).
     Audits the cell as one row. Call inside a transaction, after _check."""
+    from leave.services import costing as leave_costing   # here, not at the top: leave imports entries._touch
+    if not items and leave_costing.active_day(person, day) is not None:
+        return []   # a blank cell on a day off cannot delete the covered shift (clear cannot either)
     old = list(Entry.objects.filter(person=person, day=day).select_related("department").order_by("position"))
     planned = []
     for position, item in enumerate(items):
