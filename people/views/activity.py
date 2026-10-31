@@ -16,7 +16,8 @@ PERSON_MODELS = ("people.person", "shifts.entry", "leave.booking", "leave.adjust
 # Practice-wide leave settings, shown like departments and templates: not
 # keyed to a person.
 LEAVE_SETTING_MODELS = {"leave.bankholiday": "Bank holiday", "leave.blackout": "Blackout",
-                        "leave.leavetype": "Leave type", "leave.leavesetting": "Leave settings"}
+                        "leave.leavetype": "Leave type", "leave.leavesetting": "Leave settings",
+                        "payroll.payrollrun": "Payroll"}
 
 
 def _pk(value):

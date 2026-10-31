@@ -27,9 +27,11 @@ def _items(request, role):
                      {"label": "Year end", "url": "/time-off/year-end/"}]
     items.insert(1, {"key": "time-off", "label": "Time off", "icon": "calendar-off", "url": "/time-off/",
                      "active": path.startswith("/time-off/"), "children": leave_children})
+    report_children = [{"label": "Hours", "url": "/reports/hours/"}, {"label": "Leave", "url": "/reports/leave/"}]
+    if role != "staff":
+        report_children.append({"label": "Payroll", "url": "/reports/payroll/"})
     items.append({"key": "reports", "label": "Reports", "icon": "report", "url": "/reports/hours/",
-                  "active": path.startswith("/reports/"),
-                  "children": [{"label": "Hours", "url": "/reports/hours/"}, {"label": "Leave", "url": "/reports/leave/"}]})
+                  "active": path.startswith("/reports/"), "children": report_children})
     if role != "staff":
         children = [{"label": "Activity log", "url": "/activity/"}]
         if role == "all":

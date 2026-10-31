@@ -25,7 +25,7 @@ def mark_sent(user, month):
     rows = report.rows(people, month)
     figures = {"generated_at": timezone.now().isoformat(), "rows": {str(r.person.pk): r.figures() for r in rows}}
     with transaction.atomic():
-        run = PayrollRun.objects.create(month=month, sent_by=user, people=len(rows), figures=figures)
+        run = PayrollRun.objects.create(month=month, sent_at=timezone.now(), sent_by=user, people=len(rows), figures=figures)
         audit.record_as(user, "payroll.payrollrun", run.pk, {"sent": ("", f"{month:%B %Y}, {len(rows)} people")}, note="marked sent to the bureau")
     return run
 

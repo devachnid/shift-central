@@ -18,6 +18,7 @@ def figures(user):
     Setup is hours, days and an allowance: someone with an allowance for
     neither this leave year nor the next still needs a manager. Whatever day
     a person's leave year starts, those two years begin within a year of today."""
+    from payroll.services import runs
     from shifts.services import gp_sync, notify
     today = timezone.localdate()
     people = access.managed_people(user).current(on=today) | access.managed_people(user).filter(
@@ -39,6 +40,7 @@ def figures(user):
         "needs_setup": needs_setup.order_by("name"),
         "not_seen": hr_sync.not_seen_recently().filter(pk__in=people).order_by("name"),
         "leaving_soon": _leaving(people, today),
+        "payroll_unsent": runs.unsent_due(user, today),
         **leave,
     }
 

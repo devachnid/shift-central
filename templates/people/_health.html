@@ -32,4 +32,6 @@
     {% if health.year_end_waiting %}<a href="{% url 'time-off-year-end' %}">Decide</a>{% endif %}</div>
   <div class="health-item{% if health.unnotified_old %} is-warning{% endif %}">Unnotified rota changes over a week old<strong>{{ health.unnotified_old }}</strong>
     {% if health.unnotified_old %}<a href="{% url 'rota-notify' %}" data-dialog>Notify staff</a>{% endif %}</div>
+  {% if health.payroll_unsent %}<div class="health-item is-warning">Payroll for {{ health.payroll_unsent|date:"F Y" }} not yet sent<strong>due</strong>
+    <a href="{% url 'report-payroll' %}?month={{ health.payroll_unsent|date:'Y-m' }}">Open</a></div>{% endif %}
 </section>
