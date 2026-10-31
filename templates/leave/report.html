@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load leave_extras %}
+{% block title %}Leave · AMG Shift Central{% endblock %}
+{% block topbar_actions %}<a class="topbar-action" href="?from={{ start|date:'Y-m-d' }}&amp;to={{ end|date:'Y-m-d' }}&amp;download=1">Download</a>{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <label>From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
+  <label>To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <button class="btn btn-quiet" type="submit">Refresh</button>
+</form>
+{% for t in teams %}
+<section class="report-block">
+  <h2>{{ t.team }}</h2>
+  <table class="table">
+    <thead><tr><th>Name</th><th>Allowance</th><th>Adjustments</th><th>Days</th><th>Deducted</th><th>Remaining</th><th>TOIL</th></tr></thead>
+    <tbody>
+    {% for r in t.rows %}
+    <tr><td>{{ r.person.name }}</td>
+        <td>{% if r.missing %}<span class="muted">not set</span>{% else %}{{ r.allowance|hm }}{% endif %}</td>
+        <td>{{ r.adjustments|hm }}</td><td>{{ r.days }}</td><td>{{ r.deducted|hm }}</td>
+        <td>{% if r.missing %}<span class="muted">—</span>{% else %}{{ r.remaining|hm }}{% endif %}</td>
+        <td>{{ r.toil|hm }}</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td>{{ t.team }} total</td><td>{{ t.allowance|hm }}</td><td>{{ t.adjustments|hm }}</td><td>{{ t.days }}</td><td>{{ t.deducted|hm }}</td><td>{{ t.remaining|hm }}</td><td>{{ t.toil|hm }}</td></tr></tfoot>
+  </table>
+</section>
+{% empty %}<p>Nobody to report on.</p>{% endfor %}
+{% endblock %}

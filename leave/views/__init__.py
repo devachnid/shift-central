@@ -4,3 +4,5 @@ from .list import time_off  # noqa: F401
 from .request import mine, request_time_off  # noqa: F401
 from .approve import decide, waiting  # noqa: F401
 from .statement import adjust, hours_change  # noqa: F401
+from .planner import planner  # noqa: F401
+from .report import leave_report  # noqa: F401
