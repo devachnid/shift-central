@@ -1,7 +1,7 @@
 # AMG Shift Central: leave — design
 
 **Date:** 2026-10-31
-**Status:** approved in conversation; built, with the deviations recorded at the end
+**Status:** approved in conversation; built and reviewed, with the deviations (the final review's under their own heading) recorded at the end
 **Requirements:** `docs/requirements/` as amended by
 `docs/requirements/2026-10-29-proposed-amendments.md`, all three amendments
 and the two smaller points approved by the practice manager on 31 October
@@ -625,7 +625,7 @@ note. The log is managers-only as the Activity log already is (LEAVE-31).
 - Year-end carry-over flag, leaver flags, the payroll report and
   one-pagers (spec 4). MIG-04's typed carry-over is an Adjustment here.
 - Push notifications; the leave one-pager; messages (spec 5).
-- Repeating time off (FMS "Repeat" column shows "—").
+- Repeating time off (the Time off list has no Repeat column).
 - Maximum off at once, notice periods, multi-level approval, delegation,
   automatic approval.
 - Importing FindMyShift bookings or balances.
@@ -636,10 +636,18 @@ note. The log is managers-only as the Activity log already is (LEAVE-31).
   the sessions feed).
 - A GP who left within the sessions feed's eight-week window loses recent
   sessions on the next replace (grid spec's note); leave costing for GPs
-  reads sessions, so a leaver's past GP leave costs stay as booked
-  (BookingDay rows are not re-costed for GPs).
+  reads sessions, so a leaver's past GP leave costs stay as booked. A GP's day is re-costed only when a
+  rota write touches it, as when a manager sets the shift behind the leave; a change to the GP's sessions
+  alone does not re-cost it.
 - Q-01 to Q-03 (the adviser's questions) may change rounding or carry-over
   rules; both live in one function each.
+- GP sessions are not covered by leave. They are the rota app's, so on Who's in today a GP on leave still
+  appears at their session's site as well as under "off"; to settle with the rota app in spec 4.
+- Approved bookings that run past a person's HR finish date still count in their balance and, for a GP,
+  stay in the feed. Whether to flag or cancel them belongs with the leaver's window in spec 4.
+- Sync run rows are never pruned. The rota app writes one for every fifteen-minute read of the feed (about
+  35,000 a year), each holding the addresses it could not match, and this app's own sync runs are kept
+  the same way.
 
 ## Deviations recorded during the build
 
@@ -647,7 +655,8 @@ note. The log is managers-only as the Activity log already is (LEAVE-31).
 recorded here, grouped by the task in which it was decided, so that the spec and the code can be read
 together. Where this section and the sections above disagree, this section describes what was built.
 Where a ruling was later refined, the final behaviour is given with the refinement. Tasks 11 and 12 were
-built in the GP rota app's repository (`devachnid/rota`). The manager's guide (`docs/admin/leave.md`)
+built in the GP rota app's repository (`devachnid/rota`). The review of the whole branch, last, made the
+decisions under "Final review". The manager's guide (`docs/admin/leave.md`)
 describes the finished behaviour.
 
 ### Before the build (the plan's pre-flight)
@@ -714,7 +723,8 @@ describes the finished behaviour.
 17. **Waiting TOIL is summed over every year** (`toil_pending`), and TOIL available is TOIL remaining less
     that, so the running figure and what is waiting are itemised on the same footing.
 18. **An approved TOIL booking dated in the future reduces TOIL remaining now,** exactly as approved holiday
-    reduces annual leave remaining. Screens read `Statement.toil_pending` (all years), not `pending["toil"]`.
+    reduces annual leave remaining. Item 17 is about TOIL still waiting for approval; this is TOIL already
+    approved.
 
 ### Task 4: the booking lifecycle
 
@@ -760,11 +770,12 @@ describes the finished behaviour.
 31. **The right-click menu on a day of leave, final behaviour.** The menu opens for a viewer who can edit when
     the cell is selectable or holds leave. On a cell holding leave that is not selectable (approved leave, or
     any leave on a row the viewer cannot edit), the menu holds only the leave items: **View time off**, and
-    **Cancel time off** where the row is editable. Pending leave on an editable row keeps the normal items with
+    **Cancel time off** where the row is editable, and on approved leave of an editable row the shift item
+    that item 70 describes. Pending leave on an editable row keeps the normal items with
     the leave items first. A viewer who cannot edit gets no menu. The plan assumed the context-menu handler did
     not consult selectability; it did, and the first fix (leave items only on approved leave) was then refined
     to cover a row the viewer cannot edit. The leave items come from a pure `leaveMenuItems` function with its
-    own unit test.
+    own unit test. Right-clicking such a cell also empties the selection (item 82).
 
 ### Task 7: the Time off screens
 
@@ -778,14 +789,14 @@ describes the finished behaviour.
     overrides on the existing days, and the audit shows "cost <day>: rota → override" even when the figure is
     unchanged. A stored override shows as the day's default in the preview ("set by a manager"), with the bank
     holiday allowance named first for a bank holiday day. A waiting request's Edit dialog shows no cost boxes,
-    since its days do not exist until it is approved.
+    since its days do not exist until it is approved. Item 76 gives how Edit opens.
 36. **Typed costs are gated by `may_decide`,** which is `can_manage` by definition, so no extra check was added.
 37. **The list and CSV show no "Allowance used" for a waiting booking** (blank, not "0 min").
 38. **Declined and cancelled bookings are listed when named in the Status filter,** only where the viewer has
     detail on the booking (their own, or their people's); colleagues never see them (ACC-06 lists approved and
-    waiting leave only).
-39. **Smaller mechanics fixed in the dispatch:** the Add dialog redraws on change by posting `preview=1` and the
-    Save button posts with an empty value; My leave shows the statement inline; and a manager booking their own
+    waiting leave only). Item 73 gives the rest of what a colleague sees.
+39. **Smaller mechanics settled in the build:** the Add time off dialog redraws as a field changes, and its Save
+    button saves rather than previews; My leave shows the statement on the page; and a manager booking their own
     leave without the flag sees "Your own leave will wait for another manager to approve it".
 
 ### Task 8: the statement, Adjust and Add hours change
@@ -812,10 +823,11 @@ describes the finished behaviour.
     includes archived types.
 46. **The Health card's counts, as built.** *Requests waiting* does not count the viewing manager's own
     requests (another manager decides those) and measures the oldest wait from the cancellation request's time
-    when there is one. *Leave costs to check* shows the real count beside a list capped at twenty days.
+    when there is one. *Leave costs to check* shows the real count beside the first five days, then "and N more".
     *Negative leave balances* looks at the current and the next leave year (a manager may overbook the next year),
-    skipping a year with no allowance, and filters to people with leave taken or hours taken away before the slow
-    statement is worked out.
+    skipping a year with no allowance, and never lists a GP, whatever their balance (a GP has no hours here, and
+    *Needs hours and allowances* leaves GPs out for the same reason); it filters to people with leave taken or
+    hours taken away before the slow statement is worked out.
 47. **A date outside the supported calendar (2000 to 2100) no longer errors in the report or the list.** The
     view treats it as not given and falls back to the default range: the report's is the viewer's current
     leave year, the list's is the current leave year and the next.
@@ -832,16 +844,17 @@ describes the finished behaviour.
 53. **Blackout dialogs answer with a redirect, and a "refresh" on a page that is not the grid reloads the page.**
     The blackout dialog is on a list page where nothing listens for the grid's refresh event, so it redirects. For
     the Adjust and Add hours change dialogs, `modal.js` turns a refresh request into a page reload when there is
-    no rota grid, and a `data-dialog-refresh` marker reloads when the dialog is closed.
+    no rota grid, and a `data-dialog-refresh` marker reloads when the dialog is closed (by a fresh visit to the
+    address: item 90).
 54. **"Add for everyone" is hardened.** An unknown or malformed day is a 404; a figure that is not hours or is
     over 24 h is an error on its row; a day that falls outside a person's two leave years, or an archived Bank
     holiday type, is reported by name; a duplicate bank holiday day is a form error; deleting a bank holiday is a
     POST; an inactive team stays ticked when a blackout is edited.
 55. **The reminder setting is 1 to 30 working days,** and saving it is audited.
 56. **The team-manager report scope** (their people and themselves) and the CSV are tested.
-57. **Dispatch-level decisions:** the `leave.views` package exports every view named in the URL file; the
-    planner, approve and bank-holiday routes come before the `<int:pk>` routes; pages carry no inline script
-    (the Content-Security-Policy); and no log line carries a record value.
+57. **Smaller decisions about addresses and pages:** the fixed addresses (planner, approve, bank holidays) are
+    matched before the ones that take a booking's number; pages carry no inline script, as the
+    Content-Security-Policy requires; and no log line carries a record's values.
 58. **The Health test pins today's date** so "this leave year" does not depend on the clock.
 
 ### Task 10: the GP leave feed
@@ -876,7 +889,7 @@ describes the finished behaviour.
     Shift Central settings, the deploy unit list was reordered, and the rota guide gained a "Moving from
     FindMyShift" note for a box that ran the old reader.
 
-### Other differences found when the guide was written
+### Task 13: the manager's guide and its review
 
 67. **The Add time off dialog's layout.** The per-day *Allowance used* table sits in the main part of the dialog
     under the dates, not under Advanced; Advanced holds *Paid or unpaid* (where the type allows it) and *Manager
@@ -888,18 +901,145 @@ describes the finished behaviour.
 69. **A person cannot withdraw a waiting request.** Only approved leave can be cancelled by the person (as a
     cancellation request); a manager declines or cancels a waiting one.
 
-### After the review of the documentation
-
 70. **LEAVE-06 is reachable through the shift dialog and a leave-cell menu item.** The spec re-costs a
     placeholder-costed day when the rota for that day is written, but as first built nothing in the interface could
     write to a day of approved leave (the cell is read-only, paste, move and clear skip it, and the shift dialog
     showed only "is off" with a link), so a placeholder cost and its Health line could clear only through the
-    booking's Edit override. Two things were added. The shift dialog on a covered day now shows the normal shift
-    form, prefilled from the first shift the leave covers (otherwise empty), under a note that the person is off and
-    that the shift set here is what they would have worked, sets the leave's cost and stays hidden on the grid;
-    saving goes through the ordinary entries path, so the new shift is covered and a whole-day, non-overridden
-    booking is re-costed (source `rota`, no longer a placeholder) with the "Leave cost to check" email when the
-    figure changes. On a half-day, timed or overridden booking the note says the cost is not changed. And the grid
-    menu on a cell of approved leave, on a row the viewer may edit, offers **Shift behind the leave…** after
-    View time off and Cancel time off (section 5 listed only the first two); pending leave is unchanged. Writing
-    the person's other days of the week does not re-cost the day.
+    booking's Edit override. Two things were added.
+    - The shift dialog on a day of approved whole-day or half-day leave shows the normal shift form, prefilled from
+      the first shift the leave covers (otherwise empty), under a note that the person is off. On a whole day that
+      has not been overridden the note says the shift set here is what they would have worked, sets the leave's
+      cost and stays hidden on the grid; saving goes through the ordinary entries path, so the new shift is covered
+      and the day is re-costed (source `rota`, no longer a placeholder). The "Leave cost to check" email goes to the
+      managers whenever the day was a placeholder or its figure changed, so also when the shift confirms the same
+      figure the average day gave. On a half day or an overridden day the note says the shift stays hidden and
+      the cost is not changed; a half day's placeholder therefore clears only by typing the figure in Edit.
+    - On a day of leave by the hour the shift is not hidden but shortened, so the dialog edits that shortened
+      shift instead (item 75).
+    - The grid menu on a cell of approved leave, on a row the viewer may edit, offers **Shift behind the leave…**
+      (whole and half days) or **Edit the day's shift…** (leave by the hour), both opening the shift dialog, after
+      View time off and Cancel time off (section 5 listed only the first two); pending leave is unchanged.
+    Writing the person's other days of the week does not re-cost the day.
+
+### Final review
+
+These were decided when the whole branch was read against this spec, the requirements and the guides.
+
+71. **The balance check pools annual leave with bank holidays and goes a leave year at a time.** The spec checked
+    each account on its own against the first day's leave year. A bank holiday's allowance moves into annual
+    leave, so a request that drew on both could pass each check and still take more than the one figure the
+    statement shows. Now annual leave and bank holidays are added together and compared once against annual leave
+    available, for each leave year the request touches, so a request over the end of a leave year is checked a year
+    at a time (a year with no allowance has none). TOIL never resets and is one pool whatever the year. The refusal
+    reads "This would take 37 h 30 min of annual leave (bank holidays included) and 25 h is available", naming
+    the year when the request touches two. The previews on Add, Edit, Request and Decide show a balance line for
+    each year, and a manager's own request is refused by the same check whatever the preview shows.
+72. **Typed hours are strict and bounded.** Every box that takes hours (a day's *Allowance used*, Adjust, Add for
+    everyone) accepts `7:30` (up to three digits of hours, minutes 00 to 59) or decimal hours with an optional
+    "h" (`7.5`, `7.5 h`). Anything else, such as `7h30`, `1e3` or `7,5`, is a form error and is never guessed at.
+    A day's figure is at most 24 hours, an adjustment at most 2,000 hours either way, and a figure too large to
+    read is a form error rather than a server error.
+73. **The Time off list, its CSV and the View dialog show colleagues only what the grid would.** The spec had every
+    member of staff see every approved and waiting booking by type. Now a person sees colleagues' rows only for the
+    people the grid shows them (*Show to other staff*, *Can see other staff*), managers see everyone on the rota
+    with their own people in full and the others by type, and the CSV carries the same rows as the screen. The
+    View dialog answers "not found" to a colleague for a declined or cancelled booking and for a person the grid
+    hides, never shows a colleague who decided, and shows a cancellation request as Approved, as the list and the
+    CSV do (section 5). Filtering by Cancellation requested shows a colleague only their own rows and their
+    people's. This extends item 38.
+74. **Nobody can tick *Own leave needs no approval* on themselves.** The spec left it to an all-teams manager,
+    which allowed the practice manager to tick it on their own profile and so approve their own leave. The
+    service now refuses it, and one's own Permissions dialog shows the value and says another all-teams manager
+    sets it.
+75. **A shift set on a day of timed leave is cut around the leave, and the shift dialog edits it.** When a shift is
+    written on a day that already has timed leave (in a week with no shifts, or through the dialog), it is cut
+    around the leave as booking the leave would have cut it: shortened with its original times remembered, or
+    hidden when the leave is the whole of it. The dialog on such a day edits the visible shortened shift ("Update
+    shift") under a note giving the leave's times, so saving 09:00 to 17:00 around leave from 14:00 to 15:30 leaves
+    09:00 to 14:00 showing and 09:00 to 17:00 remembered for when the leave is cancelled. Where the leave is the
+    whole of a shift nothing is showing, so the dialog says "Add shift", and a shift added there stays visible. The
+    grid menu words it **Edit the day's shift…**. This refines item 70 and replaces the note "stays hidden on the
+    grid" for leave by the hour.
+76. **Edit opens with the costs, works the paid flag out again when the type changes, and can edit an archived
+    type's booking.** Items 34 and 35 left Edit's cost boxes empty until a change was made. Now Edit opens bound
+    to the booking: each day's cost, a figure a manager typed earlier in its box (as hours and minutes), and the
+    balance line. A waiting request's Edit shows its costs without boxes and says "Costs can be set once the
+    request is approved". Changing the type works the paid flag out as booking would (the manager's choice or
+    the type's default where the type offers one, otherwise the type's own setting; "—" means the type's
+    default), where it had been kept or cleared. A booking whose type has since been archived keeps that type on
+    offer in Edit, though Add does not offer it. Add shows no cost boxes when the staff member is the manager
+    themselves, since their own leave is costed from the rota (item 24).
+77. **Leave that draws on no allowance has its own table on the statement.** Sick leave, Training and the other
+    types that take their days from nothing had appeared among the annual leave deductions and the "Requested"
+    lines. They now appear in a second table headed "Leave that draws on no allowance", approved and requested,
+    in no figure.
+78. **Who is emailed, and the links.** The managers emailed are those who can manage the person, can sign in and
+    have not left; a manager who has not started or has no login gets nothing. A link in an email sent from a
+    rota write is a full address, from the first trusted origin when no page made the request. A cancellation
+    request on a booking that was already reminded is reminded in its own right.
+79. **Hours changes start within the person's two leave years, and a back-dated change does not undo a later one.**
+    As an adjustment must, an hours change must start in the person's current or next leave year ("An hours change
+    can start in this leave year or the next"). A change already due is copied onto the person only when no later
+    change is already in force; otherwise it is recorded, works out its own days, and is marked copied so the sync
+    never copies it. Posting the same change twice says "There is already a change from that day" and is not a
+    server error. This refines items 12 and 43.
+80. **The leave admin is read-only, and a booking cannot be deleted there.** Leave types, bank holidays and the
+    leave setting join the bookings, days, adjustments and blackouts as view-only in the Django admin, because an
+    edit there skipped the audit and the lock on a type's account. A booking cannot be deleted there, as that
+    skipped the undo and the audit and never put back a shift the leave had shortened; it is cancelled on the
+    Time off pages.
+81. **Find and Replace skips a day of leave, and a paste counts leave days apart from rows.** Find and Replace
+    leaves a day of approved leave alone, as Clear and Move do (item 27). A paste or a template reports
+    "1 row and 2 leave days couldn't be pasted onto.": rows the manager may not edit and days of approved leave
+    are counted separately, and the answer to a paste carries the leave days as part of its skipped total.
+82. **On the grid, right-click on leave empties the selection, and leave tiles are coloured for contrast.**
+    Right-clicking a day of approved leave empties the selection and moves focus there, as a left click does, so
+    that Delete or Cut afterwards cannot act on an earlier selection. Approved leave is filled in the type's colour
+    with white or dark text, whichever contrasts more; waiting leave is outlined with a thick edge in the type's
+    colour and dark text; and today's column keeps its highlight.
+83. **A typed figure's audit line says where the old figure came from.** It reads "7 h 30 min (average day)" to
+    "7 h 30 min (override)", for example, where it had always said "(rota)".
+84. **Where a refusal shows, and what the blackout message says.** Section 6 put every refusal in place of the
+    Send button, and section 10 had the overlap, blackout and balance refusals name the day or the figure. As built,
+    dates, an overlap (which names the booking already there) and a blackout show a red message at the top of
+    the request page; only too little available shows where the button would be, with the balance line giving
+    the figure. The blackout message, "Leave cannot be requested on one of these days (a blackout period)",
+    names no day (a request that reached the service some other way is refused naming the day). A refusal from
+    a service in any dialog is shown at the top of the dialog, never beside a field.
+85. **The practice-wide settings are open to any manager.** Item 52 is read in full: a team manager can add a
+    blackout for any team or for everyone, add and delete a bank holiday, and edit leave types and the leave
+    setting, and each holds for the whole practice. "Add for everyone" lists only the people the manager can
+    manage.
+86. **The person reads adjustment reasons and override notes.** The statement shows an adjustment's reason, and
+    the View dialog and My leave show an override's note and the Manager notes, to the person they are about.
+    The requirements mark the balance-change log as hidden from the person (ACC-06), but the statement is the
+    person's own record (REP-10). The guide warns managers to write them for the person to read.
+87. **Approving a cancellation undoes the whole booking.** The spec's cancellation approval, like a manager's
+    cancel, undoes every day, those already taken included, and the build keeps that. To end a booking early
+    a manager refuses the cancellation request and Edits the booking so that it ends on the last day taken; the
+    guide says so.
+88. **Small differences between the build and the spec's wording.** (a) There is no `cancel.py`: cancelling,
+    the decision on a cancellation and editing are in `bookings.py`. (b) `people` and `shifts` read from `leave`
+    in more places than section 1 allows (the profile's allowance years and its statement, the rule on moving a
+    leave year, the Health card, the grid's window, Who's in today and the shift dialog). (c) Changing a leave
+    year's start is refused once the person has any allowance or any waiting or approved booking, not only in a
+    year it would move. (d) Add for everyone has the button "Add bank holiday for everyone ticked". (e) The grid's
+    download writes a leave tile as the type's name with its part, and "(requested)" for waiting leave, not the
+    tile's label. (f) Edit works on a waiting booking as well as an approved one. (g) TOIL earned leaves out a TOIL
+    shift hidden under leave. (h) LV-15a and LV-15b share one test, the carry-over being a typed adjustment.
+89. **Tests do not depend on today's date.** In the tests the clock is pinned to Monday 2 November 2026 at 09:00
+    (Europe/London) and runs on from there. A test written on the 2026 to 2027 calendar, such as the worked
+    examples and every 2027 booking, says so with a marker that sets the day it was written for, so moving
+    the pinned day does not break them. The whole suite was run with the pin moved to June 2027 and to January
+    2028, and passed each time.
+90. **A page that a dialog refreshes is reloaded by visiting its address again.** A page that was itself the
+    answer to a form post no longer makes the browser ask to resend the form when a dialog refreshes it. This
+    refines item 53.
+91. **The rota app's setup order, and the checks it keeps.** In the rota app's repository, the guide gives the
+    order token, environment, the timer's units installed, migrate then restart, logins, the type mapping, the
+    first sync, the timer; it names the real leave types (Holiday, Sick leave, TOIL, Training); and its README's
+    move of an install that runs as root copies the timer too. The old FindMyShift design is marked superseded.
+    `rota.E007` stays, as the check that the Shift Central address is https (section 8 listed it as removed
+    with the FindMyShift settings). More tests pin the client's refusals (plain http with debug off, a
+    redirect, a body that is not JSON, a body with no list) and that a login with a blank email matches
+    no record.
