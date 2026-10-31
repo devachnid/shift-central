@@ -47,8 +47,17 @@ def cell_text(entries):
 
 
 def day_text(person, day):
-    rows = Entry.objects.filter(person=person, day=day).select_related("department").order_by("position")
-    return " / ".join(line(e) for e in rows) or "no shift"
+    """The day as notify and the audit see it: the leave, if any, then the
+    entries still showing. Covered entries are left out (spec 3)."""
+    rows = Entry.objects.filter(person=person, day=day, covered_by__isnull=True).select_related("department").order_by("position")
+    parts = [line(e) for e in rows]
+    from leave.models import Booking, BookingDay
+    bd = BookingDay.objects.filter(booking__person=person, day=day, booking__status__in=Booking.ACTIVE).select_related("booking__type").first()
+    if bd is not None:
+        b = bd.booking
+        mark = {"whole": "", "am": " (morning)", "pm": " (afternoon)", "times": f" {b.start:%H:%M}-{b.finish:%H:%M}" if b.start else ""}[b.part]
+        parts.insert(0, f"{b.type.name}{mark}")
+    return " / ".join(parts) or "no shift"
 
 
 def duration(td):
