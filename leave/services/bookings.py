@@ -245,13 +245,15 @@ def book(user, person, leave_type, first, last, part, start=None, finish=None, d
     if not access.can_manage(user, person):
         costs = None
     if dates_only:
+        if costs:
+            raise LeaveError("part", "A past schedule entry is whole days with no hours")
         _check_dates_only(leave_type, first, last, part)
     else:
         _check_dates(person, first, last, part, start, finish)
-    before_level = _trigger_before(person, leave_type)
     booking = _new(user, person, leave_type, first, last, part, start, finish, description, paid, note, Booking.Status.APPROVED)
     booking.decided_by, booking.decided_at, booking.dates_only = user, timezone.now(), dates_only
     with transaction.atomic():
+        before_level = _trigger_before(person, leave_type)
         _check_overlap(person, first, last)
         booking.save()
         days = _apply(booking)
@@ -436,7 +438,8 @@ def cancel(user, booking, note="", base_url=""):
         fresh.save()
         audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh))}, note="cancelled by a manager")
     booking.refresh_from_db()
-    _mail(notify.cancel_decided, fresh, True, base_url)
+    if not fresh.dates_only:        # a manager removing typed history: nothing to tell the person
+        _mail(notify.cancel_decided, fresh, True, base_url)
 
 
 # --- edit, override, recost -----------------------------------------------

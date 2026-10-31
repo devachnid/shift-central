@@ -8,7 +8,7 @@ from decimal import Decimal
 import pytest
 from django.core import mail
 
-from leave.models import BookingDay
+from leave.models import Booking, BookingDay
 from leave.services import balances, bookings, feed, sickness
 from leave.services.common import LeaveError
 from people.models import AuditEntry
@@ -136,6 +136,13 @@ def test_a_dates_only_entry_has_no_days_covers_nothing_and_skips_the_year_rule(b
     assert row.last_day == date(2026, 7, 13) and not BookingDay.objects.filter(booking=row).exists()
     with pytest.raises(LeaveError):
         bookings.edit(boss.user, row, part="am", first=date(2026, 7, 6), last=date(2026, 7, 6))
+    with pytest.raises(LeaveError):
+        bookings.book(boss.user, sam, sick_type(), date(2026, 8, 3), date(2026, 8, 3), "whole", dates_only=True, costs={date(2026, 8, 3): 3600})
+    assert not Booking.objects.filter(person=sam, first_day=date(2026, 8, 3)).exists()
+    before = len(mail.outbox)
+    bookings.cancel(boss.user, row)
+    row.refresh_from_db()
+    assert row.status == "cancelled" and len(mail.outbox) == before
 
 
 @pytest.mark.today(date(2027, 1, 15))
@@ -157,3 +164,16 @@ def test_a_gps_dates_only_entry_is_in_the_feed():
 def test_overlaps_window():
     assert sickness.overlaps_window(date(2026, 1, 1), date(2026, 1, 3), today=date(2026, 7, 1))
     assert not sickness.overlaps_window(date(2025, 12, 1), date(2026, 1, 1), today=date(2026, 7, 1))
+
+
+@pytest.mark.today(date(2026, 7, 1))
+def test_changing_a_booking_to_sick_leave_through_edit_reaches_the_trigger(boss):
+    sam = make_person(first_name="Sam")
+    for d in (date(2026, 2, 2), date(2026, 3, 2)):
+        bookings.book(boss.user, sam, sick_type(), d, d, "whole")
+    holiday = bookings.book(boss.user, sam, make_type("Holiday"), date(2026, 4, 1), date(2026, 4, 1), "whole")
+    assert sent() == [] and sickness.level_for(sam) == 0
+    bookings.edit(boss.user, holiday, type=sick_type())
+    assert sickness.level_for(sam) == 1
+    assert [m.subject for m in sent()] == ["Sam Patel has reached Trigger 1"]
+    assert AuditEntry.objects.filter(model="leave.booking", object_id=sam.pk, note__contains="Trigger 1 reached").exists()
