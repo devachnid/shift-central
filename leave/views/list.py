@@ -34,8 +34,9 @@ def _range(request, person):
 def visible_rows(user, start, end, filters):
     me = getattr(user, "person", None)
     rows = (Booking.objects.filter(first_day__lte=end, last_day__gte=start)
-            .exclude(status__in=(Booking.Status.DECLINED, Booking.Status.CANCELLED))
             .select_related("person__team", "type").prefetch_related("booking_days"))
+    if filters.get("status") not in (Booking.Status.DECLINED, Booking.Status.CANCELLED):   # asked for by name, they are listed
+        rows = rows.exclude(status__in=(Booking.Status.DECLINED, Booking.Status.CANCELLED))
     if filters.get("type"):
         rows = rows.filter(type__name=filters["type"])
     if filters.get("team"):
@@ -52,7 +53,7 @@ def visible_rows(user, start, end, filters):
         manage = not mine and (everyone or b.person.team_id in team_ids)
         detail = mine or manage
         out.append({"booking": b, "detail": detail, "manage": manage, "days": (b.last_day - b.first_day).days + 1,
-                    "cost": sum(bd.cost_seconds for bd in b.booking_days.all()) if detail else None})
+                    "cost": sum(bd.cost_seconds for bd in b.booking_days.all()) if detail and b.is_active else None})
     return out
 
 

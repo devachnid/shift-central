@@ -57,11 +57,20 @@ def _preview(form, booking=None, person=None):
         costs = [costing.cost(person, kw["leave_type"], d, kw["part"], kw["start"], kw["finish"], include=own.get(d))
                  for d in Booking(first_day=kw["first"], last_day=kw["last"]).days()]
     typed = form.costs()
+    stored = {bd.day: bd for bd in booking.booking_days.all() if bd.source == "override"} if booking is not None else {}
     days = []
     for c, day in zip(costs, Booking(first_day=kw["first"], last_day=kw["last"]).days()):
-        days.append({"day": day, "cost": typed.get(day, c.seconds), "source": c.source, "placeholder": c.placeholder,
-                     "hours_known": c.hours_known, "account": c.account, "typed": day in typed,
-                     "text": form.data.get(f"cost_{day.isoformat()}", "").strip()})
+        key = f"cost_{day.isoformat()}"
+        row = {"day": day, "cost": typed.get(day, c.seconds), "source": c.source, "placeholder": c.placeholder,
+               "hours_known": c.hours_known, "account": c.account, "typed": day in typed,
+               "text": form.data.get(key, "").strip()}
+        if day in stored and key not in form.data:      # a manager's earlier figure stands until another is typed
+            row.update(cost=stored[day].cost_seconds, source="override", placeholder=False, account=stored[day].account)
+            if stored[day].cost_seconds % 60 == 0:
+                row["text"] = f"{stored[day].cost_seconds // 3600}:{stored[day].cost_seconds % 3600 // 60:02d}"
+        elif day in stored and day not in typed:
+            row.update(cost=stored[day].cost_seconds, source="override", placeholder=False, account=stored[day].account)
+        days.append(row)
     total = {}
     for d in days:
         total[d["account"]] = total.get(d["account"], 0) + d["cost"]
@@ -129,7 +138,7 @@ def edit(request, pk):
         if form.is_valid() and not request.POST.get("preview") and "error" not in preview:
             kw = form.booking_kwargs()
             try:
-                bookings.edit(request.user, booking, base_url=request.build_absolute_uri("/"), type=kw["leave_type"], first=kw["first"], last=kw["last"],
+                bookings.edit(request.user, booking, base_url=request.build_absolute_uri("/"), costs=form.costs(), type=kw["leave_type"], first=kw["first"], last=kw["last"],
                               part=kw["part"], start=kw["start"], finish=kw["finish"], description=kw["description"], paid=kw["paid"])
                 return JsonResponse(REFRESH)
             except LeaveError as e:

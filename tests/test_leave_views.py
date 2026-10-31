@@ -182,3 +182,33 @@ def test_the_add_preview_keeps_typed_hours_and_edit_does_not_count_the_booking_t
     data.pop(f"cost_{MON}")
     body = c.post(f"/time-off/{b.pk}/edit/", data).content.decode()
     assert "Balance before <strong>232 h 30 min</strong>, after <strong>225 h</strong>" in body
+
+
+def test_edit_keeps_and_previews_a_stored_override_and_saves_a_typed_one(sam, lead):
+    from leave.models import BookingDay
+    from tests.factories import make_bank_holiday
+    day = date(2027, 5, 3)
+    make_bank_holiday(day, "Early May bank holiday")
+    from leave.services import bank_holidays
+    b = bank_holidays.book(lead.user, sam, day, 27000)
+    c = _client(lead)
+    data = {"person": sam.pk, "type": b.type.pk, "first_day": day, "last_day": day, "part": "whole", "description": "Spring"}
+    body = c.post(f"/time-off/{b.pk}/edit/", {**data, "preview": "1"}).content.decode()
+    assert "7 h 30 min" in body and f'name="cost_{day}" value="7:30"' in body
+    assert c.post(f"/time-off/{b.pk}/edit/", {**data, f"cost_{day}": "7:30"}).json() == {"refresh": True}
+    bd = BookingDay.objects.get(booking=b)
+    assert (bd.cost_seconds, bd.source, bd.override_note) == (27000, "override", "bank holiday")
+    assert c.post(f"/time-off/{b.pk}/edit/", {**data, f"cost_{day}": "4:00"}).json() == {"refresh": True}
+    bd.refresh_from_db()
+    assert (bd.cost_seconds, bd.source) == (14400, "override")
+
+
+def test_the_list_hides_declined_and_cancelled_unless_asked_and_pending_shows_no_cost(sam, lead):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    pending = bookings.request(sam.user, sam, make_type("Holiday"), TUE, TUE, "whole")
+    c = _client(lead)
+    row = next(r for r in c.get("/time-off/").context["rows"] if r["booking"].pk == pending.pk)
+    assert row["cost"] is None
+    bookings.cancel(lead.user, b)
+    assert b.pk not in [r["booking"].pk for r in c.get("/time-off/").context["rows"]]
+    assert [r["booking"].pk for r in c.get("/time-off/?status=cancelled").context["rows"]] == [b.pk]

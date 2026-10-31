@@ -337,3 +337,21 @@ def test_extending_a_booking_keeps_the_overrides_on_the_days_it_already_had(sam,
     assert (first.day, first.cost_seconds, first.source, first.override_note, first.override_by) == (MON, 14400, "override", "half pay day", lead.user)
     assert (second.day, second.cost_seconds, second.source) == (TUE, 27000, "rota")
     assert Entry.objects.filter(person=sam, day__in=(MON, TUE), covered_by__isnull=False).count() == 2
+
+
+def test_edit_with_typed_costs_makes_them_overrides(sam, lead):
+    make_bank_holiday(date(2027, 5, 3), "Early May bank holiday")
+    day = date(2027, 5, 3)
+    b = bank_holidays.book(lead.user, sam, day, 27000)
+    bookings.edit(lead.user, b, costs={day: 14400}, description="Spring")
+    bd = BookingDay.objects.get(booking=b)
+    assert (bd.cost_seconds, bd.source, bd.override_note, bd.override_by) == (14400, "override", "set when edited", lead.user)
+
+
+def test_extending_with_a_typed_cost_overrides_the_new_day_and_keeps_the_old_figure(sam, lead):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    bookings.override_day(lead.user, BookingDay.objects.get(booking=b), 4 * 3600, "half pay day")
+    bookings.edit(lead.user, b, last=TUE, costs={TUE: 3 * 3600})
+    old, new = BookingDay.objects.get(booking=b, day=MON), BookingDay.objects.get(booking=b, day=TUE)
+    assert (old.cost_seconds, old.override_note) == (14400, "half pay day")
+    assert (new.cost_seconds, new.source) == (10800, "override")

@@ -134,6 +134,23 @@ def request(user, person, leave_type, first, last, part, start=None, finish=None
     return booking
 
 
+def _type_costs(user, rows, costs, note):
+    """A manager's typed figures become overrides on the booking's days (a
+    typed figure is always an override, so a bank holiday day reads "bank
+    holiday" even at the rota's cost). Returns the audit lines."""
+    changes = {}
+    for bd in rows:
+        typed = (costs or {}).get(bd.day)
+        if typed is not None and not (bd.source == BookingDay.Source.OVERRIDE and bd.cost_seconds == int(typed)):   # an unchanged figure keeps its note
+            before = bd.cost_seconds
+            bd.cost_seconds, bd.source, bd.placeholder = int(typed), BookingDay.Source.OVERRIDE, False
+            bd.override_by, bd.override_note = user, note[:300]
+            bd.save()
+            if before != bd.cost_seconds:
+                changes[f"cost {bd.day.isoformat()}"] = (hours.fmt(before), hours.fmt(bd.cost_seconds))
+    return changes
+
+
 def book(user, person, leave_type, first, last, part, start=None, finish=None, description="", paid=None, note="", costs=None, base_url=""):
     """A manager's booking, approved as it is made. `costs` is {day: seconds}
     typed on the Advanced tab; each becomes an override. Only a manager's
@@ -150,12 +167,7 @@ def book(user, person, leave_type, first, last, part, start=None, finish=None, d
         _check_overlap(person, first, last)
         booking.save()
         days = _apply(booking)
-        for bd in days:
-            typed = (costs or {}).get(bd.day)
-            if typed is not None:          # a typed figure is always an override, so a bank holiday day reads "bank holiday" even at the rota's cost
-                bd.cost_seconds, bd.source, bd.placeholder = int(typed), BookingDay.Source.OVERRIDE, False
-                bd.override_by, bd.override_note = user, (note or "set when booked")[:300]
-                bd.save()
+        _type_costs(user, days, costs, note or "set when booked")
         audit.record_as(user, "leave.booking", person.pk, {"booking": ("", describe(booking))}, note="booked by a manager")
     _after_apply(booking, days, base_url)
     return booking
@@ -326,7 +338,7 @@ def cancel(user, booking, note="", base_url=""):
 EDITABLE = ("type", "first", "last", "part", "start", "finish", "description", "paid")
 
 
-def edit(user, booking, base_url="", **fields):
+def edit(user, booking, base_url="", costs=None, **fields):
     if not may_decide(user, booking):
         raise PermissionDenied("you don't manage this person")
     unknown = set(fields) - set(EDITABLE)
@@ -367,7 +379,8 @@ def edit(user, booking, base_url="", **fields):
                     bd.cost_seconds, bd.override_note, bd.override_by_id = kept[bd.day]
                     bd.source, bd.placeholder = BookingDay.Source.OVERRIDE, False
                     bd.save()
-        audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh))}, note="edited by a manager")
+        typed = _type_costs(user, days or list(BookingDay.objects.filter(booking=fresh)), costs, "set when edited")
+        audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh)), **typed}, note="edited by a manager")
     booking.refresh_from_db()
     _after_apply(fresh, days, base_url)
 
