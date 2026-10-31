@@ -177,8 +177,13 @@ def template_apply(request, pk):
         # Shown in place of the refresh: the island picks the paste up on its next window load.
         # Without the cell and row order, so no Apply button is offered: a second click would
         # paste the template again on top of the first.
-        noun = "row" if result.skipped == 1 else "rows"
-        return _templates_dialog(request, "", "", warning=f"{result.skipped} {noun} couldn't be pasted onto.")
+        rows, days = result.skipped - result.skipped_days, result.skipped_days
+        parts = []
+        if rows:
+            parts.append(f"{rows} row" if rows == 1 else f"{rows} rows")
+        if days:
+            parts.append(f"{days} leave day" if days == 1 else f"{days} leave days")
+        return _templates_dialog(request, "", "", warning=f"{' and '.join(parts)} couldn't be pasted onto.")
     return JsonResponse(REFRESH)
 
 

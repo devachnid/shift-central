@@ -7,6 +7,7 @@ import pytest
 from django.test import Client
 
 from shifts.models import Entry, GridOptions, Template
+from tests import clock
 from tests.factories import make_department, make_entry, make_person, make_team, make_team_manager, make_user_for
 
 pytestmark = pytest.mark.django_db
@@ -247,6 +248,29 @@ def test_a_skipped_rows_warning_after_applying_a_template_offers_no_second_apply
     assert "1 row couldn&#x27;t be pasted onto." in body or "1 row couldn't be pasted onto." in body
     assert "/apply/" not in body and 'name="cell"' not in body and "Select a cell" not in body
     assert Entry.objects.filter(person=nina).count() == 1
+
+
+@pytest.mark.today(clock.LATE_2026)     # books leave in 2027 through the service
+def test_a_template_warning_counts_days_off_apart_from_rows(lead):
+    from leave.services import bookings
+    from tests.factories import make_type
+    nina = make_person(first_name="Nina", team=lead.team)
+    nurse = make_person(first_name="Nurse", team=make_team("Nursing"))
+    tue = date(2027, 3, 2)
+    user = make_user_for(lead)
+    c = Client()
+    c.force_login(user)
+    bookings.book(user, nina, make_type("Sick leave"), tue, tue, "whole")
+    block = {"days": 2, "rows": [[[{"kind": "comment", "text": "a"}], [{"kind": "comment", "text": "b"}]],
+                                  [[{"kind": "comment", "text": "c"}], [{"kind": "comment", "text": "d"}]]]}
+    t = Template.objects.create(name="Two days", block=block)
+
+    def warning(row_order):
+        body = c.post(f"/rota/templates/{t.pk}/apply/", {"cell": f"{nina.pk}:2027-03-01", "row_order": row_order}).content.decode()
+        return body.replace("&#x27;", "'")
+    # Nina's Tuesday is a day off, and Nurse's row is not the lead's to edit.
+    assert "1 row and 1 leave day couldn't be pasted onto." in warning(f"{nina.pk},{nurse.pk}")
+    assert "1 leave day couldn't be pasted onto." in warning(f"{nina.pk}")
 
 
 def test_editing_a_shift_after_a_gap_in_the_positions_replaces_that_shift(lead):
