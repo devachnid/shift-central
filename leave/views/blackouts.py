@@ -24,7 +24,7 @@ def index(request):
 
 def _dialog(request, row=None):
     initial = {"first_day": row.first_day, "last_day": row.last_day, "note": row.note, "teams": list(row.teams.all())} if row else None
-    form = BlackoutForm(request.POST or None, initial=initial)
+    form = BlackoutForm(request.POST or None, initial=initial, row=row)
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         if row is None:

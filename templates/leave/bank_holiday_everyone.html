@@ -3,10 +3,12 @@
 {% block dialog_body %}
 {% if done %}
 <p class="flash" data-dialog-refresh>Added for {{ booked }} {{ booked|pluralize:"person,people" }}{% if skipped %} ({{ skipped }} skipped: already booked or not yours){% endif %}.</p>
+{% if outside %}<p class="flash flash-warning">{{ outside }} {{ outside|pluralize:"person,people" }} not added: leave can only be booked in a person's current leave year and the next.</p>{% endif %}
 <p><a href="{% url 'bank-holidays' %}?year={{ day.year }}">Show the list</a></p>
 {% else %}
 <form method="post" action="{% url 'bank-holiday-everyone' day|date:'Y-m-d' %}" data-dialog-form>
   {% csrf_token %}
+  {% if problem %}<p class="flash flash-error">{{ problem }}</p>{% endif %}
   <p class="field-help">Each person's hours are the day they most often worked on this weekday in the last four weeks. Change any of them, and untick anyone it doesn't apply to. Anyone already booked for the day is skipped.</p>
   <table class="table">
     <thead><tr><th><span class="visually-hidden">Add</span></th><th>Staff</th><th>Hours</th></tr></thead>

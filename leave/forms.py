@@ -8,8 +8,9 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 
 from django import forms
+from django.db.models import Q
 
-from leave.models import Booking, LeaveType
+from leave.models import BankHoliday, Booking, LeaveType
 from leave.services import hours, types
 from people.models import Person, Team
 from people.services import access
@@ -140,6 +141,13 @@ class BankHolidayForm(forms.Form):
     day = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"))
     name = forms.CharField(max_length=60)
 
+    def clean_day(self):
+        day = self.cleaned_data["day"]
+        existing = BankHoliday.objects.filter(day=day).first()
+        if existing is not None:
+            raise forms.ValidationError(f"{existing.name} is already on the list for that day")
+        return day
+
 
 class BlackoutForm(forms.Form):
     first_day = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"), label="First day")
@@ -148,9 +156,11 @@ class BlackoutForm(forms.Form):
                                            help_text="Leave none ticked for everyone")
     note = forms.CharField(max_length=120, required=False)
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, row=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["teams"].queryset = Team.objects.filter(active=True)
+        # An edit keeps the teams the blackout already names, active or not.
+        keep = row.teams.values("pk") if row is not None else []
+        self.fields["teams"].queryset = Team.objects.filter(Q(active=True) | Q(pk__in=keep))
 
     def clean(self):
         d = super().clean()

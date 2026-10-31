@@ -65,8 +65,12 @@ def _leave(user, people, today):
                                                day__range=window).values_list("booking__person", flat=True))
     candidates |= set(Adjustment.objects.filter(person__in=people, account__in=drawing, seconds__lt=0,
                                                 leave_year__range=window).values_list("person", flat=True))
-    negative = [p for p in people.filter(pk__in=candidates, is_gp=False).order_by("name")
-                if any(balances.statement(p, year).annual_remaining < 0 for year in years.years_for(p, today))]
+    negative = []
+    for p in people.filter(pk__in=candidates, is_gp=False).order_by("name"):
+        statements = (balances.statement(p, year) for year in years.years_for(p, today))
+        # A year with no allowance set is "needs hours and allowances", not a deficit.
+        if any(not s.missing and s.annual_remaining < 0 for s in statements):
+            negative.append(p)
     return {
         "waiting": len(since),
         "waiting_oldest_days": (timezone.now() - min(since)).days if since else 0,

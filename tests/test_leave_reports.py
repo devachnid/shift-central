@@ -261,7 +261,7 @@ def test_leave_settings_are_validated_audited_and_for_managers(lead, sam):
     assert _client(sam).get("/settings/leave/").status_code == 403 and _client(sam).post("/settings/leave/", {"reminder_working_days": "9"}).status_code == 403
 
 
-def test_the_nav_links_all_resolve(lead, sam):
+def test_every_page_the_navigation_points_at_opens_for_a_manager(lead, sam):
     c = _client(lead)
     for url in ("/time-off/planner/", "/time-off/bank-holidays/", "/time-off/blackouts/", "/reports/leave/", "/settings/leave-types/", "/settings/leave/"):
         assert c.get(url).status_code == 200, url
@@ -287,3 +287,104 @@ def test_the_health_card_does_not_show_other_teams_leave(sam, lead, monkeypatch)
     bookings.request(make_user_for(other) and other.user, other, make_type("Holiday"), MON, MON, "whole")
     f = health.figures(lead.user)
     assert f["waiting"] == 0 and f["placeholders"] == [] and f["negative"] == []
+
+
+# --- fix round 1 -----------------------------------------------------------
+
+@pytest.mark.parametrize("query", ["from=9999-06-01", "from=9999-12-31&to=9999-12-31", "from=0001-01-01", "to=0001-01-01", "from=2027-01-01&to=9999-12-31"])
+def test_the_leave_report_and_the_time_off_list_survive_dates_far_from_today(sam, lead, query):
+    sam.leave_year_start = "04-01"
+    sam.save()
+    for url in ("/reports/leave/", "/time-off/"):
+        assert _client(sam).get(f"{url}?{query}").status_code == 200, (url, query)
+        assert _client(lead).get(f"{url}?{query}&download=1").status_code == 200, (url, query)
+
+
+def test_an_out_of_range_date_falls_back_to_the_default_range(sam):
+    body = _client(sam).get("/reports/leave/?from=9999-06-01").content.decode()
+    assert 'value="9999' not in body
+
+
+def test_a_booking_of_an_always_unpaid_type_is_unpaid_whatever_the_type_is_called(sam, lead):
+    row = LeaveType.objects.get(name="Unpaid leave")
+    row.name = "Leave without pay"
+    row.save()
+    b = bookings.book(lead.user, sam, row, MON, MON, "whole")
+    assert b.paid is False
+    assert bookings.book(lead.user, sam, make_type("Training"), TUE, TUE, "whole").paid is None
+
+
+def test_the_activity_log_lists_practice_wide_leave_changes(lead):
+    c = _client(lead)
+    c.post("/time-off/bank-holidays/", {"day": "2027-05-07", "name": "Coronation"})
+    c.post("/time-off/blackouts/add/", {"first_day": "2027-12-20", "last_day": "2027-12-31", "note": "Christmas"})
+    c.post("/settings/leave/", {"reminder_working_days": "5"})
+    holiday = LeaveType.objects.get(name="Holiday")
+    c.post(f"/settings/leave-types/{holiday.pk}/edit/", {"name": "Annual leave", "colour": "#123456", "display_order": "10"})
+    body = c.get("/activity/").content.decode()
+    assert "2027-05-07 Coronation" in body and "Bank holiday" in body
+    assert "Blackout" in body and "Leave settings" in body and "Leave type" in body and "Annual leave" in body
+
+
+def test_a_modal_refresh_reloads_the_page_when_there_is_no_rota_grid():
+    from pathlib import Path
+    js = Path("static/js/modal.js").read_text()
+    assert 'document.querySelector(\'[data-component="rota-grid"]\')' in js and "window.location.reload()" in js
+
+
+def test_a_type_with_bookings_keeps_its_account_in_the_service_too(lead, sam):
+    from leave.services import types
+    study = types.add(lead.user, "Study leave", "#654321", "none", True, False, "never")
+    assert types.update(lead.user, study, draws_from="annual").draws_from == "annual"
+    bookings.book(lead.user, sam, study, MON, MON, "whole")
+    with pytest.raises(ValueError):
+        types.update(lead.user, study, draws_from="none")
+    assert types.update(lead.user, study, colour="#111111", draws_from="annual").colour == "#111111"
+
+
+def test_a_year_with_no_allowance_is_not_a_negative_balance(sam, lead, monkeypatch):
+    monkeypatch.setattr(timezone, "localdate", lambda: date(2027, 2, 1))
+    bookings.book(lead.user, sam, make_type("Holiday"), date(2028, 3, 6), date(2028, 3, 6), "whole")      # next year: nothing set yet
+    assert health.figures(lead.user)["negative"] == []
+
+
+def test_add_for_everyone_says_why_it_booked_nobody(sam, lead):
+    from tests.factories import make_bank_holiday
+    c = _client(lead)
+    make_bank_holiday(date(2031, 1, 1), "New Year")
+    r = c.post("/time-off/bank-holidays/2031-01-01/everyone/", {f"hours_{sam.pk}": "7:30", f"tick_{sam.pk}": "on"})
+    body = r.content.decode()
+    assert "Added for 0 people" in body and "current leave year and the next" in body and "skipped" not in body
+    LeaveType.objects.filter(draws_from="bank_holiday").update(archived=True)
+    body = c.post("/time-off/bank-holidays/2027-05-03/everyone/", {f"hours_{sam.pk}": "7:30", f"tick_{sam.pk}": "on"}).content.decode()
+    assert "archived" in body and "Added for" not in body and not Booking.objects.filter(person=sam).exists()
+
+
+def test_adding_a_bank_holiday_twice_is_an_error_not_a_silent_keep(lead):
+    c = _client(lead)
+    r = c.post("/time-off/bank-holidays/", {"day": "2027-05-03", "name": "Another name"})
+    assert r.status_code == 200 and "is already on the list for that day" in r.content.decode()
+    assert BankHoliday.objects.get(day=date(2027, 5, 3)).name != "Another name"
+
+
+def test_editing_a_blackout_keeps_a_team_that_has_since_gone_inactive(lead, team):
+    old = make_team("Closed")
+    b = Blackout.objects.create(first_day=date(2027, 12, 20), last_day=date(2027, 12, 24))
+    b.teams.set([team, old])
+    old.active = False
+    old.save()
+    c = _client(lead)
+    body = c.get(f"/time-off/blackouts/{b.pk}/edit/").content.decode()
+    assert "Closed" in body
+    c.post(f"/time-off/blackouts/{b.pk}/edit/", {"first_day": "2027-12-20", "last_day": "2027-12-24", "teams": [team.pk, old.pk]})
+    assert set(b.teams.all()) == {team, old}
+    assert "Closed" not in c.get("/time-off/blackouts/add/").content.decode()       # not offered for a new one
+
+
+def test_a_team_manager_reports_on_their_own_team_only(sam, lead):
+    olly = make_person(first_name="Olly", team=make_team("Nursing"), start_date=date(2020, 1, 6))
+    c = _client(lead)
+    body = c.get("/reports/leave/?from=2027-01-01&to=2027-12-31").content.decode()
+    assert "Sam Patel" in body and "Olly Patel" not in body and "Nursing" not in body
+    csv = c.get("/reports/leave/?from=2027-01-01&to=2027-12-31&download=1").content.decode()
+    assert "Sam Patel" in csv and olly.name not in csv and "Nursing" not in csv

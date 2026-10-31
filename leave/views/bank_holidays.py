@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from leave.forms import BankHolidayForm, parse_hours
 from leave.models import BankHoliday, Booking, LeaveType
-from leave.services import bank_holidays, hours
+from leave.services import bank_holidays, hours, years
 from people.services import access
 
 MAX_DAY = 24 * 3600
@@ -84,8 +84,15 @@ def everyone(request, day):
         rows.append({"person": person, "text": text, "ticked": ticked, "error": error, "seconds": seconds})
     context = {"day": day, "holiday": holiday}
     if posted:
+        if LeaveType.objects.filter(seeded=True, draws_from=LeaveType.Account.BANK_HOLIDAY, archived=True).exists():
+            return render(request, "leave/bank_holiday_everyone.html", {
+                **context, "rows": rows, "problem": "The Bank holiday leave type is archived. Restore it under Leave types to book bank holidays."})
         if any(r["error"] and r["ticked"] for r in rows):
             return render(request, "leave/bank_holiday_everyone.html", {**context, "rows": rows})
-        booked, skipped = bank_holidays.book_many(request.user, day, {r["person"].pk: r["seconds"] for r in rows if r["ticked"]})
-        return render(request, "leave/bank_holiday_everyone.html", {**context, "done": True, "booked": booked, "skipped": skipped})
+        ticked = [r for r in rows if r["ticked"]]
+        # Leave can be booked in a person's current leave year and the next only.
+        outside = [r for r in ticked if years.year_of(r["person"], day) not in years.years_for(r["person"])]
+        booked, skipped = bank_holidays.book_many(request.user, day, {r["person"].pk: r["seconds"] for r in ticked if r not in outside})
+        return render(request, "leave/bank_holiday_everyone.html", {**context, "done": True, "booked": booked, "skipped": skipped,
+                                                                    "outside": len(outside)})
     return render(request, "leave/bank_holiday_everyone.html", {**context, "rows": rows})

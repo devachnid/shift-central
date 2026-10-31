@@ -28,6 +28,8 @@ def update(user, row, **fields):
         raise ValueError(f"not editable: {sorted(unknown)}")
     if row.seeded and any(k in fields and fields[k] != getattr(row, k) for k in FIXED_ON_SEEDED):
         raise ValueError("A seeded type keeps what it draws from and how it reaches payroll")
+    if any(k in fields and fields[k] != getattr(row, k) for k in FIXED_ON_SEEDED) and row.bookings.exists():
+        raise ValueError("A type with bookings keeps what it draws from and how it reaches payroll")
     changes = {}
     for k, v in fields.items():
         before = getattr(row, k)
