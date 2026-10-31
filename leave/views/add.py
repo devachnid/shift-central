@@ -71,23 +71,46 @@ def _preview(form, booking=None, person=None):
         elif day in stored and day not in typed:
             row.update(cost=stored[day].cost_seconds, source="override", placeholder=False, account=stored[day].account)
         days.append(row)
-    total = {}
-    for d in days:
-        total[d["account"]] = total.get(d["account"], 0) + d["cost"]
-    year = years.year_of(person, kw["first"])
-    s = balances.statement(person, year)
     account = kw["leave_type"].draws_from
     pool = POOLS.get(account)
-    out = {"days": days, "total": sum(total.values()),
+    out = {"days": days, "total": sum(d["cost"] for d in days),
            "placeholders": any(d["placeholder"] for d in days), "unknown_hours": any(not d["hours_known"] for d in days),
-           "missing_allowance": bool(s.missing) and account in ("annual", "bank_holiday")}
+           "missing_allowance": False}
     if pool is None:
-        return out | {"before": None, "after": None, "available": None, "over": False}
-    remaining, available = (s.annual_remaining, s.annual_available) if pool != ("toil",) else (s.toil_remaining, s.toil_available)
-    given_back = _own_spend(booking, person, pool, year)
-    spend = sum(total.get(a, 0) for a in pool)
-    before, available = remaining + (given_back if booking and booking.is_active else 0), available + given_back
-    return out | {"before": before, "after": before - spend, "available": available, "over": spend > available}
+        return out | {"before": None, "after": None, "available": None, "over": False, "balances": []}
+    lines = _balance_lines(person, booking, pool, [(d["day"], d["account"], d["cost"]) for d in days])
+    out["missing_allowance"] = any(line["missing"] for line in lines)
+    first = lines[0]
+    return out | {"before": first["before"], "after": first["after"], "available": first["available"],
+                  "over": any(line["over"] for line in lines), "balances": lines}
+
+
+def _year_groups(person, pool, items):
+    """The days by the balance they are checked against: annual leave by
+    leave year, TOIL as one (it never resets)."""
+    groups = {}
+    for day, account, seconds in items:
+        year = years.year_of(person, items[0][0] if pool == ("toil",) else day)
+        groups.setdefault(year, []).append((account, seconds))
+    return sorted(groups.items())
+
+
+def _balance_lines(person, booking, pool, items):
+    """Before, after and available for each balance the booking draws on
+    (bookings.pools' rule): one line, or one per leave year when an annual
+    leave booking crosses the leave year's end, each named by its year."""
+    groups = _year_groups(person, pool, items)
+    toil = pool == ("toil",)
+    out = []
+    for year, rows in groups:
+        s = balances.statement(person, year)
+        remaining, available = (s.toil_remaining, s.toil_available) if toil else (s.annual_remaining, s.annual_available)
+        given_back = _own_spend(booking, person, pool, year)
+        spend = sum(seconds for account, seconds in rows if account in pool)
+        before, available = remaining + (given_back if booking and booking.is_active else 0), available + given_back
+        out.append({"year": years.label(year) if len(groups) > 1 else "", "before": before, "after": before - spend,
+                    "available": available, "over": spend > available, "missing": bool(s.missing) and not toil})
+    return out
 
 
 @login_required

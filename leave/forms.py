@@ -15,24 +15,30 @@ from leave.services import hours, types
 from people.models import Person, Team
 from people.services import access
 
-HM = re.compile(r"^(\d{1,3}):([0-5]\d)$")
+HM = re.compile(r"^([0-9]{1,3}):([0-5][0-9])$")
+DECIMAL_HOURS = re.compile(r"^([0-9]+(?:\.[0-9]+)?)\s*h?$")
+MAX_DAY = 24 * 3600                 # a day's allowance used
+MAX_ADJUSTMENT = 2000 * 3600        # an adjustment, either way
 CHANGE_SUBMITS = ("person", "type", "first_day", "last_day", "part", "start", "finish")
 
 
 def parse_hours(text):
+    """Hours as typed in a box, to whole seconds: H:MM ("7:30") or decimal
+    hours with an optional h ("7.5", "7.5 h"); blank is None. Anything else
+    ("7h30", "1e3", a sign) is refused rather than guessed at."""
     text = (text or "").strip()
     if not text:
         return None
     m = HM.match(text)
     if m:
         return int(m.group(1)) * 3600 + int(m.group(2)) * 60
-    try:
-        seconds = hours.from_hours(Decimal(text.replace("h", "").strip()))
-    except (InvalidOperation, ValueError, OverflowError):
-        raise forms.ValidationError("Type hours as 7:30 or 7.5") from None
-    if seconds < 0:
+    m = DECIMAL_HOURS.match(text)
+    if m is None or len(m.group(1)) > 12:
         raise forms.ValidationError("Type hours as 7:30 or 7.5")
-    return seconds
+    try:
+        return hours.from_hours(Decimal(m.group(1)))
+    except (InvalidOperation, ArithmeticError, ValueError):
+        raise forms.ValidationError("Type hours as 7:30 or 7.5") from None
 
 
 def _paid_select():
@@ -98,9 +104,14 @@ class BookingForm(forms.Form):
         for key, value in self.data.items():
             if key.startswith("cost_") and value.strip():
                 try:
-                    out[date.fromisoformat(key[5:])] = parse_hours(value)
+                    day, seconds = date.fromisoformat(key[5:]), parse_hours(value)
                 except (ValueError, forms.ValidationError):
                     self.add_error(None, f"Could not read the hours for {key[5:]}")
+                    continue
+                if seconds > MAX_DAY:
+                    self.add_error(None, f"A day has 24 hours: check the hours for {key[5:]}")
+                    continue
+                out[day] = seconds
         return out
 
 
@@ -125,6 +136,8 @@ class AdjustForm(forms.Form):
         seconds = parse_hours(text[1:] if text[:1] in ("-", "−", "+") else text)
         if not seconds:
             raise forms.ValidationError("Type the hours")
+        if seconds > MAX_ADJUSTMENT:
+            raise forms.ValidationError("An adjustment is at most 2000 hours either way")
         return sign * seconds
 
 

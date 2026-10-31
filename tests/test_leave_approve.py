@@ -291,3 +291,90 @@ def test_allowances_typed_with_a_new_year_start_land_under_the_new_years(team, l
     # the Health card lists the person when no allowance is near
     Allowance.objects.filter(person=ann).delete()
     assert ann in health.figures(lead.user)["needs_setup"]
+
+
+# --- typed hours: two shapes only, and bounded (S12)
+
+@pytest.mark.parametrize("text, seconds", [("7:30", 27000), ("0:45", 2700), ("7.5", 27000), ("7.5h", 27000), ("7.5 h", 27000),
+                                           (" 7 ", 25200), ("7h", 25200), ("12", 43200), ("", None)])
+def test_hours_are_typed_as_h_mm_or_decimal_hours(text, seconds):
+    from leave.forms import parse_hours
+    assert parse_hours(text) == seconds
+
+
+@pytest.mark.parametrize("text", ["7h30", "1e3", "9e999999", "7:5", "7:60", "1234:00", "-1", "+2", "7.5.5", ".5", "7,5", "h", "NaN", "Infinity", "٣"])
+def test_any_other_shape_of_hours_is_refused(text):
+    from django import forms
+
+    from leave.forms import parse_hours
+    with pytest.raises(forms.ValidationError) as e:
+        parse_hours(text)
+    assert e.value.messages == ["Type hours as 7:30 or 7.5"]
+
+
+def test_a_typed_day_cost_is_read_or_refused_never_a_server_error(sam, lead):
+    c = _client(lead)
+    base = {"person": sam.pk, "type": make_type("Holiday").pk, "first_day": MON, "last_day": MON, "part": "whole"}
+    for text, message in (("9e999999", f"Could not read the hours for {MON}"), ("7h30", f"Could not read the hours for {MON}"),
+                          ("24:30", f"A day has 24 hours: check the hours for {MON}")):
+        r = c.post("/time-off/add/", {**base, f"cost_{MON}": text})
+        assert r.status_code == 200 and message in r.content.decode()
+    assert not Booking.objects.exists()
+    assert c.post("/time-off/add/", {**base, f"cost_{MON}": "24:00"}).json() == {"refresh": True}
+
+
+def test_an_adjustment_is_bounded_and_a_bad_figure_is_a_form_error(sam, lead):
+    c = _client(lead)
+    url = f"/staff/{sam.pk}/leave/adjust/"
+    data = {"leave_year": "2027-01-01", "account": "annual", "reason": "correction"}
+    for text in ("9e999999", "7h30", "2000:30", "-2001"):
+        r = c.post(url, {**data, "hours": text})
+        assert r.status_code == 200 and "refresh" not in r.content.decode()
+    assert "An adjustment is at most 2000 hours either way" in c.post(url, {**data, "hours": "-2000.5"}).content.decode()
+    assert not Adjustment.objects.exists()
+    assert c.post(url, {**data, "hours": "-2000"}).json() == {"refresh": True}
+
+
+def test_the_everyone_page_refuses_a_bad_figure_without_a_server_error(sam, lead):
+    from tests.factories import make_bank_holiday
+    day = date(2027, 5, 3)
+    make_bank_holiday(day, "Early May bank holiday")
+    boss = make_person(first_name="Boss")
+    c = _client(boss, is_all_teams_manager=True)
+    r = c.post(f"/time-off/bank-holidays/{day}/everyone/", {f"tick_{sam.pk}": "on", f"hours_{sam.pk}": "9e999999"})
+    assert r.status_code == 200 and "Type hours as 7:30 or 7.5" in r.content.decode()
+
+
+# --- nobody sets "Own leave needs no approval" on themselves (S14)
+
+def test_an_all_teams_manager_cannot_tick_their_own_leave_flag():
+    boss = make_person(first_name="Boss")
+    c = _client(boss, is_all_teams_manager=True)
+    body = c.get(f"/staff/{boss.pk}/permissions/").content.decode()
+    assert 'name="own_leave_without_approval"' not in body
+    assert "Another all-teams manager sets this for you" in body
+    c.post(f"/staff/{boss.pk}/permissions/", {"own_leave_without_approval": "on"})
+    boss.refresh_from_db()
+    assert not boss.own_leave_without_approval
+    assert not AuditEntry.objects.filter(field="own_leave_without_approval").exists()
+
+
+def test_the_service_refuses_the_own_leave_flag_on_oneself():
+    from django.core.exceptions import PermissionDenied
+
+    from people.services import managers
+    boss = make_person(first_name="Boss")
+    user = make_user_for(boss, is_all_teams_manager=True)
+    with pytest.raises(PermissionDenied):
+        managers.set_own_leave_flag(user, boss, True)
+    boss.refresh_from_db()
+    assert not boss.own_leave_without_approval
+
+
+def test_a_self_set_flag_is_kept_when_the_dialog_is_saved():
+    """A flag another manager set stands when the person saves their own dialog."""
+    boss = make_person(first_name="Boss", own_leave_without_approval=True)
+    c = _client(boss, is_all_teams_manager=True)
+    c.post(f"/staff/{boss.pk}/permissions/", {})
+    boss.refresh_from_db()
+    assert boss.own_leave_without_approval

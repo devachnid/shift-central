@@ -11,6 +11,6 @@
   </tbody>
   <tfoot><tr><td>Total</td><td>{{ preview.total|hm }}</td><td></td></tr></tfoot>
 </table>
-{% if preview.before is not None %}<p>Balance before <strong>{{ preview.before|hm }}</strong>, after <strong>{{ preview.after|hm }}</strong>{% if preview.over %} — <span class="field-error">more than the {{ preview.available|hm }} available</span>{% endif %}</p>{% endif %}
+{% for line in preview.balances %}<p>Balance{% if line.year %} for {{ line.year }}{% endif %} before <strong>{{ line.before|hm }}</strong>, after <strong>{{ line.after|hm }}</strong>{% if line.over %} — <span class="field-error">more than the {{ line.available|hm }} available</span>{% endif %}</p>{% endfor %}
 {% if preview.missing_allowance %}<p class="flash flash-warning">No allowance is set for this leave year.</p>{% endif %}
 {% endif %}

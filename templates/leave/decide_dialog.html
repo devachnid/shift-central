@@ -23,9 +23,9 @@
     </tbody>
     <tfoot><tr><td>Total</td><td>{{ total|hm }}</td><td></td></tr></tfoot>
   </table>
-  {% if account != "none" %}
-  <p>Balance before <strong>{{ before|hm }}</strong>{% if b.status == "pending" %}, after <strong>{{ after|hm }}</strong>{% endif %}</p>
-  {% endif %}
+  {% for line in balances %}
+  <p>Balance{% if line.year %} for {{ line.year }}{% endif %} before <strong>{{ line.before|hm }}</strong>{% if line.after is not None %}, after <strong>{{ line.after|hm }}</strong>{% endif %}</p>
+  {% endfor %}
   {% if others %}
   <p><strong>Also off in {{ b.person.team.name }} on those days:</strong></p>
   <ul>{% for o in others %}<li>{{ o.person.name }} · {{ o.label }} · {{ o.first_day|date:"j M" }}{% if o.last_day != o.first_day %} – {{ o.last_day|date:"j M" }}{% endif %}</li>{% endfor %}</ul>

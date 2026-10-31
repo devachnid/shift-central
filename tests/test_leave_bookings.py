@@ -377,3 +377,53 @@ def test_typing_the_rotas_own_figure_still_audits_the_change_of_source(sam, lead
     assert (bd.cost_seconds, bd.source) == (27000, "override")
     row = AuditEntry.objects.get(model="leave.booking", object_id=sam.pk, field=f"cost {MON.isoformat()}")
     assert (row.before, row.after) == ("7 h 30 min (rota)", "7 h 30 min (override)")
+
+
+# --- the balance check pools annual leave and bank holidays, year by year (S1)
+
+def _person_with(annual_2026=None, annual_2027=None):
+    p = make_person(first_name="Pat", start_date=date(2020, 1, 6), weekly_hours=Decimal("37.5"), days_per_week=5)
+    make_user_for(p)
+    for year, hours_ in ((date(2026, 1, 1), annual_2026), (Y27, annual_2027)):
+        if hours_ is not None:
+            make_allowance(p, year, Decimal(hours_), 0)
+    return p
+
+
+def test_a_request_across_bank_holidays_is_checked_against_one_pool(sam, lead):
+    """A1: 25 h available; 27-31 Dec 2027 with no rota is 37 h 30 min, two
+    days of it bank holidays. Neither part alone is over 25 h; together they
+    are."""
+    make_bank_holiday(date(2027, 12, 27), "Christmas Day (substitute)")
+    make_bank_holiday(date(2027, 12, 28), "Boxing Day (substitute)")
+    adjustments.add(lead.user, sam, Y27, "annual", -(int(207.5 * 3600)), "test")       # 172.5 + 60 − 207.5 = 25 h
+    with pytest.raises(LeaveError) as e:
+        bookings.request(sam.user, sam, make_type("Holiday"), date(2027, 12, 27), date(2027, 12, 31), "whole")
+    assert e.value.code == "balance"
+    assert e.value.message == "This would take 37 h 30 min of annual leave (bank holidays included) and 25 h is available"
+    assert not Booking.objects.filter(person=sam).exists()
+
+
+def test_a_request_across_the_leave_year_boundary_is_checked_year_by_year(lead):
+    """A2: 7 h 30 min left in 2026 and a full 2027; 31 Dec 2026 to 5 Jan
+    2027 takes one day from 2026 and five from 2027."""
+    pat = _person_with(annual_2026="7.5", annual_2027="187.5")
+    b = bookings.request(pat.user, pat, make_type("Holiday"), date(2026, 12, 31), date(2027, 1, 5), "whole")
+    assert b.status == "pending"
+
+
+def test_a_request_into_a_year_with_no_allowance_is_refused_naming_the_year(lead):
+    pat = _person_with(annual_2026="187.5")
+    with pytest.raises(LeaveError) as e:
+        bookings.request(pat.user, pat, make_type("Holiday"), date(2026, 12, 31), date(2027, 1, 5), "whole")
+    assert e.value.code == "balance"
+    assert e.value.message == "This would take 37 h 30 min of annual leave (bank holidays included) in 2027 and 0 min is available"
+
+
+def test_toil_is_one_pool_whatever_the_year(lead):
+    pat = _person_with(annual_2026="187.5", annual_2027="187.5")
+    adjustments.add(lead.user, pat, date(2026, 1, 1), "toil", 4 * 3600, "test")
+    toil = make_type("TOIL", draws_from="toil")
+    with pytest.raises(LeaveError) as e:
+        bookings.request(pat.user, pat, toil, date(2026, 12, 31), date(2027, 1, 1), "whole")
+    assert e.value.message == "This would take 15 h of TOIL and 4 h is available"

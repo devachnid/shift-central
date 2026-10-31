@@ -14,7 +14,6 @@ from shifts.models import Entry
 from shifts.services import render
 from shifts.services.entries import _touch
 
-ACCOUNT_LABEL = {"annual": "annual leave", "bank_holiday": "bank holiday allowance", "toil": "TOIL"}
 
 
 # --- who may --------------------------------------------------------------
@@ -65,21 +64,40 @@ def preview(person, leave_type, first, last, part, start=None, finish=None):
     return [costing.cost(person, leave_type, d, part, start, finish) for d in probe.days()]
 
 
-def _total(costs):
+def pools(person, items):
+    """What a booking takes, by balance: {(pool, year): seconds} for
+    (day, account, seconds) items. Annual leave and bank holidays are one
+    pool per leave year (the bank holiday balance moves into annual leave,
+    so the statement's available figure is the two together); TOIL never
+    resets, so it is one pool whatever the year (year None). Days that draw
+    on nothing are left out."""
     out = {}
-    for c in costs:
-        out[c.account] = out.get(c.account, 0) + c.seconds
+    for day, account, seconds in items:
+        if account == "none":
+            continue
+        key = ("toil", None) if account == "toil" else ("annual", years.year_of(person, day))
+        out[key] = out.get(key, 0) + seconds
     return out
 
 
-def _check_balance(person, first, costs):
-    year = years.year_of(person, first)
-    for account, seconds in _total(costs).items():
-        if account == "none" or seconds == 0:
+def pool_available(person, pool, year):
+    """The figure a request is checked against: annual leave (bank holidays
+    included) available in the year, or TOIL available."""
+    if pool == "toil":
+        return balances.available(person, years.year_of(person, timezone.localdate()), "toil")
+    return balances.available(person, year, "annual")
+
+
+def _check_balance(person, first, last, costs):
+    spent = pools(person, zip(Booking(first_day=first, last_day=last).days(), (c.account for c in costs), (c.seconds for c in costs)))
+    several = len([1 for pool, _ in spent if pool == "annual"]) > 1
+    for (pool, year), seconds in sorted(spent.items(), key=lambda kv: (kv[0][0], kv[0][1] or first)):
+        if seconds == 0:
             continue
-        available = balances.available(person, year, account)
-        if available is not None and seconds > available:
-            raise LeaveError("balance", f"This would take {hours.fmt(seconds)} of {ACCOUNT_LABEL[account]} and {hours.fmt(max(available, 0))} is available")
+        available = pool_available(person, pool, year)
+        if seconds > available:
+            what = "TOIL" if pool == "toil" else "annual leave (bank holidays included)" + (f" in {years.label(year)}" if several else "")
+            raise LeaveError("balance", f"This would take {hours.fmt(seconds)} of {what} and {hours.fmt(max(available, 0))} is available")
 
 
 def suggestion_for(person, day):
@@ -124,7 +142,7 @@ def request(user, person, leave_type, first, last, part, start=None, finish=None
         if blackouts.blocks(person, day):
             raise LeaveError("blackout", f"Leave cannot be requested for {day:%a %-d %b}")
     costs = preview(person, leave_type, first, last, part, start, finish)
-    _check_balance(person, first, costs)
+    _check_balance(person, first, last, costs)
     booking = _new(user, person, leave_type, first, last, part, start, finish, description, paid, note, Booking.Status.PENDING)
     with transaction.atomic():
         _check_overlap(person, first, last)

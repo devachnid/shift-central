@@ -68,13 +68,31 @@ def decide(request, pk):
             b.refresh_from_db()
     days = _day_costs(b)
     total = sum(cost.seconds for _, cost in days)
-    s = balances.statement(b.person, years.year_of(b.person, b.first_day))
     account = b.type.draws_from
-    before = s.toil_remaining if account == "toil" else s.annual_remaining
+    lines = _balance_lines(b, days, account)
     others = Booking.objects.none()
     if b.person.team_id:
         others = (Booking.objects.filter(person__team=b.person.team, status__in=Booking.ACTIVE, first_day__lte=b.last_day, last_day__gte=b.first_day)
                   .exclude(person=b.person).select_related("person", "type"))
     return render(request, "leave/decide_dialog.html", {
-        "b": b, "form": form, "days": days, "total": total, "before": before, "account": account,
-        "after": before - total if account != "none" and b.status == Booking.Status.PENDING else before, "others": others})
+        "b": b, "form": form, "days": days, "total": total, "account": account, "balances": lines, "others": others})
+
+
+def _balance_lines(b, days, account):
+    """The balance before (and, for a request, after) for each balance the
+    booking draws on: one line, or one per leave year when annual leave
+    crosses the leave year's end (bookings.pools' rule)."""
+    if account == "none":
+        return []
+    toil = account == "toil"
+    groups = {}
+    for day, cost in days:
+        year = years.year_of(b.person, b.first_day if toil else day)
+        groups[year] = groups.get(year, 0) + (cost.seconds if cost.account != "none" else 0)
+    out = []
+    for year, spend in sorted(groups.items()):
+        s = balances.statement(b.person, year)
+        before = s.toil_remaining if toil else s.annual_remaining
+        out.append({"year": years.label(year) if len(groups) > 1 else "", "before": before,
+                    "after": before - spend if b.status == Booking.Status.PENDING else None})
+    return out

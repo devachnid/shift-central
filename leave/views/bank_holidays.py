@@ -9,12 +9,10 @@ from django.http import Http404
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
-from leave.forms import BankHolidayForm, parse_hours
+from leave.forms import MAX_DAY, BankHolidayForm, parse_hours
 from leave.models import BankHoliday, Booking, LeaveType
 from leave.services import bank_holidays, hours, years
 from people.services import access
-
-MAX_DAY = 24 * 3600
 
 
 def _year(text):
