@@ -5,6 +5,7 @@ import re
 from collections import OrderedDict
 
 from leave.models import Booking, BookingDay
+from leave.services import sessions as leave_sessions
 from people.models import Person
 from shifts.models import Entry, GpSession
 from shifts.services import render
@@ -30,7 +31,9 @@ def board(day):
             continue
         team = by_site[site_of(e)].setdefault(e.person.team.name if e.person.team else "—", OrderedDict())
         team.setdefault(e.person, []).append(render.line(e))
-    for s in GpSession.objects.filter(person__in=people, day=day).select_related("person__team").order_by("part"):
+    gp_sessions = leave_sessions.visible(GpSession.objects.filter(person__in=people, day=day).select_related("person__team").order_by("part"),
+                                         leave_sessions.hidden(people, day, day))
+    for s in gp_sessions:
         site = s.site if s.site in ("AG", "PMC") else "Either"
         team = by_site[site].setdefault(s.person.team.name if s.person.team else "—", OrderedDict())
         team.setdefault(s.person, []).append(" ".join(x for x in (s.part, s.label, s.site) if x))
