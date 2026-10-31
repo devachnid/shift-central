@@ -123,7 +123,7 @@ def add(request):
                 pass
         form = BookingForm(request.user, initial=initial)
         preview = {}
-    return render(request, "leave/add_dialog.html", {"form": form, "preview": preview, "title": "Time off"})
+    return render(request, "leave/add_dialog.html", {"form": form, "preview": preview, "title": "Time off", "can_type": True})
 
 
 @login_required
@@ -149,4 +149,5 @@ def edit(request, pk):
                                                   "start": booking.start, "finish": booking.finish, "paid": booking.paid},
                            person=booking.person)
         preview = {}
-    return render(request, "leave/add_dialog.html", {"form": form, "preview": preview, "booking": booking, "title": "Edit time off"})
+    return render(request, "leave/add_dialog.html", {"form": form, "preview": preview, "booking": booking, "title": "Edit time off",
+                                                    "can_type": booking.is_active})

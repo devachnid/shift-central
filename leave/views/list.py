@@ -35,7 +35,8 @@ def visible_rows(user, start, end, filters):
     me = getattr(user, "person", None)
     rows = (Booking.objects.filter(first_day__lte=end, last_day__gte=start)
             .select_related("person__team", "type").prefetch_related("booking_days"))
-    if filters.get("status") not in (Booking.Status.DECLINED, Booking.Status.CANCELLED):   # asked for by name, they are listed
+    hidden_unless_detail = filters.get("status") in (Booking.Status.DECLINED, Booking.Status.CANCELLED)
+    if not hidden_unless_detail:       # named by status they are listed, for the person and their managers only
         rows = rows.exclude(status__in=(Booking.Status.DECLINED, Booking.Status.CANCELLED))
     if filters.get("type"):
         rows = rows.filter(type__name=filters["type"])
@@ -52,6 +53,8 @@ def visible_rows(user, start, end, filters):
         mine = me is not None and me.pk == b.person_id
         manage = not mine and (everyone or b.person.team_id in team_ids)
         detail = mine or manage
+        if hidden_unless_detail and not detail:
+            continue          # colleagues never see declined or cancelled bookings (ACC-06)
         out.append({"booking": b, "detail": detail, "manage": manage, "days": (b.last_day - b.first_day).days + 1,
                     "cost": sum(bd.cost_seconds for bd in b.booking_days.all()) if detail and b.is_active else None})
     return out

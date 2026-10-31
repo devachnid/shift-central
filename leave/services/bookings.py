@@ -137,17 +137,21 @@ def request(user, person, leave_type, first, last, part, start=None, finish=None
 def _type_costs(user, rows, costs, note):
     """A manager's typed figures become overrides on the booking's days (a
     typed figure is always an override, so a bank holiday day reads "bank
-    holiday" even at the rota's cost). Returns the audit lines."""
+    holiday" even at the rota's cost). Returns the audit lines: a changed
+    figure, or the same figure that is now a manager's rather than the rota's."""
     changes = {}
     for bd in rows:
         typed = (costs or {}).get(bd.day)
-        if typed is not None and not (bd.source == BookingDay.Source.OVERRIDE and bd.cost_seconds == int(typed)):   # an unchanged figure keeps its note
-            before = bd.cost_seconds
-            bd.cost_seconds, bd.source, bd.placeholder = int(typed), BookingDay.Source.OVERRIDE, False
-            bd.override_by, bd.override_note = user, note[:300]
-            bd.save()
-            if before != bd.cost_seconds:
-                changes[f"cost {bd.day.isoformat()}"] = (hours.fmt(before), hours.fmt(bd.cost_seconds))
+        if typed is None or (bd.source == BookingDay.Source.OVERRIDE and bd.cost_seconds == int(typed)):   # an unchanged figure keeps its note
+            continue
+        before, was = bd.cost_seconds, bd.source
+        bd.cost_seconds, bd.source, bd.placeholder = int(typed), BookingDay.Source.OVERRIDE, False
+        bd.override_by, bd.override_note = user, note[:300]
+        bd.save()
+        if before != bd.cost_seconds:
+            changes[f"cost {bd.day.isoformat()}"] = (hours.fmt(before), hours.fmt(bd.cost_seconds))
+        elif was != BookingDay.Source.OVERRIDE:
+            changes[f"cost {bd.day.isoformat()}"] = (f"{hours.fmt(before)} (rota)", f"{hours.fmt(before)} (override)")
     return changes
 
 

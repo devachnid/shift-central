@@ -355,3 +355,24 @@ def test_extending_with_a_typed_cost_overrides_the_new_day_and_keeps_the_old_fig
     old, new = BookingDay.objects.get(booking=b, day=MON), BookingDay.objects.get(booking=b, day=TUE)
     assert (old.cost_seconds, old.override_note) == (14400, "half pay day")
     assert (new.cost_seconds, new.source) == (10800, "override")
+
+
+def test_edit_is_a_managers_alone_so_typed_costs_are_gated_with_it(sam, lead, team):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    nina = make_person(first_name="Nina", team=team)
+    make_user_for(nina)
+    with pytest.raises(PermissionDenied):
+        bookings.edit(nina.user, b, costs={MON: 3600}, description="x")
+    with pytest.raises(PermissionDenied):
+        bookings.edit(sam.user, b, costs={MON: 3600})
+    assert BookingDay.objects.get(booking=b).source == "rota"
+
+
+def test_typing_the_rotas_own_figure_still_audits_the_change_of_source(sam, lead):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    assert BookingDay.objects.get(booking=b).source == "rota"
+    bookings.edit(lead.user, b, costs={MON: 27000}, description="Spring")
+    bd = BookingDay.objects.get(booking=b)
+    assert (bd.cost_seconds, bd.source) == (27000, "override")
+    row = AuditEntry.objects.get(model="leave.booking", object_id=sam.pk, field=f"cost {MON.isoformat()}")
+    assert (row.before, row.after) == ("7 h 30 min (rota)", "7 h 30 min (override)")

@@ -20,7 +20,8 @@
     <div class="field"><label for="id_finish">Finish</label>{{ form.finish }}{% for e in form.finish.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
   </div>
   <input type="hidden" name="preview" value="1">
-  {% include "leave/_preview.html" with editable=True %}
+  {% include "leave/_preview.html" with editable=can_type %}
+  {% if booking and not can_type and preview.days %}<p class="field-help">Costs can be set once the request is approved.</p>{% endif %}
   <details class="advanced"><summary>Advanced</summary>
     {% if form.paid %}<div class="field"><label for="id_paid">Paid or unpaid</label>{{ form.paid }}</div>{% endif %}
     {% if not booking %}<div class="field"><label for="id_manager_note">Manager notes</label>{{ form.manager_note }}</div>{% endif %}

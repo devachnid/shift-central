@@ -212,3 +212,21 @@ def test_the_list_hides_declined_and_cancelled_unless_asked_and_pending_shows_no
     bookings.cancel(lead.user, b)
     assert b.pk not in [r["booking"].pk for r in c.get("/time-off/").context["rows"]]
     assert [r["booking"].pk for r in c.get("/time-off/?status=cancelled").context["rows"]] == [b.pk]
+
+
+def test_the_edit_dialog_of_a_pending_booking_has_no_cost_boxes(sam, lead):
+    b = bookings.request(sam.user, sam, make_type("Holiday"), MON, MON, "whole")
+    c = _client(lead)
+    assert 'name="cost_' not in c.get(f"/time-off/{b.pk}/edit/").content.decode()
+    data = {"person": sam.pk, "type": b.type.pk, "first_day": MON, "last_day": MON, "part": "whole", "preview": "1"}
+    body = c.post(f"/time-off/{b.pk}/edit/", data).content.decode()
+    assert "7 h 30 min" in body and 'name="cost_' not in body and "Costs can be set once the request is approved" in body
+
+
+def test_colleagues_never_see_cancelled_bookings_even_by_status(sam, lead, team):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    bookings.cancel(lead.user, b)
+    nina = make_person(first_name="Nina", team=team)
+    assert _client(nina).get("/time-off/?status=cancelled").context["rows"] == []
+    assert len(_client(lead).get("/time-off/?status=cancelled").context["rows"]) == 1
+    assert len(_client(sam).get("/time-off/?status=cancelled").context["rows"]) == 1
