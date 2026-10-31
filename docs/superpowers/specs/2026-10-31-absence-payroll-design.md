@@ -228,7 +228,8 @@ as spec 3's services do:
    Otherwise `bookings.edit` it to the head (`last_day = first − 1`) or,
    when there is no head, to the tail (`first_day = last + 1`); when both a
    head and a tail remain, `bookings.book` the tail as a second approved
-   booking with the same type, description, paid flag and notes. Each
+   booking with the same type, description, paid flag and notes, and a
+   manager's typed figures on the tail's days carried as its overrides. Each
    step restores the removed days' costs through the edit path, so the
    hours come back exactly as they were charged (SICK-03: Mon–Fri 37.5 h,
    Wed–Thu converted, 15 h back).
@@ -555,8 +556,14 @@ stop the others.
 - `decide` refuses a carry or keep outside the range; the dialog shows
   the limit.
 - `mark_sent` by a team manager is a 403; a month more than a year ahead
-  or before 2026 a 400 (as the window's `parse_day` bounds); a bad
-  `month` falls back to this month.
+  or before 2026 a 400 (as the window's `parse_day` bounds); a missing or
+  unreadable `month` is a 400 on Mark as sent (never a fallback: marking
+  the wrong month sent is a wrong record) and falls back to this month on
+  the report page only.
+- The flags claim their row before sending (the leaver flag dates, a
+  booking's `return_flagged_at`), so two runs alongside each other send one
+  email between them; the trigger level is read inside the write's
+  transaction.
 - A PDF or Excel writer failure is a 500 logged with the class name only;
   the screen table still works.
 - `daily_flags` steps never raise out of the command; each logs and

@@ -871,6 +871,14 @@ def test_converting_the_whole_booking_cancels_it(boss, sam):
     assert Booking.objects.filter(person=sam, type__name="Holiday", status="approved").count() == 0
 
 
+def test_a_typed_figure_on_a_tail_day_survives_the_conversion(boss, sam):
+    friday = MON + timedelta(days=4)
+    holiday = bookings.book(boss.user, sam, make_type("Holiday"), MON, friday, "whole", costs={friday: 18000})      # Friday typed as 5 h
+    convert.convert(boss.user, holiday, sick(), MON + timedelta(days=2), MON + timedelta(days=3))
+    tail = BookingDay.objects.get(booking__person=sam, day=friday, booking__type__name="Holiday")
+    assert (tail.cost_seconds, tail.source) == (18000, "override")
+
+
 def test_converting_the_first_days_keeps_the_tail_in_the_same_booking(boss, sam):
     holiday = bookings.book(boss.user, sam, make_type("Holiday"), MON, MON + timedelta(days=4), "whole", description="Spain")
     convert.convert(boss.user, holiday, sick(), MON, MON + timedelta(days=1))
@@ -974,10 +982,12 @@ def convert(user, booking, leave_type, first, last, note="", base_url=""):
             bookings.edit(user, fresh, base_url=base_url, note=NOTE, first=last + timedelta(days=1))
         else:
             tail_last = fresh.last_day
+            # A manager's typed figure on a tail day stands: the tail is re-booked with those costs as overrides.
+            typed = {bd.day: bd.cost_seconds for bd in BookingDay.objects.filter(booking=fresh, source=BookingDay.Source.OVERRIDE, day__gt=last)}
             bookings.edit(user, fresh, base_url=base_url, note=NOTE, last=first - timedelta(days=1))
             if last < tail_last:
                 bookings.book(user, person, fresh.type, last + timedelta(days=1), tail_last, Booking.Part.WHOLE,
-                              description=fresh.description, paid=fresh.paid, note=fresh.manager_note, base_url=base_url)
+                              description=fresh.description, paid=fresh.paid, note=fresh.manager_note, costs=typed or None, base_url=base_url)
         manager_note = f"converted from {label} {dates}" + (f"; {note.strip()}" if note and note.strip() else "")
         sick = bookings.book(user, person, leave_type, first, last, Booking.Part.WHOLE, note=manager_note[:300], base_url=base_url)
     bookings._mail(notify.converted, label, dates, sick, base_url)
@@ -1828,14 +1838,16 @@ def flag(person, base_url=""):
         return False
     today = timezone.localdate()
     within_week = person.end_date <= today + WEEK
-    _, statement = figure(person)
-    notify.leaving(person, statement, after_leaving(person), week=within_week, base_url=base_url)
     fields = {"leaver_flagged_for": person.end_date}
     if within_week:
         fields["leaver_week_flagged_for"] = person.end_date
-    Person.objects.filter(pk=person.pk).update(**fields)
+    # Claim first, then send: two syncs seeing the same new date send one email between them.
+    if not Person.objects.filter(pk=person.pk).exclude(leaver_flagged_for=person.end_date).update(**fields):
+        return False
     for k, v in fields.items():
         setattr(person, k, v)
+    _, statement = figure(person)
+    notify.leaving(person, statement, after_leaving(person), week=within_week, base_url=base_url)
     return True
 
 
@@ -1847,9 +1859,10 @@ def week_flags(today=None, base_url=""):
     for p in Person.objects.filter(end_date__gte=today, end_date__lte=today + WEEK).order_by("end_date", "pk"):
         if p.leaver_week_flagged_for == p.end_date:
             continue
+        if not Person.objects.filter(pk=p.pk).exclude(leaver_week_flagged_for=p.end_date).update(leaver_week_flagged_for=p.end_date):
+            continue           # claimed by a run alongside this one
         _, statement = figure(p)
         notify.leaving(p, statement, after_leaving(p), week=True, base_url=base_url)
-        Person.objects.filter(pk=p.pk).update(leaver_week_flagged_for=p.end_date)
         n += 1
     return n
 ```
@@ -1887,9 +1900,11 @@ def send(today=None, base_url=""):
     today = today or timezone.localdate()
     n = 0
     for b in due(today):
+        # Claim the row first: a second run alongside this one finds it claimed and sends nothing.
+        if not Booking.objects.filter(pk=b.pk, return_flagged_at__isnull=True).update(return_flagged_at=timezone.now()):
+            continue
         statement = balances.statement(b.person, years.year_of(b.person, today))
         notify.returned(b, statement, base_url)
-        Booking.objects.filter(pk=b.pk).update(return_flagged_at=timezone.now())
         n += 1
     return n
 ```
@@ -3462,6 +3477,8 @@ def test_mark_as_sent_is_a_confirm_dialog_for_all_teams_managers(boss, staff):
     body = c.get("/reports/payroll/?month=2027-01").content.decode()
     assert "Sent to the bureau on 25 Jan 2027 by Boss" in body and "Draft" not in body
     assert _client(staff["lead"]).post("/reports/payroll/sent/?month=2027-01").status_code == 403
+    assert c.post("/reports/payroll/sent/?month=junk").status_code == 400 and c.post("/reports/payroll/sent/").status_code == 400
+    assert PayrollRun.objects.count() == 1                                                  # nothing was marked by the bad requests
     page = c.get("/activity/").content.decode()
     assert "Payroll" in page and "January 2027" in page
 
@@ -3551,6 +3568,7 @@ class MonthForm(forms.Form):
 """The payroll report (PAY-01 to 03): the month on screen for the viewer's
 people, the Excel, Mark as sent to the bureau (all-teams managers)."""
 
+import re
 from datetime import timedelta
 
 from django.contrib.auth.decorators import login_required
@@ -3560,6 +3578,8 @@ from django.shortcuts import render
 from exports import xlsx as exports_xlsx
 from payroll.services import report, runs, xlsx
 from people.services import access
+
+MONTH = re.compile(r"^\d{4}-\d{2}$")
 
 
 def _month(request):
@@ -3605,6 +3625,9 @@ def payroll(request):
 @login_required
 @access.all_teams_required
 def mark_sent(request):
+    # Never a fallback here: marking "this month" sent because the parameter was unreadable is a wrong record.
+    if not MONTH.match(request.GET.get("month", "")):
+        return HttpResponseBadRequest("Say which month, as YYYY-MM")
     month = _month(request)
     if not hasattr(month, "year"):
         return month
