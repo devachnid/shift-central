@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from people.models import Allowance
-from people.services import access, hr_sync, profiles
+from people.services import access, hr_sync
 
 LEAVING_WINDOW = timedelta(days=30)
 
@@ -16,13 +16,15 @@ def figures(user):
     Starters count as well as current staff: their hours are wanted before
     day one. GPs are salaried by session and never need weekly hours.
     Setup is hours, days and an allowance: someone with an allowance for
-    neither this leave year nor the next still needs a manager."""
+    neither this leave year nor the next still needs a manager. Whatever day
+    a person's leave year starts, those two years begin within a year of today."""
     from shifts.services import gp_sync, notify
     today = timezone.localdate()
     people = access.managed_people(user).current(on=today) | access.managed_people(user).filter(
         start_date__gt=today)
     people = people.distinct()
-    with_allowance = Allowance.objects.filter(leave_year__in=profiles.leave_years(today)).values("person")
+    with_allowance = Allowance.objects.filter(leave_year__gte=today - timedelta(days=365),
+                                              leave_year__lte=today + timedelta(days=365)).values("person")
     needs_setup = people.filter(is_gp=False).filter(
         Q(weekly_hours__isnull=True) | Q(days_per_week__isnull=True) | ~Q(pk__in=with_allowance))
     gp_unmatched = gp_sync.unmatched()

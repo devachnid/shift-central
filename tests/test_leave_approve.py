@@ -221,3 +221,72 @@ def test_the_activity_log_shows_adjustments_for_my_people_only(sam, lead):
     assert "carried over" in body
     body = _client(lead).get(f"/staff/{sam.pk}/history/").content.decode()
     assert "carried over" in body and "adjustment" in body
+
+
+# --- the negative-balance email after an hours change ------------------------
+
+HOURS_CHANGE = {"from_day": "2027-07-01", "weekly_hours": "30", "days_per_week": "5",
+                "annual_hours": "138", "bank_holiday_hours": "48", "note": "part time from July"}
+
+
+def test_an_hours_change_that_leaves_the_balance_negative_emails_the_managers(sam, lead):
+    from django.core import mail
+
+    from leave.services import adjustments
+    adjustments.add(lead.user, sam, Y27, "annual", -(230 * 3600), "used elsewhere")
+    mail.outbox.clear()
+    assert _client(lead).post(f"/staff/{sam.pk}/leave/hours-change/", HOURS_CHANGE).json() == {"refresh": True}
+    assert len(mail.outbox) == 1
+    assert mail.outbox[0].to == [lead.email] and mail.outbox[0].subject == "Sam Patel's leave balance is negative"
+
+
+def test_an_hours_change_that_leaves_the_balance_positive_sends_no_email(sam, lead):
+    from django.core import mail
+    mail.outbox.clear()
+    assert _client(lead).post(f"/staff/{sam.pk}/leave/hours-change/", HOURS_CHANGE).json() == {"refresh": True}
+    assert mail.outbox == []
+
+
+def test_a_refused_hours_change_sends_no_email(sam, lead):
+    from django.core import mail
+
+    from leave.services import adjustments
+    adjustments.add(lead.user, sam, Y27, "annual", -(230 * 3600), "used elsewhere")
+    mail.outbox.clear()
+    r = _client(lead).post(f"/staff/{sam.pk}/leave/hours-change/", {**HOURS_CHANGE, "note": ""})
+    assert r.status_code == 200 and mail.outbox == [] and Allowance.objects.filter(person=sam).count() == 1
+    # the service's own refusal (a change on the year's first day) is shown and sends nothing either
+    r = _client(lead).post(f"/staff/{sam.pk}/leave/hours-change/", {**HOURS_CHANGE, "from_day": "2027-01-01"})
+    assert r.status_code == 200 and mail.outbox == [] and Allowance.objects.filter(person=sam).count() == 1
+
+
+# --- a leave year that does not start on 1 January ---------------------------
+
+def test_allowances_typed_with_a_new_year_start_land_under_the_new_years(team, lead):
+    from django.utils import timezone
+
+    from leave.services import balances, years
+    from people.services import health
+    ann = make_person(first_name="Ann", team=team, weekly_hours=Decimal("37.5"), days_per_week=5)
+    c = _client(lead)
+    this = years.years_for(type("P", (), {"leave_year_start": "04-01"})())
+    body = c.get(f"/staff/{ann.pk}/profile/?tab=hours").content.decode()
+    assert 'name="leave_year_start"' in body
+    data = {"weekly_hours": "37.5", "days_per_week": "5", "leave_year_start": "04-01", "note": "",
+            f"annual_{this[0].year}": "187.5", f"bank_holiday_{this[0].year}": "60",
+            f"annual_{this[1].year}": "187.5", f"bank_holiday_{this[1].year}": "60"}
+    r = c.post(f"/staff/{ann.pk}/profile/?tab=hours", data)
+    assert r.status_code == 200 and "Saved" in r.content.decode()
+    ann.refresh_from_db()
+    assert ann.leave_year_start == "04-01"
+    assert set(Allowance.objects.filter(person=ann).values_list("leave_year", flat=True)) == set(this)
+    assert this[0].month == 4 and this[0].day == 1
+    today = timezone.localdate()
+    assert not balances.statement(ann, years.year_of(ann, today)).missing
+    # the form now names the years by their first day
+    body = c.get(f"/staff/{ann.pk}/profile/?tab=hours").content.decode()
+    assert f"Annual leave allowance from 1 Apr {this[0].year}" in body
+    assert ann not in health.figures(lead.user)["needs_setup"]
+    # the Health card lists the person when no allowance is near
+    Allowance.objects.filter(person=ann).delete()
+    assert ann in health.figures(lead.user)["needs_setup"]

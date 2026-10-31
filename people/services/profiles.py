@@ -2,7 +2,6 @@
 and 6). Each change is audited per field; an allowance that already
 exists needs a typed reason to change (LEAVE-31)."""
 
-from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
@@ -15,11 +14,6 @@ from people.services import access, audit
 
 DISPLAY_FIELDS = ("job_title", "name_colour", "display_order", "display_on_rota",
                   "show_to_other_staff", "can_see_other_staff")
-
-
-def leave_years(today=None):
-    today = today or timezone.localdate()
-    return [date(today.year, 1, 1), date(today.year + 1, 1, 1)]
 
 
 def _apply(actor, person, fields, note=""):

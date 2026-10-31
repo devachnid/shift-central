@@ -76,15 +76,6 @@ def test_staff_cannot_download():
     assert r["Content-Type"].startswith("text/html")
 
 
-@pytest.fixture(autouse=True)
-def years_2026_2027(monkeypatch):
-    """The Health card asks for an allowance this leave year or next; pin
-    the years as tests/test_profile.py does."""
-    from people.services import profiles
-    monkeypatch.setattr(profiles, "leave_years",
-                        lambda today=None: [date(2026, 1, 1), date(2027, 1, 1)])
-
-
 def _set_up(person, year=2026):
     Allowance.objects.create(person=person, leave_year=date(year, 1, 1),
                              annual_hours=Decimal("187.5"), bank_holiday_hours=Decimal("60"))
