@@ -413,3 +413,43 @@ def test_a_booking_of_an_archived_type_can_have_its_dates_edited(sam, lead):
     b.refresh_from_db()
     assert b.last_day == TUE
     assert f'<option value="{t.pk}"' not in c.get("/time-off/add/").content.decode(), "never offered for new leave"
+
+
+def test_a_colleagues_approved_filter_agrees_with_all(sam, lead, team):
+    """R-B1: a cancellation request shows to colleagues as approved, so the
+    Approved filter lists it too, and comparing the two views reveals nothing."""
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    bookings.request_cancel(sam.user, b, "")
+    other = make_person(first_name="Olive", team=team)
+    bookings.book(lead.user, other, make_type("Training"), TUE, TUE, "whole")
+    nina = _client(make_person(first_name="Nina", team=team))
+
+    def approved_rows(url):
+        table = _table(nina.get(url))
+        return sorted(row.split("</td>")[0] for row in table.split("<tr>")[1:] if "<td>Approved</td>" in row)
+    everything = approved_rows("/time-off/")
+    assert everything == approved_rows("/time-off/?status=approved") and len(everything) == 2
+    assert "Sam Patel" in _table(_client(sam).get("/time-off/?status=cancel_requested"))
+    assert "Sam Patel" not in _table(_client(lead).get("/time-off/?status=approved")), "managers see the real status"
+
+
+def test_a_past_years_booking_opens_in_edit_and_takes_a_label_or_cost(sam, lead, today):
+    """R-B2: only moving a booking is held to "this leave year and the next"."""
+    day = date(2025, 6, 2)
+    today(day)
+    make_allowance(sam, date(2025, 1, 1), Decimal("172.5"), 60)
+    make_entry(sam, day, start=time(9), finish=time(17), break_minutes=30)
+    b = bookings.book(lead.user, sam, make_type("Holiday"), day, day, "whole")
+    today(clock.LATE_2026)
+    c = _client(lead)
+    body = c.get(f"/time-off/{b.pk}/edit/").content.decode()
+    assert "this leave year and the next" not in body and f'name="cost_{day}"' in body
+    data = {"person": sam.pk, "type": b.type.pk, "first_day": day, "last_day": day, "part": "whole"}
+    assert c.post(f"/time-off/{b.pk}/edit/", {**data, "description": "Lisbon", f"cost_{day}": "7:00"}).json() == {"refresh": True}
+    b.refresh_from_db()
+    assert b.description == "Lisbon" and b.booking_days.get().cost_seconds == 7 * 3600
+    assert c.post(f"/time-off/{b.pk}/edit/", {**data, "type": make_type("Sick leave").pk}).json() == {"refresh": True}
+    b.refresh_from_db()
+    assert b.type.name == "Sick leave"
+    body = c.post(f"/time-off/{b.pk}/edit/", {**data, "type": make_type("Sick leave").pk, "last_day": date(2025, 6, 3)}).content.decode()
+    assert "Leave can be booked in this leave year and the next" in body

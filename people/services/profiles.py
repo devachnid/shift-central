@@ -127,8 +127,8 @@ def _change_from(person, year, from_day):
 def add_hours_change(actor, person, from_day, weekly_hours, days_per_week, annual_hours, bank_holiday_hours, note):
     """A dated change of contract (PAT-06, LEAVE-12): a second Allowance row
     for the year from `from_day`, carrying the new full-year figures and the
-    new weekly hours and days. The day is in the person's current or next
-    leave year (as an adjustment's year is); the year's first row must
+    new weekly hours and days. The day is in the person's previous, current
+    or next leave year (years.correctable, as an adjustment's year is); the year's first row must
     exist; the first day itself is set_allowance's. When the day has
     arrived the hours go on the person now, unless a later change is already
     in force (a back-dated change is recorded, and costs its days, but does
@@ -137,8 +137,8 @@ def add_hours_change(actor, person, from_day, weekly_hours, days_per_week, annua
     if not note or not note.strip():
         raise ValueError("A reason is needed for an hours change")
     year = years.year_of(person, from_day)
-    if year not in years.years_for(person):
-        raise ValueError("An hours change can start in this leave year or the next")
+    if year not in years.correctable(person):
+        raise ValueError("An hours change can start in the previous leave year, this one or the next")
     if from_day == year:
         raise ValueError("Set the year's allowance on the Pay & time off tab; a change starts after the year's first day")
     if not Allowance.objects.filter(person=person, leave_year=year, from_day=year).exists():

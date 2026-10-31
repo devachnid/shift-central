@@ -45,7 +45,10 @@ def visible_rows(user, start, end, filters):
         rows = rows.filter(type__name=filters["type"])
     if filters.get("team"):
         rows = rows.filter(person__team__name=filters["team"])
-    if filters.get("status"):
+    approved_only = filters.get("status") == Booking.Status.APPROVED
+    if approved_only:        # a cancellation request is approved leave to colleagues (section 5), so it is listed for them here too
+        rows = rows.filter(status__in=(Booking.Status.APPROVED, Booking.Status.CANCEL_REQUESTED))
+    elif filters.get("status"):
         rows = rows.filter(status=filters["status"])
     if filters.get("person") and filters["person"].isascii() and filters["person"].isdigit():
         rows = rows.filter(person_id=int(filters["person"]))
@@ -61,6 +64,8 @@ def visible_rows(user, start, end, filters):
         detail = mine or manage
         if not detail and (hidden_unless_detail or b.person_id not in visible):
             continue          # colleagues never see declined or cancelled bookings (ACC-06), nor a hidden person's
+        if detail and approved_only and b.status != Booking.Status.APPROVED:
+            continue          # the person and their managers see the real status
         out.append({"booking": b, "detail": detail, "manage": manage, "days": (b.last_day - b.first_day).days + 1, "status": status_for(b, detail),
                     "cost": sum(bd.cost_seconds for bd in b.booking_days.all()) if detail and b.is_active else None})
     return out

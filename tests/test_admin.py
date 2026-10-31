@@ -76,3 +76,19 @@ def test_the_leave_admin_cannot_add_change_or_delete(root_client, model):
     assert page.status_code == 200 and 'name="_save"' not in page.content.decode()
     assert root_client.get(f"/admin/leave/{model}/{row.pk}/delete/").status_code == 403
     assert root_client.post(f"/admin/leave/{model}/{row.pk}/change/", {"name": "x"}).status_code == 403
+
+
+def test_an_allowance_row_cannot_be_deleted_on_its_own(root_client):
+    """R-A4: deleting a year's first row would turn set_allowance's next
+    edit into an edit of the hours-change row. The row still goes with its
+    person (the test above)."""
+    from datetime import date
+    from decimal import Decimal
+
+    from people.models import Allowance
+    row = Allowance.objects.create(person=make_person(), leave_year=date(2026, 1, 1), annual_hours=Decimal("187.5"),
+                                   bank_holiday_hours=Decimal("60"))
+    assert root_client.get(f"/admin/people/allowance/{row.pk}/delete/").status_code == 403
+    assert root_client.post(f"/admin/people/allowance/{row.pk}/delete/", {"post": "yes"}).status_code == 403
+    r = root_client.post("/admin/people/allowance/", {"action": "delete_selected", "_selected_action": [row.pk], "post": "yes"})
+    assert Allowance.objects.filter(pk=row.pk).exists() and r.status_code in (200, 302)

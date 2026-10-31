@@ -378,3 +378,28 @@ def test_a_self_set_flag_is_kept_when_the_dialog_is_saved():
     c.post(f"/staff/{boss.pk}/permissions/", {})
     boss.refresh_from_db()
     assert boss.own_leave_without_approval
+
+
+# --- R-A3: an adjustment can be for the previous leave year too
+
+def test_an_adjustment_can_be_for_the_previous_leave_year_but_not_the_one_before(sam, lead):
+    from leave.services import adjustments
+    c = _client(lead)
+    url = f"/staff/{sam.pk}/leave/adjust/"
+    body = c.get(url).content.decode()
+    assert 'value="2025-01-01"' in body and 'value="2026-01-01" selected' in body and 'value="2027-01-01"' in body
+    data = {"account": "annual", "hours": "7:30", "reason": "2025 carried over late"}
+    assert c.post(url, {**data, "leave_year": "2025-01-01"}).json() == {"refresh": True}
+    assert Adjustment.objects.get().leave_year == date(2025, 1, 1)
+    assert "Choose one of the leave years listed" in c.post(url, {**data, "leave_year": "2024-01-01"}).content.decode()
+    with pytest.raises(ValueError) as e:
+        adjustments.add(lead.user, sam, date(2024, 1, 1), "annual", 3600, "too old")
+    assert str(e.value) == "An adjustment can be for the previous leave year, this one or the next"
+    with pytest.raises(ValueError):
+        adjustments.add(lead.user, sam, date(2028, 1, 1), "annual", 3600, "too far")
+    assert Adjustment.objects.count() == 1
+
+
+def test_the_statement_can_show_the_previous_leave_year(sam, lead):
+    body = _client(lead).get(f"/staff/{sam.pk}/profile/?tab=hours&year=2025-01-01").content.decode()
+    assert '<option value="2025-01-01" selected>2025</option>' in body

@@ -16,15 +16,15 @@ REFRESH = {"refresh": True}
 
 
 def _statement_for(person, text):
-    """The statement for the ISO year asked for when it is one of the
-    person's two; else the current year's, or the next year's when only that
+    """The statement for the ISO year asked for when it is the person's
+    previous, current or next leave year; else the current year's, or the next year's when only that
     one has an allowance set (a new person, or the last weeks of a year)."""
     options = years.years_for(person)
     try:
         asked = date.fromisoformat(text or "")
     except ValueError:
         asked = None
-    if asked in options:
+    if asked in years.correctable(person):
         return balances.statement(person, asked)
     current = balances.statement(person, options[0])
     if current.missing:
@@ -35,10 +35,10 @@ def _statement_for(person, text):
 
 
 def statement_context(person, year_text, manages=False, in_dialog=False):
-    """What _statement.html needs: the statement and the person's two years
-    to switch between."""
+    """What _statement.html needs: the statement and the years to switch
+    between (last year's too, which an adjustment can still correct)."""
     return {"statement": _statement_for(person, year_text), "person": person, "manages": manages, "in_dialog": in_dialog,
-            "year_options": [(y.isoformat(), years.label(y)) for y in years.years_for(person)]}
+            "year_options": [(y.isoformat(), years.label(y)) for y in years.correctable(person)]}
 
 
 def _managed(request, pk):
@@ -51,8 +51,8 @@ def _managed(request, pk):
 @login_required
 def adjust(request, pk):
     person = _managed(request, pk)
-    options = years.years_for(person)
-    form = AdjustForm(request.POST or None, initial={"leave_year": options[0]})
+    options = years.correctable(person)
+    form = AdjustForm(request.POST or None, initial={"leave_year": options[1]})
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         if d["leave_year"] not in options:
@@ -64,7 +64,7 @@ def adjust(request, pk):
             except ValueError as e:
                 form.add_error(None, str(e))
     return render(request, "leave/adjust_dialog.html", {
-        "person": person, "form": form, "years": options, "selected": request.POST.get("leave_year") or options[0].isoformat()})
+        "person": person, "form": form, "years": options, "selected": request.POST.get("leave_year") or options[1].isoformat()})
 
 
 @login_required

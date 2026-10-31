@@ -2,7 +2,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import transaction
 
 from leave.models import Adjustment
-from leave.services import hours
+from leave.services import hours, years
 from people.services import access, audit
 
 
@@ -13,6 +13,8 @@ def add(user, person, year, account, seconds, reason):
         raise ValueError("unknown account")
     if not (reason or "").strip():
         raise ValueError("A reason is needed")
+    if year not in years.correctable(person):
+        raise ValueError("An adjustment can be for the previous leave year, this one or the next")
     with transaction.atomic():
         row = Adjustment.objects.create(person=person, leave_year=year, account=account, seconds=int(seconds), reason=reason.strip()[:300], actor=user)
         audit.record_as(user, "leave.adjustment", person.pk, {f"{account} {year.year}": ("", hours.fmt(row.seconds))}, note=row.reason)

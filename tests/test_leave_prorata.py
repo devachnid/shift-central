@@ -172,24 +172,32 @@ def test_a_back_dated_change_does_not_undo_a_later_one_already_in_force(all_team
 
 
 @pytest.mark.today(clock.LATE_2026)
-def test_an_hours_change_starts_in_the_current_or_next_leave_year(all_teams_user):
+def test_an_hours_change_starts_in_the_previous_current_or_next_leave_year(all_teams_user):
+    """R-A3: last year can be corrected (in January, say); the year before cannot."""
     sam = make_person(weekly_hours=Decimal("37.5"), days_per_week=5)
-    for year in (2025, 2028):
+    for year in (2024, 2028):
         make_allowance(sam, date(year, 1, 1), 172, 60)
         with pytest.raises(ValueError) as e:
             profiles.add_hours_change(all_teams_user, sam, date(year, 7, 1), Decimal("30"), 4, 138, 48, "x")
-        assert str(e.value) == "An hours change can start in this leave year or the next"
+        assert str(e.value) == "An hours change can start in the previous leave year, this one or the next"
+    with pytest.raises(ValueError) as e:
+        profiles.add_hours_change(all_teams_user, sam, date(2024, 12, 31), Decimal("30"), 4, 138, 48, "x")
+    assert "previous leave year" in str(e.value)
+    make_allowance(sam, date(2025, 1, 1), 172, 60)
+    row = profiles.add_hours_change(all_teams_user, sam, date(2025, 1, 2), Decimal("30"), 4, 138, 48, "last year's contract")
+    assert row.leave_year == date(2025, 1, 1)
 
 
 @pytest.mark.today(clock.LATE_2026)
-def test_the_hours_change_form_refuses_a_day_outside_the_two_leave_years():
+def test_the_hours_change_form_takes_a_day_in_the_previous_current_or_next_leave_year():
     from leave.forms import HoursChangeForm
     sam = make_person()
     data = {"weekly_hours": "30", "days_per_week": "4", "annual_hours": "138", "bank_holiday_hours": "48", "note": "x"}
-    assert not HoursChangeForm({**data, "from_day": "2025-07-01"}, person=sam).is_valid()
-    form = HoursChangeForm({**data, "from_day": "2028-07-01"}, person=sam)
-    assert not form.is_valid() and form.errors["from_day"] == ["Choose a day in this leave year or the next"]
-    assert HoursChangeForm({**data, "from_day": "2027-07-01"}, person=sam).is_valid()
+    form = HoursChangeForm({**data, "from_day": "2024-12-31"}, person=sam)
+    assert not form.is_valid() and form.errors["from_day"] == ["Choose a day in the previous leave year, this one or the next"]
+    assert not HoursChangeForm({**data, "from_day": "2028-01-01"}, person=sam).is_valid()
+    for day in ("2025-01-01", "2026-07-01", "2027-12-31"):
+        assert HoursChangeForm({**data, "from_day": day}, person=sam).is_valid()
 
 
 @pytest.mark.today(clock.LATE_2026)

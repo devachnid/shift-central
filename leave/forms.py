@@ -157,8 +157,8 @@ class HoursChangeForm(forms.Form):
 
     def clean_from_day(self):
         day = self.cleaned_data["from_day"]
-        if self.person is not None and years.year_of(self.person, day) not in years.years_for(self.person):
-            raise forms.ValidationError("Choose a day in this leave year or the next")
+        if self.person is not None and years.year_of(self.person, day) not in years.correctable(self.person):
+            raise forms.ValidationError("Choose a day in the previous leave year, this one or the next")
         return day
 
 

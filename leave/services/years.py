@@ -31,6 +31,18 @@ def years_for(person, today=None):
     return [this, next_year(this)]
 
 
+def previous_year(year):
+    return date(year.year - 1, year.month, year.day)
+
+
+def correctable(person, today=None):
+    """The leave years an adjustment or an hours change may be dated in:
+    the previous one (last year's statement is put right in January), this
+    one and the next. Leave itself is booked in this one and the next only."""
+    this, following = years_for(person, today)
+    return [previous_year(this), this, following]
+
+
 def label(year):
     """"2027", or "2027/28" for a year that starts after 1 January."""
     return str(year.year) if (year.month, year.day) == (1, 1) else f"{year.year}/{str(year.year + 1)[2:]}"

@@ -284,11 +284,12 @@ def test_lv_21_staff_e(boss):
     assert s.taken["bank_holiday"] == h("65") and s.annual_remaining == h("121")
 
 
-def test_lv_15a_and_15b_carry_over_as_adjustments(boss):
+def test_lv_15a_and_15b_carry_over_as_adjustments(boss, today):
     sam = full_timer()
     make_allowance(sam, Y27, Decimal("172.5"), 0)
     adjustments.add(boss.user, sam, Y27, "annual", h("15"), "carried over 2026")
     assert balances.statement(sam, Y27).annual_remaining == h("187.5") == 675000
+    today(date(2028, 1, 4))           # 2027's carry-over is made in January 2028
     y28 = date(2028, 1, 1)
     make_allowance(sam, y28, Decimal("172.5"), 0)
     adjustments.add(boss.user, sam, y28, "annual", h("10"), "carried over 2027 (10 h of 20 h)")
