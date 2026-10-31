@@ -328,9 +328,12 @@ def test_the_activity_log_lists_practice_wide_leave_changes(lead):
 
 
 def test_a_modal_refresh_reloads_the_page_when_there_is_no_rota_grid():
+    """By a fresh GET of the address, never reload(): a page rendered from
+    a POST (the request page, Leave settings) would ask to resubmit it."""
     from pathlib import Path
     js = Path("static/js/modal.js").read_text()
-    assert 'document.querySelector(\'[data-component="rota-grid"]\')' in js and "window.location.reload()" in js
+    assert 'document.querySelector(\'[data-component="rota-grid"]\')' in js
+    assert js.count("window.location.assign(window.location.href)") == 2 and "reload()" not in js
 
 
 def test_a_type_with_bookings_keeps_its_account_in_the_service_too(lead, sam):

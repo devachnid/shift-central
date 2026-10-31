@@ -40,12 +40,13 @@
     } else if (afterClose) {
       reloadOnClose = true;
     } else {
-      window.location.reload();
+      // assign, not reload: a page rendered from a POST would otherwise ask to resubmit it
+      window.location.assign(window.location.href);
     }
   }
   function close() {
     dialog.innerHTML = "";
-    if (reloadOnClose) { reloadOnClose = false; window.location.reload(); return; }
+    if (reloadOnClose) { reloadOnClose = false; window.location.assign(window.location.href); return; }
     if (opener && opener.isConnected) { opener.focus({ preventScroll: true }); }
     opener = null;
   }

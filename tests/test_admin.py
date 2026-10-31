@@ -53,3 +53,26 @@ def test_allowances_and_grants_stay_read_only_in_the_admin(root_client, model):
            if model == "allowance" else make_team_manager(p, make_team("Nursing")))
     body = root_client.get(f"/admin/people/{model}/{row.pk}/change/").content.decode()
     assert 'name="_save"' not in body
+
+
+# --- the leave admin is read-only (S17): the pages are the way to edit, through the audited services
+
+def _leave_rows():
+    from datetime import date
+
+    from leave.models import BankHoliday, LeaveSetting, LeaveType
+    from leave.services import settings as leave_settings
+    from tests.factories import make_booking
+    leave_settings.get()
+    return {"leavetype": LeaveType.objects.first(), "bankholiday": BankHoliday.objects.first(),
+            "leavesetting": LeaveSetting.objects.first(), "booking": make_booking(make_person(), date(2027, 3, 1))}
+
+
+@pytest.mark.parametrize("model", ["leavetype", "bankholiday", "leavesetting", "booking"])
+def test_the_leave_admin_cannot_add_change_or_delete(root_client, model):
+    row = _leave_rows()[model]
+    assert root_client.get(f"/admin/leave/{model}/add/").status_code == 403
+    page = root_client.get(f"/admin/leave/{model}/{row.pk}/change/")
+    assert page.status_code == 200 and 'name="_save"' not in page.content.decode()
+    assert root_client.get(f"/admin/leave/{model}/{row.pk}/delete/").status_code == 403
+    assert root_client.post(f"/admin/leave/{model}/{row.pk}/change/", {"name": "x"}).status_code == 403
