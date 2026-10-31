@@ -288,6 +288,7 @@ def test_a_patch_that_changes_nothing_on_the_day_records_nothing(world):
     assert DayChange.objects.get().before == "08:00-16:15"
 
 
+@pytest.mark.today(clock.LATE_2026)     # books leave in 2027 through the service
 def test_a_paste_reports_the_days_off_it_skipped_apart_from_the_rows(world):
     from leave.services import bookings
     from tests.factories import make_type
