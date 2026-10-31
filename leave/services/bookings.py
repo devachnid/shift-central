@@ -2,6 +2,8 @@
 leave.booking against the person; every write is one transaction; emails
 go after the commit through leave.services.notify, which never raises."""
 
+from datetime import timedelta
+
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.utils import timezone
@@ -36,7 +38,11 @@ def may_view_detail(user, booking):
 
 # --- checks ---------------------------------------------------------------
 
-def _check_dates(person, first, last, part, start, finish):
+def _check_dates(person, first, last, part, start, finish, was=None):
+    """The shape of the dates and times, and that the days are in this leave
+    year or the next. For an edit (`was`, the booking as it stands) only the
+    days it adds are held to the years, so a booking begun last year can
+    still be cut short."""
     if first > last:
         raise LeaveError("dates", "The last day is before the first")
     if part != "whole" and first != last:
@@ -46,7 +52,15 @@ def _check_dates(person, first, last, part, start, finish):
     if part != "times" and (start or finish):
         raise LeaveError("dates", "Times are for a timed booking only")
     allowed = years.years_for(person)
-    if years.year_of(person, first) not in allowed or years.year_of(person, last) not in allowed:
+    if was is None:
+        ends = [first, last]
+    else:
+        ends = []
+        if first < was.first_day:
+            ends += [first, min(last, was.first_day - timedelta(days=1))]
+        if last > was.last_day:
+            ends += [max(first, was.last_day + timedelta(days=1)), last]
+    if any(years.year_of(person, day) not in allowed for day in ends):
         raise LeaveError("dates", "Leave can be booked in this leave year and the next")
 
 
@@ -379,8 +393,9 @@ def cancel(user, booking, note="", base_url=""):
 # --- edit, override, recost -----------------------------------------------
 
 def moves(booking, first, last, part, start, finish):
-    """Whether an edit changes the booking's days or times (and so is
-    checked as a booking is: dates, this leave year and the next, overlap)."""
+    """Whether an edit changes the booking's days or times (and so has its
+    dates checked, the days it adds held to this leave year and the next,
+    and the overlap checked)."""
     return (first, last, part, start, finish) != (booking.first_day, booking.last_day, booking.part, booking.start, booking.finish)
 
 
@@ -405,7 +420,7 @@ def edit(user, booking, base_url="", costs=None, **fields):
         finish = fields.get("finish", fresh.finish) if part == "times" else None
         relabel = (new_type.pk, first, last, part, start, finish) == (fresh.type_id, fresh.first_day, fresh.last_day, fresh.part, fresh.start, fresh.finish)
         if moves(fresh, first, last, part, start, finish):     # a type change on the same days is a correction, in any year
-            _check_dates(fresh.person, first, last, part, start, finish)
+            _check_dates(fresh.person, first, last, part, start, finish, was=fresh)
             _check_overlap(fresh.person, first, last, exclude=fresh)
         before = describe(fresh)
         days = []

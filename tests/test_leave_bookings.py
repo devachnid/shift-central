@@ -506,3 +506,39 @@ def test_leave_that_draws_on_no_allowance_has_its_own_heading_on_the_statement(s
     c.force_login(sam.user)
     body = c.get("/time-off/mine/?year=2027-01-01").content.decode()
     assert "Leave that draws on no allowance" in body and "Tue 2 Mar: Sick leave" in body
+
+
+# --- an edit is held to "this leave year and the next" only for the days it adds (item 8)
+
+def test_a_booking_begun_last_year_can_be_cut_short_in_january(sam, lead, today):
+    today(date(2026, 12, 21))
+    make_allowance(sam, date(2026, 1, 1), Decimal("172.5"), 60)
+    b = bookings.book(lead.user, sam, make_type("Holiday"), date(2026, 12, 29), date(2027, 1, 5), "whole")
+    today(date(2027, 1, 4))                       # 2026 is now last year
+    bookings.edit(lead.user, b, last=date(2027, 1, 4))
+    b.refresh_from_db()
+    assert (b.first_day, b.last_day) == (date(2026, 12, 29), date(2027, 1, 4))
+    bookings.edit(lead.user, b, first=date(2026, 12, 30))
+    b.refresh_from_db()
+    assert b.first_day == date(2026, 12, 30)
+    with pytest.raises(LeaveError) as e:
+        bookings.edit(lead.user, b, first=date(2026, 12, 28))
+    assert e.value.message == "Leave can be booked in this leave year and the next"
+    bookings.edit(lead.user, b, last=date(2027, 1, 6))     # adding days this year is fine
+    b.refresh_from_db()
+    assert b.last_day == date(2027, 1, 6)
+
+
+def test_the_edit_dialog_cuts_short_a_booking_begun_last_year(sam, lead, today):
+    from django.test import Client
+    today(date(2026, 12, 21))
+    make_allowance(sam, date(2026, 1, 1), Decimal("172.5"), 60)
+    b = bookings.book(lead.user, sam, make_type("Holiday"), date(2026, 12, 29), date(2027, 1, 5), "whole")
+    today(date(2027, 1, 4))
+    c = Client()
+    c.force_login(lead.user)
+    data = {"person": sam.pk, "type": b.type.pk, "first_day": "2026-12-29", "last_day": "2027-01-04", "part": "whole"}
+    assert "this leave year and the next" not in c.post(f"/time-off/{b.pk}/edit/", {**data, "preview": "1"}).content.decode()
+    assert c.post(f"/time-off/{b.pk}/edit/", data).json() == {"refresh": True}
+    body = c.post(f"/time-off/{b.pk}/edit/", {**data, "first_day": "2026-12-28", "preview": "1"}).content.decode()
+    assert "Leave can be booked in this leave year and the next" in body

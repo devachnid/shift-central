@@ -46,9 +46,8 @@ def _preview(form, booking=None, person=None):
     kw = form.booking_kwargs()
     person = person or form.cleaned_data.get("person") or booking.person
     try:
-        if booking is None or bookings.moves(booking, kw["first"], kw["last"], kw["part"], kw["start"], kw["finish"]):
-            # An edit that leaves the days alone (a label, a cost, the type) is not held to "this year and the next".
-            bookings._check_dates(person, kw["first"], kw["last"], kw["part"], kw["start"], kw["finish"])
+        # An edit is held to "this leave year and the next" only for the days it adds (bookings._check_dates).
+        bookings._check_dates(person, kw["first"], kw["last"], kw["part"], kw["start"], kw["finish"], was=booking)
         bookings._check_overlap(person, kw["first"], kw["last"], exclude=booking)
     except LeaveError as e:
         return {"error": e.message}
