@@ -10,8 +10,8 @@ from decimal import Decimal, InvalidOperation
 from django import forms
 
 from leave.models import Booking, LeaveType
-from leave.services import hours
-from people.models import Person
+from leave.services import hours, types
+from people.models import Person, Team
 from people.services import access
 
 HM = re.compile(r"^(\d{1,3}):([0-5]\d)$")
@@ -134,3 +134,76 @@ class HoursChangeForm(forms.Form):
     annual_hours = forms.DecimalField(max_digits=6, decimal_places=2, min_value=0, label="New annual leave allowance (full year, hours)")
     bank_holiday_hours = forms.DecimalField(max_digits=6, decimal_places=2, min_value=0, label="New bank holiday allowance (full year, hours)")
     note = forms.CharField(max_length=300, label="Reason")
+
+
+class BankHolidayForm(forms.Form):
+    day = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"))
+    name = forms.CharField(max_length=60)
+
+
+class BlackoutForm(forms.Form):
+    first_day = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"), label="First day")
+    last_day = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"), label="Last day")
+    teams = forms.ModelMultipleChoiceField(Team.objects.none(), required=False, widget=forms.CheckboxSelectMultiple,
+                                           help_text="Leave none ticked for everyone")
+    note = forms.CharField(max_length=120, required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["teams"].queryset = Team.objects.filter(active=True)
+
+    def clean(self):
+        d = super().clean()
+        if d.get("first_day") and d.get("last_day") and d["last_day"] < d["first_day"]:
+            self.add_error("last_day", "The last day is before the first")
+        return d
+
+
+class TypeForm(forms.Form):
+    """A leave type. What a type draws from and how it reaches payroll decide
+    the arithmetic and spec 4's report: they are fixed on a seeded type and,
+    for a type a manager added, once it has a booking. Until then they are
+    offered, and always when adding."""
+    name = forms.CharField(max_length=60)
+    colour = forms.RegexField(r"^#[0-9A-Fa-f]{6}$", max_length=7, widget=forms.TextInput(attrs={"type": "color"}),
+                              error_messages={"invalid": "Choose a colour"})
+    draws_from = forms.ChoiceField(choices=LeaveType.Account.choices, initial="none", label="Takes its days from")
+    on_payroll = forms.ChoiceField(choices=LeaveType.Payroll.choices, initial="never", label="On the payroll report")
+    requestable = forms.BooleanField(required=False, label="Staff can request it")
+    paid_choice = forms.BooleanField(required=False, label="The manager chooses paid or unpaid")
+    default_paid = forms.BooleanField(required=False, initial=True, label="Paid unless chosen otherwise")
+    display_order = forms.IntegerField(min_value=0, max_value=9999, required=False)
+    archived = forms.BooleanField(required=False, label="Archived (no longer offered; its bookings stand)")
+
+    def __init__(self, *args, row=None, **kwargs):
+        if row is not None:
+            kwargs.setdefault("initial", {k: getattr(row, k) for k in (
+                "name", "colour", "draws_from", "on_payroll", "requestable", "paid_choice", "default_paid", "display_order", "archived")})
+        super().__init__(*args, **kwargs)
+        self.row = row
+        if row is None:
+            del self.fields["display_order"], self.fields["archived"]
+        elif row.seeded or row.bookings.exists():
+            del self.fields["draws_from"], self.fields["on_payroll"]
+
+    def clean_name(self):
+        name = self.cleaned_data["name"].strip()
+        if LeaveType.objects.filter(name__iexact=name).exclude(pk=self.row.pk if self.row else None).exists():
+            raise forms.ValidationError("There is already a type with that name")
+        return name
+
+    def save(self, user):
+        d = self.cleaned_data
+        if self.row is None:
+            return types.add(user, d["name"], d["colour"], d["draws_from"], d["requestable"], d["paid_choice"], d["on_payroll"], d["default_paid"])
+        fields = {k: d[k] for k in ("name", "colour", "requestable", "paid_choice", "default_paid", "archived")}
+        if d.get("display_order") is not None:
+            fields["display_order"] = d["display_order"]
+        for k in ("draws_from", "on_payroll"):
+            if k in d:
+                fields[k] = d[k]
+        return types.update(user, self.row, **fields)
+
+
+class SettingsForm(forms.Form):
+    reminder_working_days = forms.IntegerField(min_value=1, max_value=30, label="Remind the managers when a request has waited this many working days")

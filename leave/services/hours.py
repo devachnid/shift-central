@@ -23,3 +23,9 @@ def fmt(seconds):
     if h:
         return f"{sign}{h} h"
     return f"{sign}{m}{half} min"
+
+
+def fmt_short(seconds):
+    """H:MM, the way an hours box is typed and read back (parse_hours)."""
+    h, rest = divmod(max(int(seconds), 0), 3600)
+    return f"{h}:{rest // 60:02d}"

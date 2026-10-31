@@ -9,7 +9,8 @@ from people.services import access, audit
 
 
 def _type():
-    return LeaveType.objects.get(name="Bank holiday")
+    """Found by what it draws from, not its name: a manager may rename it."""
+    return LeaveType.objects.get(seeded=True, draws_from=LeaveType.Account.BANK_HOLIDAY)
 
 
 def add(user, day, name):

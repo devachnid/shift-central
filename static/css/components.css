@@ -151,3 +151,10 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .planner .is-blank { border-color: transparent; background: none; }
 .planner-chip { display: block; color: #fff; border-radius: 2px; padding: 0 2px; margin-top: 1px; font-weight: 700; line-height: 1.3; overflow: hidden; text-overflow: clip; white-space: nowrap; }
 .planner-chip.is-pending { background-image: repeating-linear-gradient(135deg, rgba(255, 255, 255, .5) 0 3px, transparent 3px 6px); }
+
+/* --- leave settings pages -------------------------------------------------- */
+.stack { max-width: 560px; }
+.inline-form { display: inline; }
+.check { display: flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-md); color: var(--ink); }
+fieldset.field { border: 0; padding: 0; } fieldset.field legend { font-size: var(--fs-xs); color: var(--muted); padding: 0; margin-bottom: 2px; }
+.field .check input { width: auto; }

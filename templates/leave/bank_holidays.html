@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Bank holidays · AMG Shift Central{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <a href="?year={{ previous }}" aria-label="Previous year">‹</a>
+  <strong>{{ year }}</strong>
+  <a href="?year={{ next }}" aria-label="Next year">›</a>
+</form>
+<table class="table">
+  <thead><tr><th>Day</th><th>Name</th><th>Booked</th><th></th><th></th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r.day|date:"D j M Y" }}</td><td>{{ r.name }}</td>
+    <td>{% if r.booked %}Booked for {{ r.booked }} {{ r.booked|pluralize:"person,people" }}{% else %}<span class="muted">Not booked</span>{% endif %}</td>
+    <td><a href="{% url 'bank-holiday-everyone' r.day|date:'Y-m-d' %}" data-dialog>Add for everyone</a></td>
+    <td><form method="post" action="{% url 'bank-holidays' %}">{% csrf_token %}<button class="btn btn-quiet" name="delete" value="{{ r.day|date:'Y-m-d' }}" aria-label="Delete {{ r.name }}">Delete</button></form></td>
+  </tr>
+  {% empty %}<tr><td colspan="5">No bank holidays are listed for {{ year }}.</td></tr>{% endfor %}
+  </tbody>
+</table>
+<form method="post" action="{% url 'bank-holidays' %}" class="stack">
+  {% csrf_token %}
+  <h2>Add a bank holiday</h2>
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <div class="field-row">
+    <div class="field{% if form.day.errors %} has-error{% endif %}"><label for="id_day">Day</label>{{ form.day }}{% for e in form.day.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+    <div class="field{% if form.name.errors %} has-error{% endif %}"><label for="id_name">Name</label>{{ form.name }}{% for e in form.name.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  </div>
+  <button class="btn btn-dark">Add bank holiday</button>
+</form>
+{% endblock %}

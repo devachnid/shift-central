@@ -1,0 +1,19 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}{% if row %}Edit blackout{% else %}Add blackout{% endif %}{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% if row %}{% url 'blackout-edit' row.pk %}{% else %}{% url 'blackout-add' %}{% endif %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <div class="field-row">
+    <div class="field{% if form.first_day.errors %} has-error{% endif %}"><label for="id_first_day">First day</label>{{ form.first_day }}{% for e in form.first_day.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+    <div class="field{% if form.last_day.errors %} has-error{% endif %}"><label for="id_last_day">Last day</label>{{ form.last_day }}{% for e in form.last_day.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  </div>
+  <fieldset class="field"><legend>Teams</legend>
+    {% for box in form.teams %}<label class="check">{{ box.tag }} {{ box.choice_label }}</label>{% endfor %}
+    <span class="field-help">{{ form.teams.help_text }}</span>
+    {% for e in form.teams.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </fieldset>
+  <div class="field{% if form.note.errors %} has-error{% endif %}"><label for="id_note">Note</label>{{ form.note }}{% for e in form.note.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  <button class="btn btn-dark">{% if row %}Save changes{% else %}Add blackout{% endif %}</button>
+</form>
+{% endblock %}

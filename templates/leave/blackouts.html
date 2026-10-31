@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Blackouts · AMG Shift Central{% endblock %}
+{% block topbar_actions %}<a class="topbar-action is-primary" href="{% url 'blackout-add' %}" data-dialog>Add blackout +</a>{% endblock %}
+{% block content %}
+<p class="muted">Staff cannot request time off on these days. Managers can still book it.</p>
+<table class="table">
+  <thead><tr><th>First day</th><th>Last day</th><th>Teams</th><th>Note</th><th></th></tr></thead>
+  <tbody>
+  {% for b in rows %}
+  <tr>
+    <td>{{ b.first_day|date:"j M Y" }}</td><td>{{ b.last_day|date:"j M Y" }}</td>
+    <td>{% for t in b.teams.all %}{{ t.name }}{% if not forloop.last %}, {% endif %}{% empty %}Everyone{% endfor %}</td>
+    <td>{{ b.note }}</td>
+    <td><a href="{% url 'blackout-edit' b.pk %}" data-dialog>Edit</a>
+        <form method="post" action="{% url 'blackout-delete' b.pk %}" class="inline-form">{% csrf_token %}<button class="btn btn-quiet" aria-label="Delete the blackout from {{ b.first_day|date:'j M Y' }}">Delete</button></form></td>
+  </tr>
+  {% empty %}<tr><td colspan="5">There are no blackouts.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

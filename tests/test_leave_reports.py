@@ -1,13 +1,14 @@
 """The year planner, the leave report, the bank holiday pages, blackouts,
 leave types, leave settings and the Health card's new lines."""
 
-from datetime import date, time
+from datetime import date, time, timedelta
 from decimal import Decimal
 
 import pytest
 from django.test import Client
 from django.utils import timezone
 
+from leave.models import BankHoliday, Blackout, Booking, LeaveSetting, LeaveType
 from leave.services import adjustments, bookings
 from tests.factories import make_allowance, make_entry, make_person, make_team, make_team_manager, make_type, make_user_for
 
@@ -96,3 +97,157 @@ def test_the_leave_report_defaults_to_the_leave_year_and_writes_names_safely(sam
     assert f'name="from" value="{start.isoformat()}"' in r.content.decode()
     row = _client(me).get("/reports/leave/?download=1").content.decode().splitlines()[1]
     assert row.startswith("'=Eve Patel,")
+
+
+def test_bank_holidays_page_lists_adds_and_books_for_everyone(sam, lead, team):
+    c = _client(lead)
+    body = c.get("/time-off/bank-holidays/?year=2027").content.decode()
+    assert "Good Friday" in body and "Add for everyone" in body
+    assert c.post("/time-off/bank-holidays/", {"day": "2027-05-07", "name": "Coronation"}).status_code == 302
+    assert BankHoliday.objects.filter(day=date(2027, 5, 7)).exists()
+    for w in range(1, 5):
+        make_entry(sam, date(2027, 5, 3) - timedelta(weeks=w), start=time(9), finish=time(17), break_minutes=30)
+    body = c.get("/time-off/bank-holidays/2027-05-03/everyone/").content.decode()
+    assert "Sam Patel" in body and 'value="7:30"' in body
+    r = c.post("/time-off/bank-holidays/2027-05-03/everyone/", {f"hours_{sam.pk}": "7:30", f"tick_{sam.pk}": "on"})
+    assert "1 person" in r.content.decode()
+    bd = Booking.objects.get(person=sam, type__name="Bank holiday").booking_days.get()
+    assert (bd.cost_seconds, bd.account) == (27000, "bank_holiday")
+    assert _client(sam).get("/time-off/bank-holidays/").status_code == 403
+
+
+def test_blackouts_crud(lead, team):
+    c = _client(lead)
+    r = c.post("/time-off/blackouts/add/", {"first_day": "2027-12-20", "last_day": "2027-12-31", "teams": [team.pk], "note": "Christmas"})
+    assert r.json() == {"redirect": "/time-off/blackouts/"}
+    b = Blackout.objects.get()
+    assert list(b.teams.all()) == [team]
+    body = c.get("/time-off/blackouts/").content.decode()
+    assert "Christmas" in body and "Reception" in body
+    c.post(f"/time-off/blackouts/{b.pk}/edit/", {"first_day": "2027-12-20", "last_day": "2027-12-24", "note": "Christmas"})
+    b.refresh_from_db()
+    assert b.last_day == date(2027, 12, 24) and not b.teams.exists()
+    c.post(f"/time-off/blackouts/{b.pk}/delete/")
+    assert not Blackout.objects.exists()
+
+
+def test_leave_types_page_edits_and_archives_but_keeps_a_seeded_types_account(lead):
+    c = _client(lead)
+    body = c.get("/settings/leave-types/").content.decode()
+    assert "Holiday" in body and "Jury service" in body
+    holiday = LeaveType.objects.get(name="Holiday")
+    body = c.get(f"/settings/leave-types/{holiday.pk}/edit/").content.decode()
+    assert 'name="colour"' in body and 'name="draws_from"' not in body
+    c.post(f"/settings/leave-types/{holiday.pk}/edit/", {"name": "Annual leave", "colour": "#123456", "requestable": "on", "display_order": "10"})
+    holiday.refresh_from_db()
+    assert holiday.name == "Annual leave" and holiday.draws_from == "annual"
+    c.post("/settings/leave-types/add/", {"name": "Study leave", "colour": "#654321", "draws_from": "none", "requestable": "on", "on_payroll": "never"})
+    assert LeaveType.objects.get(name="Study leave").requestable
+    c.post(f"/settings/leave-types/{holiday.pk}/edit/", {"name": "Annual leave", "colour": "#123456", "display_order": "10", "archived": "on"})
+    assert LeaveType.objects.get(pk=holiday.pk).archived
+
+
+def test_leave_settings_page(lead):
+    c = _client(lead)
+    assert c.post("/settings/leave/", {"reminder_working_days": "5"}).status_code == 200
+    assert LeaveSetting.objects.get().reminder_working_days == 5
+
+
+def test_bank_holidays_page_refuses_staff_and_unknown_days_and_deletes(sam, lead):
+    c = _client(lead)
+    assert _client(sam).post("/time-off/bank-holidays/", {"day": "2027-05-07", "name": "x"}).status_code == 403
+    assert c.get("/time-off/bank-holidays/2027-05-07/everyone/").status_code == 404      # not on the list
+    assert c.get("/time-off/bank-holidays/notaday/everyone/").status_code == 404
+    assert c.post("/time-off/bank-holidays/", {"day": "nope", "name": "x"}).status_code == 200
+    r = c.post("/time-off/bank-holidays/", {"delete": "2027-05-03"})
+    assert r.status_code == 302 and not BankHoliday.objects.filter(day=date(2027, 5, 3)).exists()
+    assert c.post("/time-off/bank-holidays/", {"delete": "garbage"}).status_code == 404
+
+
+def test_add_for_everyone_lists_gps_unticked_never_the_manager_and_checks_the_hours(sam, lead, team):
+    gp = make_person(first_name="Gail", team=team, is_gp=True)
+    c = _client(lead)
+    body = c.get("/time-off/bank-holidays/2027-05-03/everyone/").content.decode()
+    assert "Gail Patel" in body and "Lead Patel" not in body
+    assert f'name="tick_{gp.pk}" id="tick_{gp.pk}" aria-label' in body        # a GP's box is not ticked
+    assert f'name="tick_{sam.pk}" id="tick_{sam.pk}" checked' in body
+    r = c.post("/time-off/bank-holidays/2027-05-03/everyone/", {f"hours_{sam.pk}": "lots", f"tick_{sam.pk}": "on"})
+    assert "Type hours as 7:30 or 7.5" in r.content.decode() and not Booking.objects.filter(type__name="Bank holiday").exists()
+    r = c.post("/time-off/bank-holidays/2027-05-03/everyone/", {f"hours_{sam.pk}": "25:00", f"tick_{sam.pk}": "on"})
+    assert "A day has 24 hours" in r.content.decode()
+    r = c.post("/time-off/bank-holidays/2027-05-03/everyone/", {f"hours_{sam.pk}": "7.5", f"tick_{sam.pk}": "on"})
+    assert "Added for 1 person" in r.content.decode()
+    r = c.post("/time-off/bank-holidays/2027-05-03/everyone/", {f"hours_{sam.pk}": "7.5", f"tick_{sam.pk}": "on"})
+    assert "Added for 0 people (1 skipped" in r.content.decode()            # already booked
+
+
+def test_a_renamed_bank_holiday_type_still_books(sam, lead):
+    row = LeaveType.objects.get(name="Bank holiday")
+    row.name = "Public holiday"
+    row.save()
+    r = _client(lead).post("/time-off/bank-holidays/2027-05-03/everyone/", {f"hours_{sam.pk}": "7:30", f"tick_{sam.pk}": "on"})
+    assert "Added for 1 person" in r.content.decode()
+    assert "Booked for 1 person" in _client(lead).get("/time-off/bank-holidays/?year=2027").content.decode()
+
+
+def test_blackout_dialogs_render_validate_and_are_for_managers(lead, sam, team):
+    c = _client(lead)
+    assert "Reception" in c.get("/time-off/blackouts/add/").content.decode()
+    r = c.post("/time-off/blackouts/add/", {"first_day": "2027-12-24", "last_day": "2027-12-20"})
+    assert "The last day is before the first" in r.content.decode() and not Blackout.objects.exists()
+    b = Blackout.objects.create(first_day=date(2027, 12, 20), last_day=date(2027, 12, 24), note="Christmas")
+    b.teams.set([team])
+    body = c.get(f"/time-off/blackouts/{b.pk}/edit/").content.decode()
+    assert "Christmas" in body and "checked" in body
+    s = _client(sam)
+    assert s.get("/time-off/blackouts/").status_code == 403 and s.get("/time-off/blackouts/add/").status_code == 403
+    assert s.post(f"/time-off/blackouts/{b.pk}/delete/").status_code == 403 and Blackout.objects.exists()
+    assert c.get(f"/time-off/blackouts/{b.pk}/delete/").status_code == 405
+
+
+def test_blackout_changes_are_audited(lead, team):
+    from people.models import AuditEntry
+    c = _client(lead)
+    c.post("/time-off/blackouts/add/", {"first_day": "2027-12-20", "last_day": "2027-12-31", "note": "Christmas"})
+    assert AuditEntry.objects.filter(model="leave.blackout", actor=lead.user).exists()
+
+
+def test_leave_type_dialogs_validate_and_fix_what_must_not_change(lead, sam):
+    c = _client(lead)
+    r = c.post("/settings/leave-types/add/", {"name": "holiday", "colour": "#123456", "draws_from": "none", "on_payroll": "never"})
+    assert "There is already a type with that name" in r.content.decode()
+    r = c.post("/settings/leave-types/add/", {"name": "Study leave", "colour": "red", "draws_from": "none", "on_payroll": "never"})
+    assert "Choose a colour" in r.content.decode()
+    c.post("/settings/leave-types/add/", {"name": "Study leave", "colour": "#654321", "draws_from": "none", "on_payroll": "never"})
+    study = LeaveType.objects.get(name="Study leave")
+    assert not study.seeded and not study.requestable
+    assert 'name="draws_from"' in c.get(f"/settings/leave-types/{study.pk}/edit/").content.decode()
+    # Until it has a booking a type's account may change; after, it is fixed.
+    c.post(f"/settings/leave-types/{study.pk}/edit/", {"name": "Study leave", "colour": "#654321", "draws_from": "annual", "on_payroll": "never"})
+    study.refresh_from_db()
+    assert study.draws_from == "annual"
+    bookings.book(lead.user, sam, study, MON, MON, "whole")
+    assert 'name="draws_from"' not in c.get(f"/settings/leave-types/{study.pk}/edit/").content.decode()
+    c.post(f"/settings/leave-types/{study.pk}/edit/", {"name": "Study leave", "colour": "#654321", "draws_from": "none", "on_payroll": "never"})
+    study.refresh_from_db()
+    assert study.draws_from == "annual"
+    assert _client(sam).get("/settings/leave-types/").status_code == 403
+    assert _client(sam).post("/settings/leave-types/add/", {"name": "x"}).status_code == 403
+
+
+def test_leave_settings_are_validated_audited_and_for_managers(lead, sam):
+    from people.models import AuditEntry
+    c = _client(lead)
+    assert "Saved." in c.post("/settings/leave/", {"reminder_working_days": "5"}).content.decode()
+    assert AuditEntry.objects.filter(model="leave.leavesetting", field="reminder_working_days", before="3", after="5").exists()
+    assert "Saved." not in c.post("/settings/leave/", {"reminder_working_days": "0"}).content.decode()
+    assert "Saved." not in c.post("/settings/leave/", {"reminder_working_days": "x"}).content.decode()
+    assert LeaveSetting.objects.get().reminder_working_days == 5
+    assert 'value="5"' in c.get("/settings/leave/").content.decode()
+    assert _client(sam).get("/settings/leave/").status_code == 403 and _client(sam).post("/settings/leave/", {"reminder_working_days": "9"}).status_code == 403
+
+
+def test_the_nav_links_all_resolve(lead, sam):
+    c = _client(lead)
+    for url in ("/time-off/planner/", "/time-off/bank-holidays/", "/time-off/blackouts/", "/reports/leave/", "/settings/leave-types/", "/settings/leave/"):
+        assert c.get(url).status_code == 200, url
