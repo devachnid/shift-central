@@ -11,7 +11,7 @@ from django import forms
 from django.db.models import Q
 
 from leave.models import BankHoliday, Booking, LeaveType
-from leave.services import hours, types
+from leave.services import hours, types, years
 from people.models import Person, Team
 from people.services import access
 
@@ -150,6 +150,16 @@ class HoursChangeForm(forms.Form):
     annual_hours = forms.DecimalField(max_digits=6, decimal_places=2, min_value=0, label="New annual leave allowance (full year, hours)")
     bank_holiday_hours = forms.DecimalField(max_digits=6, decimal_places=2, min_value=0, label="New bank holiday allowance (full year, hours)")
     note = forms.CharField(max_length=300, label="Reason")
+
+    def __init__(self, *args, person=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.person = person
+
+    def clean_from_day(self):
+        day = self.cleaned_data["from_day"]
+        if self.person is not None and years.year_of(self.person, day) not in years.years_for(self.person):
+            raise forms.ValidationError("Choose a day in this leave year or the next")
+        return day
 
 
 class BankHolidayForm(forms.Form):

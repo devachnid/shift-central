@@ -3,6 +3,8 @@ Outbox row each, never raising, never a description or note in a subject."""
 
 import logging
 
+from django.conf import settings
+
 from leave.services import hours
 from leave.services.common import recipients, span
 from messaging import services as messaging
@@ -11,6 +13,9 @@ log = logging.getLogger("leave.notify")
 
 
 def _link(base_url, path):
+    """An absolute link: the request's own address, or, for mail sent with
+    none (a rota write, the reminder timer), the first trusted origin."""
+    base_url = base_url or (settings.CSRF_TRUSTED_ORIGINS or [""])[0]
     return (base_url.rstrip("/") + path) if base_url else path
 
 

@@ -70,7 +70,7 @@ def adjust(request, pk):
 @login_required
 def hours_change(request, pk):
     person = _managed(request, pk)
-    form = HoursChangeForm(request.POST or None)
+    form = HoursChangeForm(request.POST or None, person=person)
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         try:

@@ -483,3 +483,26 @@ def test_the_audit_of_a_typed_figure_names_where_the_figure_came_from(sam, lead)
     bookings.edit(lead.user, b, costs={week: 27000})
     row = AuditEntry.objects.get(model="leave.booking", object_id=sam.pk, field=f"cost {week.isoformat()}")
     assert (row.before, row.after) == ("7 h 30 min (average day)", "7 h 30 min (override)")
+
+
+# --- the statement keeps leave that draws on nothing out of the annual figures (S4)
+
+def test_leave_that_draws_on_no_allowance_has_its_own_heading_on_the_statement(sam, lead):
+    from leave.services import balances
+    bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    bookings.book(lead.user, sam, make_type("Sick leave"), TUE, TUE, "whole")
+    bookings.request(sam.user, sam, make_type("Training"), WED, WED, "whole")
+    bookings.request(sam.user, sam, make_type("Holiday"), date(2027, 3, 8), date(2027, 3, 8), "whole")
+    s = balances.statement(sam, Y27)
+    texts = [t for _, t, _ in s.lines]
+    assert not any("Sick leave" in t or "Training" in t for t in texts), "neither is a deduction from annual leave"
+    booked = [n for k, _, n in s.lines if k == "booking"]
+    assert sum(booked) == -(s.taken["annual"] + s.taken["bank_holiday"]) == -27000
+    pending = [n for k, _, n in s.lines if k == "pending"]
+    assert sum(pending) == -(s.pending["annual"] + s.pending["bank_holiday"]) == -27000
+    assert s.no_allowance_lines == [("Tue 2 Mar: Sick leave", 27000), ("Requested: Training 3 Mar", 27000)]
+    from django.test import Client
+    c = Client()
+    c.force_login(sam.user)
+    body = c.get("/time-off/mine/?year=2027-01-01").content.decode()
+    assert "Leave that draws on no allowance" in body and "Tue 2 Mar: Sick leave" in body

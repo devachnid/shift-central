@@ -1,7 +1,7 @@
 from django.core.exceptions import PermissionDenied
 
 from leave.services import hours
-from people.models import Person, TeamManager
+from people.models import Person
 from people.services import access
 
 
@@ -13,13 +13,13 @@ class LeaveError(Exception):
 
 def recipients(person):
     """Managers who can manage the person: all-teams managers with a Person,
-    and the person's team's managers; never the person; deduplicated."""
-    out = {}
-    for p in Person.objects.filter(user__is_all_teams_manager=True).exclude(pk=person.pk):
-        out[p.pk] = p
+    and the person's team's managers; never the person; only those who can
+    sign in (an active user) and are current (not left); deduplicated."""
+    reachable = Person.objects.current().filter(user__is_active=True).exclude(pk=person.pk)
+    out = {p.pk: p for p in reachable.filter(user__is_all_teams_manager=True)}
     if person.team_id:
-        for row in TeamManager.objects.filter(team_id=person.team_id).select_related("person").exclude(person=person):
-            out[row.person.pk] = row.person
+        for p in reachable.filter(manager_of__team_id=person.team_id):
+            out[p.pk] = p
     return [out[k] for k in sorted(out)]
 
 

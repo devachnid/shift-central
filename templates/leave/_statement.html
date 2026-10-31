@@ -30,6 +30,14 @@
     {% endfor %}
     </tbody>
   </table>
+  {% if s.no_allowance_lines %}
+  <table class="table">
+    <thead><tr><th>Leave that draws on no allowance</th><th>Hours</th></tr></thead>
+    <tbody>
+    {% for text, seconds in s.no_allowance_lines %}<tr class="statement-no-allowance"><td>{{ text }}</td><td>{{ seconds|hm }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
   {% if manages %}
   <div class="dialog-links">
     <a href="{% url 'leave-adjust' person.pk %}" data-dialog>Adjust…</a>

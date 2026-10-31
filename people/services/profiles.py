@@ -5,7 +5,7 @@ exists needs a typed reason to change (LEAVE-31)."""
 from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from leave.services import years
@@ -120,29 +120,47 @@ def reorder(actor, ids):
             _apply(actor, person, {"display_order": n * 10})
 
 
+def _change_from(person, year, from_day):
+    return Allowance.objects.filter(person=person, leave_year=year, from_day=from_day).exists()
+
+
 def add_hours_change(actor, person, from_day, weekly_hours, days_per_week, annual_hours, bank_holiday_hours, note):
     """A dated change of contract (PAT-06, LEAVE-12): a second Allowance row
     for the year from `from_day`, carrying the new full-year figures and the
-    new weekly hours and days. The year's first row must exist; the first
-    day itself is set_allowance's. When the day has arrived the hours go on
-    the person now; otherwise apply_due_hours_changes() copies them on the day."""
+    new weekly hours and days. The day is in the person's current or next
+    leave year (as an adjustment's year is); the year's first row must
+    exist; the first day itself is set_allowance's. When the day has
+    arrived the hours go on the person now, unless a later change is already
+    in force (a back-dated change is recorded, and costs its days, but does
+    not undo the later one); otherwise apply_due_hours_changes() copies
+    them on the day."""
     if not note or not note.strip():
         raise ValueError("A reason is needed for an hours change")
     year = years.year_of(person, from_day)
+    if year not in years.years_for(person):
+        raise ValueError("An hours change can start in this leave year or the next")
     if from_day == year:
         raise ValueError("Set the year's allowance on the Pay & time off tab; a change starts after the year's first day")
     if not Allowance.objects.filter(person=person, leave_year=year, from_day=year).exists():
         raise ValueError(f"Set the {year.year} allowance first")
-    if Allowance.objects.filter(person=person, leave_year=year, from_day=from_day).exists():
-        raise ValueError("There is already a change from that day")
     weekly_hours = Decimal(weekly_hours).quantize(Decimal("0.01")) if weekly_hours is not None else None
-    copy_now = from_day <= timezone.localdate() and not person.is_gp and weekly_hours is not None
+    today = timezone.localdate()
+    due = from_day <= today
+    superseded = due and Allowance.objects.filter(person=person, weekly_hours__isnull=False,
+                                                  from_day__gt=from_day, from_day__lte=today).exists()
+    copy_now = due and not superseded and not person.is_gp and weekly_hours is not None
     with transaction.atomic():
-        row = Allowance.objects.create(person=person, leave_year=year, from_day=from_day,
-                                       annual_hours=Decimal(annual_hours).quantize(Decimal("0.01")),
-                                       bank_holiday_hours=Decimal(bank_holiday_hours).quantize(Decimal("0.01")),
-                                       weekly_hours=weekly_hours, days_per_week=days_per_week,
-                                       hours_applied=copy_now)
+        if _change_from(person, year, from_day):
+            raise ValueError("There is already a change from that day")
+        try:
+            with transaction.atomic():
+                row = Allowance.objects.create(person=person, leave_year=year, from_day=from_day,
+                                               annual_hours=Decimal(annual_hours).quantize(Decimal("0.01")),
+                                               bank_holiday_hours=Decimal(bank_holiday_hours).quantize(Decimal("0.01")),
+                                               weekly_hours=weekly_hours, days_per_week=days_per_week,
+                                               hours_applied=copy_now or superseded)
+        except IntegrityError:          # a double submit: the other one won
+            raise ValueError("There is already a change from that day") from None
         audit.record(actor, row, {"annual_hours": ("", str(row.annual_hours)), "bank_holiday_hours": ("", str(row.bank_holiday_hours)),
                                   "weekly_hours": ("", str(weekly_hours or "")), "days_per_week": ("", str(days_per_week or "")),
                                   "from_day": ("", from_day.isoformat())}, note=note.strip())

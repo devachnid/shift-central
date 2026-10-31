@@ -10,6 +10,7 @@ import pytest
 from leave.services import prorata
 from people.models import AuditEntry
 from people.services import profiles
+from tests import clock
 from tests.factories import make_allowance, make_person
 
 pytestmark = pytest.mark.django_db
@@ -104,6 +105,7 @@ def test_the_row_in_force_on_a_day():
     assert prorata.row_in_force(sam, date(2025, 3, 1)) is None
 
 
+@pytest.mark.today(clock.LATE_2026)
 def test_add_hours_change_writes_a_dated_row_and_audits_it(all_teams_user):
     sam = make_person(weekly_hours=Decimal("30"), days_per_week=5)
     make_allowance(sam, Y26, 138, 48)
@@ -117,19 +119,21 @@ def test_add_hours_change_writes_a_dated_row_and_audits_it(all_teams_user):
     assert person_notes == {"full time from July"}     # the copy onto the person carries the reason too
 
 
+@pytest.mark.today(clock.LATE_2026)
 def test_a_future_hours_change_waits_for_its_day(all_teams_user):
     sam = make_person(weekly_hours=Decimal("30"), days_per_week=5)
     make_allowance(sam, Y26, 138, 48)
-    make_allowance(sam, date(2099, 1, 1), 138, 48)     # the change's own year needs its first row
-    profiles.add_hours_change(all_teams_user, sam, date(2099, 7, 1), Decimal("37.5"), 5, Decimal("172.5"), 60, "later")
+    make_allowance(sam, date(2027, 1, 1), 138, 48)     # the change's own year needs its first row
+    profiles.add_hours_change(all_teams_user, sam, date(2027, 7, 1), Decimal("37.5"), 5, Decimal("172.5"), 60, "later")
     sam.refresh_from_db()
     assert sam.weekly_hours == Decimal("30.00")
-    assert profiles.apply_due_hours_changes(today=date(2099, 7, 1)) == 1
+    assert profiles.apply_due_hours_changes(today=date(2027, 7, 1)) == 1
     sam.refresh_from_db()
     assert sam.weekly_hours == Decimal("37.50")
-    assert profiles.apply_due_hours_changes(today=date(2099, 7, 2)) == 0
+    assert profiles.apply_due_hours_changes(today=date(2027, 7, 2)) == 0
 
 
+@pytest.mark.today(clock.LATE_2026)
 def test_add_hours_change_refuses_a_year_with_no_first_row_and_a_blank_reason(all_teams_user):
     sam = make_person()
     with pytest.raises(ValueError):
@@ -147,3 +151,55 @@ def test_a_quarter_hour_tie_rounds_up_from_the_exact_sum(annual, expected):
     sam = make_person(start_date=date(2026, 10, 2))
     make_allowance(sam, Y26, annual, 0)
     assert _hours(prorata.allowance(sam, Y26, "annual")) == Decimal(expected)
+
+
+# --- S6: a back-dated change, the two leave years, a double submit
+
+@pytest.mark.today(clock.LATE_2026)
+def test_a_back_dated_change_does_not_undo_a_later_one_already_in_force(all_teams_user):
+    """A6: July 30 h / 4 days is in force; a change from April (20 h / 3
+    days) entered afterwards is recorded but leaves the person at July's."""
+    sam = make_person(weekly_hours=Decimal("37.5"), days_per_week=5)
+    make_allowance(sam, Y26, 172, 60)
+    profiles.add_hours_change(all_teams_user, sam, date(2026, 7, 1), Decimal("30"), 4, 138, 48, "July")
+    april = profiles.add_hours_change(all_teams_user, sam, date(2026, 4, 1), Decimal("20"), 3, 92, 32, "April, entered late")
+    sam.refresh_from_db()
+    assert (sam.weekly_hours, sam.days_per_week) == (Decimal("30.00"), 4)
+    assert april.hours_applied, "superseded, so the sync never copies it either"
+    assert profiles.apply_due_hours_changes() == 0
+    sam.refresh_from_db()
+    assert (sam.weekly_hours, sam.days_per_week) == (Decimal("30.00"), 4)
+
+
+@pytest.mark.today(clock.LATE_2026)
+def test_an_hours_change_starts_in_the_current_or_next_leave_year(all_teams_user):
+    sam = make_person(weekly_hours=Decimal("37.5"), days_per_week=5)
+    for year in (2025, 2028):
+        make_allowance(sam, date(year, 1, 1), 172, 60)
+        with pytest.raises(ValueError) as e:
+            profiles.add_hours_change(all_teams_user, sam, date(year, 7, 1), Decimal("30"), 4, 138, 48, "x")
+        assert str(e.value) == "An hours change can start in this leave year or the next"
+
+
+@pytest.mark.today(clock.LATE_2026)
+def test_the_hours_change_form_refuses_a_day_outside_the_two_leave_years():
+    from leave.forms import HoursChangeForm
+    sam = make_person()
+    data = {"weekly_hours": "30", "days_per_week": "4", "annual_hours": "138", "bank_holiday_hours": "48", "note": "x"}
+    assert not HoursChangeForm({**data, "from_day": "2025-07-01"}, person=sam).is_valid()
+    form = HoursChangeForm({**data, "from_day": "2028-07-01"}, person=sam)
+    assert not form.is_valid() and form.errors["from_day"] == ["Choose a day in this leave year or the next"]
+    assert HoursChangeForm({**data, "from_day": "2027-07-01"}, person=sam).is_valid()
+
+
+@pytest.mark.today(clock.LATE_2026)
+def test_a_double_submitted_hours_change_is_the_same_refusal_not_a_server_error(all_teams_user, monkeypatch):
+    """The second of two submits racing past the duplicate check meets the
+    unique constraint; it is told what the check would have told it."""
+    sam = make_person(weekly_hours=Decimal("37.5"), days_per_week=5)
+    make_allowance(sam, Y26, 172, 60)
+    profiles.add_hours_change(all_teams_user, sam, date(2026, 7, 1), Decimal("30"), 4, 138, 48, "July")
+    monkeypatch.setattr(profiles, "_change_from", lambda person, year, from_day: False)       # as if the first had not committed yet
+    with pytest.raises(ValueError) as e:
+        profiles.add_hours_change(all_teams_user, sam, date(2026, 7, 1), Decimal("30"), 4, 138, 48, "July")
+    assert str(e.value) == "There is already a change from that day"

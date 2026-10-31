@@ -55,10 +55,11 @@ def toil_earned(person, today=None):
 def _pending_costs(person, year):
     """One pass over the pending bookings that touch the year or draw on TOIL
     (TOIL never resets, so a TOIL request in any year counts). Returns the
-    year's cost by account; the year's other bookings and their totals within
-    the year; and every pending TOIL booking with its total over all days,
-    each as (booking, seconds) pairs."""
-    out, each, toil_each = _zero(), [], []
+    year's cost by account; the year's bookings that draw on annual leave
+    and their totals within the year; every pending TOIL booking with its
+    total over all days; and the year's bookings that draw on nothing, each
+    as (booking, seconds) pairs."""
+    out, each, toil_each, none_each = _zero(), [], [], []
     end = years.year_end(year)
     rows = (Booking.objects.filter(person=person, status=Booking.Status.PENDING)
             .filter(Q(first_day__lte=end, last_day__gte=year) | Q(type__draws_from="toil")).select_related("type"))
@@ -72,9 +73,11 @@ def _pending_costs(person, year):
                 in_year += c.seconds
         if b.type.draws_from == "toil":
             toil_each.append((b, whole))
+        elif b.type.draws_from == "none":
+            none_each.append((b, in_year))
         else:
             each.append((b, in_year))
-    return out, each, toil_each
+    return out, each, toil_each, none_each
 
 
 def statement(person, year):
@@ -90,7 +93,7 @@ def statement(person, year):
             .values("account").annotate(total=Sum("cost_seconds")))
     for row in days:
         s.taken[row["account"]] += row["total"] or 0
-    s.pending, s.pending_bookings, s.toil_pending_bookings = _pending_costs(person, year)
+    s.pending, s.pending_bookings, s.toil_pending_bookings, s.none_pending_bookings = _pending_costs(person, year)
     s.bank_holiday_balance = s.bank_holiday_allowance + s.adjustments["bank_holiday"] - s.taken["bank_holiday"]
     s.annual_remaining = s.annual_allowance + s.adjustments["annual"] - s.taken["annual"] + s.bank_holiday_balance
     s.annual_available = s.annual_remaining - s.pending["annual"] - s.pending["bank_holiday"]
@@ -103,6 +106,7 @@ def statement(person, year):
     s.toil_pending = sum(cost for _, cost in s.toil_pending_bookings)
     s.toil_available = s.toil_remaining - s.toil_pending
     s.lines = _lines(s)
+    s.no_allowance_lines = _no_allowance_lines(s)
     return s
 
 
@@ -126,7 +130,7 @@ def _lines(s):
     for row in Adjustment.objects.filter(person=s.person, leave_year=s.year).exclude(account="toil").order_by("at"):
         out.append(("adjustment", f"{row.reason} ({row.account.replace('_', ' ')})", row.seconds))
     for bd in (BookingDay.objects.filter(booking__person=s.person, booking__status__in=Booking.ACTIVE, day__range=(s.year, years.year_end(s.year)))
-               .exclude(account="toil").select_related("booking__type").order_by("day")):
+               .exclude(account__in=("toil", "none")).select_related("booking__type").order_by("day")):
         out.append(("booking", f"{bd.day:%a %-d %b}: {bd.booking.label} ({bd.account.replace('_', ' ')}, {bd.get_source_display().lower()})", -bd.cost_seconds))
     for b, cost in s.pending_bookings:
         out.append(("pending", _requested(b), -cost))
@@ -144,6 +148,19 @@ def _lines(s):
     out.append(("toil", "TOIL earned (overtime marked TOIL, to today)", s.toil_earned))
     out.append(("toil_remaining", "TOIL remaining", s.toil_remaining))
     out.append(("toil_available", "TOIL available to request", s.toil_available))
+    return out
+
+
+def _no_allowance_lines(s):
+    """Approved and requested leave of types that draw on no allowance
+    (sickness, training…): listed for the record, in no figure."""
+    out = []
+    for bd in (BookingDay.objects.filter(booking__person=s.person, booking__status__in=Booking.ACTIVE, account="none",
+                                         day__range=(s.year, years.year_end(s.year)))
+               .select_related("booking__type").order_by("day")):
+        out.append((f"{bd.day:%a %-d %b}: {bd.booking.label}", bd.cost_seconds))
+    for b, cost in s.none_pending_bookings:
+        out.append((_requested(b), cost))
     return out
 
 
