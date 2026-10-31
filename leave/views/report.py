@@ -16,6 +16,7 @@ from leave.services import balances, hours, years
 from people.models import Person
 from people.services import access
 from shifts.services import csv_safe
+from shifts.services.window import parse_day
 
 DEDUCTS = ("annual", "bank_holiday")
 
@@ -26,11 +27,11 @@ def _dates(request):
     me = getattr(request.user, "person", None)
     default = years.year_of(me, today) if me is not None else date(today.year, 1, 1)
     try:
-        start = date.fromisoformat(request.GET.get("from", ""))
+        start = parse_day(request.GET.get("from", ""))
     except ValueError:
         start = default
     try:
-        end = date.fromisoformat(request.GET.get("to", ""))
+        end = parse_day(request.GET.get("to", ""))
     except ValueError:
         end = years.year_end(start)
     if end < start:

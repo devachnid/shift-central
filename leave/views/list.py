@@ -14,6 +14,7 @@ from leave.services import hours, years
 from people.models import Team
 from people.services import access
 from shifts.services import csv_safe
+from shifts.services.window import parse_day
 
 
 def _range(request, person):
@@ -21,11 +22,11 @@ def _range(request, person):
     the two years leave can be booked in."""
     year = years.year_of(person, timezone.localdate()) if person else date(timezone.localdate().year, 1, 1)
     try:
-        start = date.fromisoformat(request.GET.get("from", ""))
+        start = parse_day(request.GET.get("from", ""))
     except ValueError:
         start = year
     try:
-        end = date.fromisoformat(request.GET.get("to", ""))
+        end = parse_day(request.GET.get("to", ""))
     except ValueError:
         end = years.year_end(years.next_year(year)) if start == year else years.year_end(start)
     return start, end

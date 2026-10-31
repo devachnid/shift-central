@@ -94,7 +94,7 @@ def _new(user, person, leave_type, first, last, part, start, finish, description
     if leave_type.paid_choice:
         paid = leave_type.default_paid if paid is None else bool(paid)
     else:
-        paid = None if leave_type.name != "Unpaid leave" else False
+        paid = None if leave_type.default_paid else False       # a type that is always unpaid says so itself, whatever it is called
     return Booking(person=person, type=leave_type, first_day=first, last_day=last, part=part, start=start, finish=finish,
                    description=(description or "").strip()[:80], paid=paid, status=status, requested_by=user,
                    staff_note=(note or "")[:300] if status == Booking.Status.PENDING else "",
