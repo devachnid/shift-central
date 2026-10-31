@@ -19,7 +19,7 @@
     {% for row in board.wfh %}<div class="today-row"><span class="chip" style="background:{{ row.person.name_colour }}">{{ row.person.name }}</span> {{ row.lines|join:" · " }}</div>{% empty %}<p class="muted">Nobody.</p>{% endfor %}
   </section>
   <section class="today-site"><h3>Off</h3>
-    {% for p in board.off %}<div class="today-row"><span class="chip" style="background:{{ p.name_colour }}">{{ p.name }}</span></div>{% empty %}<p class="muted">Nobody.</p>{% endfor %}
+    {% for o in board.off %}<div class="today-row"><span class="chip" style="background:{{ o.person.name_colour }}">{{ o.person.name }}</span> — {{ o.label }}</div>{% empty %}<p class="muted">Nobody.</p>{% endfor %}
   </section>
 </div>
 {% endblock %}

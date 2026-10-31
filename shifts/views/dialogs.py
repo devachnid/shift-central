@@ -47,6 +47,10 @@ def shift(request, person_pk, day, entry_pk=None):
         day = window.parse_day(day)
     except ValueError:
         raise Http404("not a date") from None
+    from leave.services import costing as leave_costing
+    covered = leave_costing.active_day(person, day)
+    if covered is not None and entry_pk is None:
+        return render(request, "shifts/shift_dialog.html", {"person": person, "day": day, "covered": covered})
     entry = get_object_or_404(Entry, pk=entry_pk, person=person, day=day) if entry_pk else None
     if request.method == "POST":
         form = ShiftForm(request.POST)

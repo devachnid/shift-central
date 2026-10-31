@@ -63,6 +63,10 @@ def download(request):
         for d in days:
             items = [e["line"] for e in row["cells"].get(d["date"], [])]
             items = [f"{s['part']} {s['label']} {s['site']}".strip() for s in row["sessions"].get(d["date"], [])] + items
+            leave = row["leave"].get(d["date"])
+            if leave:
+                part = {"am": " (morning)", "pm": " (afternoon)", "times": f" {leave.get('times', '')}"}.get(leave["part"], "")
+                items.insert(0, f"{leave['type']}{part}{' (requested)' if leave['status'] == 'pending' else ''}")
             cells.append(" / ".join(items))
         writer.writerow([row["name"], row["team"]] + cells)
     return response

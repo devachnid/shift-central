@@ -6,6 +6,7 @@ from datetime import date, timedelta
 from django.db.models import Q
 from django.utils import timezone
 
+from leave.services import serialize as leave_serialize
 from people.models import Department, Person
 from people.services import access
 from shifts.models import DayChange, Entry, GpSession
@@ -114,14 +115,15 @@ def payload(user, start, weeks, filters):
         people.sort(key=lambda p: p.pk != me.pk)
 
     by_cell = {}
-    for e in Entry.objects.filter(person__in=people, day__range=(first, last)).select_related("department"):
+    for e in Entry.objects.filter(person__in=people, day__range=(first, last), covered_by__isnull=True).select_related("department"):
         by_cell.setdefault(e.person_id, {}).setdefault(e.day.isoformat(), []).append(e)
     sessions = {}
     for s in GpSession.objects.filter(person__in=people, day__range=(first, last)):
         sessions.setdefault(s.person_id, {}).setdefault(s.day.isoformat(), []).append(
             {"part": s.part, "label": s.label, "site": s.site})   # not the note: the grid never draws it
+    leave = leave_serialize.leave_for(people, first, last, user)
     if opts["hide_no_shifts"]:
-        people = [p for p in people if p.pk in by_cell or p.pk in sessions]
+        people = [p for p in people if p.pk in by_cell or p.pk in sessions or p.pk in leave]
 
     rows = []
     for p in people:
@@ -132,6 +134,7 @@ def payload(user, start, weeks, filters):
             "cells": {day: [serialize.entry(e) for e in sorted(es, key=lambda e: e.position)]
                       for day, es in by_cell.get(p.pk, {}).items()},
             "sessions": sessions.get(p.pk, {}),
+            "leave": leave.get(p.pk, {}),
         })
     return {
         "from": first.isoformat(), "weeks": weeks,

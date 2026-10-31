@@ -63,3 +63,10 @@ def negative_balance(person, statement, base_url=""):
     body = (f"After the hours change, {person.name}'s annual leave remaining is {hours.fmt(statement.annual_remaining)}.\n\n"
             f"Statement: {_link(base_url, f'/staff/{person.pk}/profile/?tab=hours')}\n")
     return _send_all(recipients(person), f"{person.name}'s leave balance is negative", body)
+
+
+def reminder(booking, base_url=""):
+    p = booking.person
+    what = "cancel" if booking.status == "cancel_requested" else "take"
+    body = f"{p.name}'s request to {what} {booking.type.name} for {span(booking)} is still waiting.\n\nDecide here: {_link(base_url, '/time-off/approve/')}\n"
+    return _send_all(recipients(p), "Time off request still waiting", body)

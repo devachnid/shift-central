@@ -380,12 +380,17 @@ def _set_labels(booking, fields):
 
 
 def override_day(user, booking_day, seconds, note):
-    if not may_decide(user, booking_day.booking):
-        raise PermissionDenied("you don't manage this person")
-    if not (note or "").strip():
-        raise ValueError("A reason is needed to override a day's cost")
-    before = booking_day.cost_seconds
     with transaction.atomic():
+        # Re-read inside the transaction: a stale instance must never
+        # resurrect a day of a booking that has since been cancelled.
+        booking_day = BookingDay.objects.select_related("booking__person").filter(pk=booking_day.pk).first()
+        if booking_day is None or booking_day.booking.status not in Booking.ACTIVE:
+            raise LeaveError("status", "This booking is no longer live")
+        if not may_decide(user, booking_day.booking):
+            raise PermissionDenied("you don't manage this person")
+        if not (note or "").strip():
+            raise ValueError("A reason is needed to override a day's cost")
+        before = booking_day.cost_seconds
         booking_day.cost_seconds, booking_day.source, booking_day.placeholder = int(seconds), BookingDay.Source.OVERRIDE, False
         booking_day.override_by, booking_day.override_note = user, note.strip()[:300]
         booking_day.save()

@@ -200,6 +200,16 @@ def test_an_override_is_logged_and_never_recosted(sam, lead):
         bookings.override_day(lead.user, bd, 3600, "")
 
 
+def test_a_stale_day_of_a_cancelled_booking_is_not_overridden(sam, lead):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    stale = BookingDay.objects.get(booking=b)
+    bookings.cancel(lead.user, b)
+    assert not BookingDay.objects.filter(booking=b).exists()
+    with pytest.raises(LeaveError):
+        bookings.override_day(lead.user, stale, 4 * 3600, "half pay day")
+    assert not BookingDay.objects.filter(booking=b).exists()
+
+
 def test_recost_follows_the_rota_for_a_whole_day_and_flags_managers(sam, lead):
     aug = date(2027, 8, 11)
     b = bookings.book(lead.user, sam, make_type("Holiday"), aug, aug, "whole")
@@ -292,12 +302,10 @@ def test_a_rolled_back_booking_sends_no_mail(sam, lead, django_capture_on_commit
 
 def test_a_grid_rewrite_of_a_timed_day_keeps_the_leave_restorable(sam, lead):
     b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "times", start=time(14, 0), finish=time(15, 30))
-    entries.set_cell_text(lead.user, sam, MON, "09:00-14:00")      # deletes and recreates the day's rows
+    rows = entries.set_cell_text(lead.user, sam, MON, "09:00-14:00")      # deletes and recreates the day's rows; the write re-links the leave
     bd = BookingDay.objects.get(booking=b)
-    assert bd.shortened_entry_id is None
-    assert bookings.after_rota_write(sam, MON) == [Entry.objects.get(person=sam, day=MON).pk]
-    bd.refresh_from_db()
     entry = Entry.objects.get(person=sam, day=MON)
+    assert [r.pk for r in rows] == [entry.pk]
     assert bd.shortened_entry_id == entry.pk
     bookings.cancel(lead.user, b)
     entry.refresh_from_db()
@@ -307,9 +315,7 @@ def test_a_grid_rewrite_of_a_timed_day_keeps_the_leave_restorable(sam, lead):
 def test_a_grid_rewrite_of_a_day_the_leave_filled_covers_the_new_shift(sam, lead):
     b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "times", start=time(9), finish=time(17))
     assert Entry.objects.get(person=sam, day=MON).covered_by is not None
-    entries.set_cell_text(lead.user, sam, MON, "09:00-17:00 1 hour break")
-    assert Entry.objects.get(person=sam, day=MON).covered_by is None
-    assert bookings.after_rota_write(sam, MON) == []
+    assert entries.set_cell_text(lead.user, sam, MON, "09:00-17:00 1 hour break") == []   # covered again by the write itself
     assert Entry.objects.get(person=sam, day=MON).covered_by == BookingDay.objects.get(booking=b)
 
 

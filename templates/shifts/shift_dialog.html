@@ -1,6 +1,10 @@
 {% extends "ui/_dialog.html" %}
 {% block dialog_title %}{{ person.name }} · {{ day|date:"D j M Y" }}{% endblock %}
 {% block dialog_body %}
+{% if covered %}
+<p>{{ person.name }} is off: <strong>{{ covered.booking.label }}</strong> ({{ covered.booking.get_part_display|lower }}).</p>
+<div class="dialog-links"><a href="/time-off/{{ covered.booking.pk }}/" data-dialog>View time off</a></div>
+{% else %}
 <form method="post" action="{% if entry %}{% url 'rota-shift-edit' person.pk day|date:'Y-m-d' entry.pk %}{% else %}{% url 'rota-shift' person.pk day|date:'Y-m-d' %}{% endif %}" data-dialog-form>
   {% csrf_token %}
   {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
@@ -18,4 +22,5 @@
   </fieldset>
   <button class="btn btn-dark">{% if entry %}Update shift{% else %}Add shift{% endif %}</button>
 </form>
+{% endif %}
 {% endblock %}

@@ -23,7 +23,7 @@ def people_for(user):
 
 def _rows(person, start, end):
     rows = []
-    for e in Entry.objects.filter(person=person, day__range=(start, end), kind=Entry.Kind.SHIFT).select_related("department").order_by("day", "position"):
+    for e in Entry.objects.filter(person=person, day__range=(start, end), kind=Entry.Kind.SHIFT, covered_by__isnull=True).select_related("department").order_by("day", "position"):
         worked = e.hours
         rows.append({"day": e.day, "start": e.start, "finish": e.finish, "break_minutes": e.break_minutes,
                      "hours": timedelta(0) if e.overtime else worked, "overtime": worked if e.overtime else timedelta(0),

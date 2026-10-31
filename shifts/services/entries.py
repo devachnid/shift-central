@@ -146,7 +146,7 @@ def _write(user, person, day, items, keep_appearance=True):
         planned.append(fields)
     if [(f["kind"], render.line(f), f.get("appearance") or {}) for f in planned] \
             == [(e.kind, render.line(e), e.appearance or {}) for e in old]:
-        return old   # nothing changes: no DayChange, no new rows, no audit
+        return [e for e in old if e.covered_by_id is None]   # nothing changes: no DayChange, no new rows, no audit
     before = " / ".join(render.line(e) for e in old) or "no shift"
     _touch(person, day)
     Entry.objects.filter(person=person, day=day).delete()
@@ -154,6 +154,9 @@ def _write(user, person, day, items, keep_appearance=True):
             for position, fields in enumerate(planned)]
     Entry.objects.bulk_create(rows)
     rows = list(Entry.objects.filter(person=person, day=day).select_related("department").order_by("position"))
+    from leave.services import bookings as leave_bookings   # here, not at the top: leave imports entries._touch
+    visible = set(leave_bookings.after_rota_write(person, day))
+    rows = [e for e in rows if e.pk in visible]
     after = " / ".join(render.line(e) for e in rows) or "no shift"
     audit.record_as(user, "shifts.entry", person.pk, {"cell": (before, after)}, note=render.audit_note(person, day))
     return rows
@@ -252,7 +255,7 @@ def _snapshot(entry):
 
 
 def _items_of(person, day):
-    return [_snapshot(e) for e in Entry.objects.filter(person=person, day=day)
+    return [_snapshot(e) for e in Entry.objects.filter(person=person, day=day, covered_by__isnull=True)
             .select_related("department").order_by("position")]
 
 
@@ -277,13 +280,20 @@ def move(user, cells, days, rows, copy, row_order):
         except OverflowError:
             raise ValueError("the move goes off the calendar") from None
     people = _people(user, [p for p, _ in cells] + [p for p, _ in targets])
+    from leave.services import costing as leave_costing   # local, for symmetry with _write
     changed = Changed()
     with transaction.atomic():
-        snapshots = {(pk, day): _items_of(people[pk], day) for pk, day in cells}
+        pairs = []
+        for source, (tpk, tday) in zip(cells, targets):
+            if leave_costing.active_day(people[tpk], tday) is not None:
+                changed.skipped += 1   # a day off is not written over; its source stays too
+            else:
+                pairs.append((source, (tpk, tday)))
+        snapshots = {(pk, day): _items_of(people[pk], day) for (pk, day), _ in pairs}
         if not copy:
-            for pk, day in cells:
+            for (pk, day), _ in pairs:
                 changed.add(people[pk], day, _write(user, people[pk], day, []))
-        for (pk, day), (tpk, tday) in zip(cells, targets):
+        for (pk, day), (tpk, tday) in pairs:
             changed.add(people[tpk], tday, _write(user, people[tpk], tday, snapshots[(pk, day)], keep_appearance=False))
     return changed
 
@@ -306,6 +316,7 @@ def paste(user, anchor, block, mode, row_order):
         raise ValueError("the block has no rows")
     if sum(len(r) if isinstance(r, list) else 1 for r in rows) > MAX_CELLS:
         raise ValueError(TOO_MANY)
+    from leave.services import costing as leave_costing   # local, for symmetry with _write
     departments = _departments()
     offered = [d for d in departments.values() if not d.archived]
     start = row_order.index(anchor_pk)
@@ -328,7 +339,11 @@ def paste(user, anchor, block, mode, row_order):
                 cleaned = [_clean_item(i, departments) for i in items]
             else:
                 raise ValueError("a block cell must be items, text or null")
-            planned.append((person, anchor_day + timedelta(days=d), cleaned))
+            target = anchor_day + timedelta(days=d)
+            if leave_costing.active_day(person, target) is not None:
+                skipped += 1   # a day off is not written over
+                continue
+            planned.append((person, target, cleaned))
     changed = Changed(skipped=skipped)
     with transaction.atomic():
         for person, day, items in planned:
