@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from leave.forms import CancelForm
 from leave.models import Booking
-from leave.services import bookings
+from leave.services import bookings, sickness
 from leave.services.common import LeaveError
 from people.services import access
 from shifts.services.window import visible_people
@@ -39,7 +39,11 @@ def view(request, pk):
         "b": b, "detail": detail, "days": days, "total": sum(d.cost_seconds for d in days), "status": status_for(b, detail),
         "can_cancel": (access.is_self(request.user, b.person) and b.status == Booking.Status.APPROVED and b.last_day >= timezone.localdate())
                       or (manager and b.status in Booking.LIVE),
-        "can_edit": manager and b.status in (Booking.Status.APPROVED, Booking.Status.PENDING)})
+        "can_edit": manager and b.status in (Booking.Status.APPROVED, Booking.Status.PENDING),
+        "can_convert": manager and b.status in Booking.ACTIVE and not b.dates_only and b.part == Booking.Part.WHOLE
+                       and b.type.draws_from in ("annual", "bank_holiday"),
+        "long_sickness": b.type.sickness and sickness.is_long(b),
+        "after_leaving": b.person.end_date is not None and b.last_day > b.person.end_date})
 
 
 @login_required

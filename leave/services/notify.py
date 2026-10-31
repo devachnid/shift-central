@@ -85,3 +85,12 @@ def trigger_reached(person, lvl, rows, base_url=""):
     body = (f"{person.name} has reached {label}: {len(rows)} instances of absence in the last six months.\n\n{lines}\n\n"
             f"Profile: {_link(base_url, f'/staff/{person.pk}/profile/?tab=hours')}\n")
     return _send_all(recipients(person), f"{person.name} has reached {label}", body)
+
+
+def converted(label, dates, sick, base_url=""):
+    """LEAVE-28: the person is told their leave was changed; the sickness
+    itself is named by type only."""
+    p = sick.person
+    body = (f"Your {label} for {dates} has been changed: {span(sick)} is now recorded as {sick.type.name}, "
+            f"and those hours have gone back to your allowance.\n\nYour leave: {_link(base_url, '/time-off/mine/')}\n")
+    return _send_all([p], "Your time off has been changed", body)
