@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
 
 from leave.forms import BookingForm
 from leave.models import Booking
@@ -103,6 +104,8 @@ def _sickness_preview(person, leave_type, first, last, booking=None):
         out["extended_first"], out["extended_last"] = min(first, joins.first_day), max(last, joins.last_day)
         merged = len([b for b in others if b.pk != joins.pk]) + (1 if sickness.overlaps_window(out["extended_first"], out["extended_last"]) else 0)
         out["instances_extended"], out["level_label_extended"] = merged, sickness.level_label(sickness.level(merged))
+        # A past schedule entry is only for days already gone: today's sickness cannot be extended onto it.
+        out["extend_blocked"] = bool(joins.dates_only and last >= timezone.localdate())
     return {"sickness": out}
 
 
@@ -143,7 +146,7 @@ def add(request):
         if form.is_valid() and not request.POST.get("preview") and "error" not in preview:
             s = preview.get("sickness") or {}
             base = request.build_absolute_uri("/")
-            if s.get("joins") is not None and request.POST.get("join", "extend") == "extend":
+            if s.get("joins") is not None and not s.get("extend_blocked") and request.POST.get("join", "extend") == "extend":
                 try:        # LEAVE-41: the manager chose to extend the entry this one joins on to
                     bookings.edit(request.user, s["joins"], base_url=base, note="extended (joined on)",
                                   first=s["extended_first"], last=s["extended_last"])
@@ -213,4 +216,4 @@ def edit(request, pk):
         form = BookingForm(request.user, _booking_data(booking), person=booking.person, booking=booking)
         preview = _preview(form, booking, person=booking.person)
     return render(request, "leave/add_dialog.html", {"form": form, "preview": preview, "booking": booking, "title": "Edit time off",
-                                                    "can_type": booking.is_active, "editing": True})
+                                                    "can_type": booking.is_active and not booking.dates_only, "editing": True})

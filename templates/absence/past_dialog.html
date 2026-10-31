@@ -12,6 +12,6 @@
   </div>
   <input type="hidden" name="preview" value="1">
   {% if preview.sickness %}{% include "absence/_sickness_preview.html" %}{% endif %}
-  <button class="btn btn-dark" name="preview" value="">{% if preview.sickness.joins and join != "separate" %}Extend the existing entry{% else %}Add past sickness{% endif %}</button>
+  <button class="btn btn-dark" name="preview" value="">{% if preview.sickness.joins and not preview.sickness.extend_blocked and join != "separate" %}Extend the existing entry{% else %}Add past sickness{% endif %}</button>
 </form>
 {% endblock %}

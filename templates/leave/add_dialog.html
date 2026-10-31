@@ -27,7 +27,7 @@
     {% if form.paid %}<div class="field"><label for="id_paid">Paid or unpaid</label>{{ form.paid }}</div>{% endif %}
     {% if not booking %}<div class="field"><label for="id_manager_note">Manager notes</label>{{ form.manager_note }}</div>{% endif %}
   </details>
-  <button class="btn btn-dark" name="preview" value="">{% if booking %}Save changes{% elif preview.sickness.joins and join != "separate" %}Extend the existing entry{% else %}Add time off{% endif %}</button>
+  <button class="btn btn-dark" name="preview" value="">{% if booking %}Save changes{% elif preview.sickness.joins and not preview.sickness.extend_blocked and join != "separate" %}Extend the existing entry{% else %}Add time off{% endif %}</button>
 </form>
 {% endif %}
 {% endblock %}

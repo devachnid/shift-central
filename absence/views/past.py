@@ -44,7 +44,7 @@ def add(request):
             s = preview.get("sickness") or {}
             base = request.build_absolute_uri("/")
             try:
-                if s.get("joins") is not None and request.POST.get("join", "extend") == "extend":
+                if s.get("joins") is not None and not s.get("extend_blocked") and request.POST.get("join", "extend") == "extend":
                     bookings.edit(request.user, s["joins"], base_url=base, note="extended (joined on)", first=s["extended_first"], last=s["extended_last"])
                 else:
                     bookings.book(request.user, d["person"], d["type"], d["first_day"], d["last_day"], "whole", base_url=base, dates_only=True)

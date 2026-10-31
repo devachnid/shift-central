@@ -127,6 +127,28 @@ def test_dates_only_entries_show_on_the_list_the_grid_and_the_view(sam, lead):
     assert "dates only" in csv
 
 
+def test_todays_sickness_cannot_extend_a_past_schedule_entry(sam, lead):
+    make_sick(sam, date(2026, 10, 26), date(2026, 10, 30), dates_only=True)         # Mon-Fri, all gone
+    c = _client(lead)
+    body = _post(c, sam, date(2026, 11, 2), date(2026, 11, 2), preview="1").content.decode()      # Mon 2 Nov is today
+    assert 'name="join"' not in body and "a past schedule entry" in body and "Extend the existing entry" not in body
+    assert _post(c, sam, date(2026, 11, 2), date(2026, 11, 2)).json() == {"refresh": True}
+    assert Booking.objects.filter(person=sam, type__sickness=True).count() == 2
+
+
+def test_the_list_says_dates_only_to_the_person_and_managers_only(sam, lead, team):
+    make_sick(sam, date(2026, 10, 5), date(2026, 10, 7), dates_only=True)
+    nina = make_person(first_name="Nina", team=team)
+    assert "dates only" not in _client(nina).get("/time-off/?from=2026-10-01&to=2026-10-31").content.decode()
+    assert "dates only" in _client(sam).get("/time-off/?from=2026-10-01&to=2026-10-31").content.decode()
+
+
+def test_the_edit_dialog_of_a_dates_only_entry_has_no_cost_boxes(sam, lead):
+    row = make_sick(sam, date(2026, 10, 5), date(2026, 10, 7), dates_only=True)
+    body = _client(lead).get(f"/time-off/{row.pk}/edit/").content.decode()
+    assert "cost_2026-10-05" not in body
+
+
 def test_the_leave_report_shows_instances_and_trigger(sam, lead):
     for d in (date(2026, 6, 1), date(2026, 8, 3), date(2026, 10, 5)):
         make_sick(sam, d)
@@ -142,4 +164,4 @@ def test_the_statement_carries_the_persons_sickness_line(sam, lead):
     body = _client(lead).get(f"/staff/{sam.pk}/profile/?tab=hours").content.decode()
     assert "Sickness: 1 instance in the last six months" in body
     nina = make_person(first_name="Nina", team=sam.team)
-    assert "Sickness:" not in _client(nina).get("/time-off/").content.decode()
+    assert _client(nina).get(f"/staff/{sam.pk}/profile/?tab=hours").status_code == 403      # the instances count is for the person and their managers only
