@@ -1,6 +1,8 @@
 """Covered entries vanish from every read of the rota; writes on a covered
 day re-cost it; the window payload carries the leave tile."""
 
+import csv
+import io
 from datetime import date, time
 from decimal import Decimal
 
@@ -92,8 +94,9 @@ def test_the_download_and_phone_list_show_the_leave(sam, lead):
     bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "am")
     c = Client()
     c.force_login(lead.user)
-    csv = c.get(f"/rota/download/?from={MON}").content.decode()
-    assert "Holiday (morning)" in csv and "09:00-17:00" not in csv.split("\n")[1].split(",")[2]
+    text = c.get(f"/rota/download/?from={MON}").content.decode()
+    row = next(r for r in csv.reader(io.StringIO(text)) if r[0] == "Sam Patel")
+    assert row[2] == "Holiday (morning)" and row[3].startswith("09:00-17:00")
     body = c.get(f"/rota/?from={MON}").content.decode()
     assert "tile-leave" in body and "Holiday" in body
 
@@ -104,3 +107,23 @@ def test_the_shift_dialog_on_a_covered_day_shows_the_leave_instead_of_the_form(s
     c.force_login(lead.user)
     body = c.get(f"/rota/shift/{sam.pk}/{MON}/").content.decode()
     assert "Holiday" in body and f"/time-off/{b.pk}/" in body and 'name="start"' not in body
+
+
+def test_clear_and_cut_never_touch_a_covered_source_day(sam, lead):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    result = entries.clear(lead.user, [(sam.pk, MON)])
+    assert result.skipped == 1 and result.cells == {}
+    covered = Entry.objects.get(person=sam, day=MON)
+    assert covered.covered_by is not None
+    bookings.cancel(lead.user, b)
+    covered.refresh_from_db()
+    assert covered.covered_by is None and (covered.start, covered.finish) == (time(9), time(17))
+
+
+def test_a_cut_move_of_a_covered_day_leaves_both_days_alone(sam, lead):
+    bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    result = entries.move(lead.user, [(sam.pk, MON)], 1, 0, False, [sam.pk])
+    assert result.skipped == 1
+    assert Entry.objects.get(person=sam, day=MON).covered_by is not None
+    tue = Entry.objects.get(person=sam, day=TUE)
+    assert tue.covered_by is None and (tue.start, tue.finish) == (time(9), time(17))

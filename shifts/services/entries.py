@@ -240,9 +240,13 @@ def _cells(cells):
 def clear(user, cells):
     cells = _cells(cells)
     people = _people(user, [p for p, _ in cells])
+    from leave.services import costing as leave_costing   # local, for symmetry with _write
     changed = Changed()
     with transaction.atomic():
         for pk, day in cells:
+            if leave_costing.active_day(people[pk], day) is not None:
+                changed.skipped += 1   # a day off keeps its covered shifts: clearing would lose them for good
+                continue
             changed.add(people[pk], day, _write(user, people[pk], day, []))
     return changed
 
@@ -285,8 +289,9 @@ def move(user, cells, days, rows, copy, row_order):
     with transaction.atomic():
         pairs = []
         for source, (tpk, tday) in zip(cells, targets):
-            if leave_costing.active_day(people[tpk], tday) is not None:
-                changed.skipped += 1   # a day off is not written over; its source stays too
+            if leave_costing.active_day(people[source[0]], source[1]) is not None \
+                    or leave_costing.active_day(people[tpk], tday) is not None:
+                changed.skipped += 1   # a day off is neither written over nor moved from; the other end stays too
             else:
                 pairs.append((source, (tpk, tday)))
         snapshots = {(pk, day): _items_of(people[pk], day) for (pk, day), _ in pairs}
