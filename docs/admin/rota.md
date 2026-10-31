@@ -256,15 +256,18 @@ Leave is booked on the [Time off pages](leave.md); the grid shows it. What chang
 - **The right-click menu** has **Time off…** on any cell you may edit (the person and day filled
   in), and **View time off** and **Cancel time off** (for people you manage) on a leave tile. On a cell
   with approved leave, or on a row you cannot edit, that is all it shows. **Rota › Time off…**
-  in the sidebar opens the same dialog without a person or day chosen. The shift dialog
-  on a day of leave says the person is off and links to the booking.
+  in the sidebar opens the same dialog without a person or day chosen. On approved leave the
+  menu also offers **Shift behind the leave…** for a row you may edit (below).
 - **Booking leave moves the grid and leaves a trail.** Adding or cancelling approved leave
   changes what the person sees for the day, so it appears in **Notify staff** as a change ("Holiday" in
   place of the shifts), and in the Activity log.
-- **Writing a rota over a day of approved leave re-costs it.** If a whole-day booking was costed on an
-  average day because the week had no rota, writing the rota replaces that cost with the real
-  one and emails the managers ("Leave cost to check"). A part-day, timed or typed-by-hand cost is
-  left alone.
+- **The shift behind the leave.** Right-click a day of approved leave and choose **Shift behind the
+  leave…** (or **Add › Shift…** on that cell): the shift dialog opens with a note that the person is off,
+  prefilled from the shift the leave covers if there is one. What you save is what they would have
+  worked; it stays hidden on the grid. If the booking is a whole day costed on an average day (the week had
+  no rota), the day is re-costed from this shift and the managers are emailed ("Leave cost to check").
+  Writing the person's other days does not change it. A half-day, timed or typed-by-hand cost is left
+  alone; the other way to put a cost right is the **Allowance used** box in the booking's Edit dialog.
 
 ## Options and Filters
 
@@ -299,8 +302,9 @@ can be bookmarked. **Clear** removes it.
 
 **Download** gives the current window as a CSV file, `rota-<first date>.csv`: a row
 per person, a column per day, several items in a cell joined by ` / `, any GP
-session first. It follows your filters and shows what you can see. A day of leave reads as the label, for
-example `Holiday`, `Holiday (morning)` or `Training 14:00-15:30`.
+session first. It follows your filters and shows what you can see. A day of leave reads as the type's name, for
+example `Holiday`, `Holiday (morning)` or `Training 14:00–15:30`, and `(requested)` after it for leave
+still waiting.
 
 **Print** is on the right-click menu and prints the page as it is; use the browser's
 print settings to choose landscape, and Filters or Options to narrow what is shown

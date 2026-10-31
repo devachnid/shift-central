@@ -135,14 +135,17 @@ decides those), with the age of the oldest and a **Decide** link to
 day* because the person's rota for that week was not written yet, with the first five as links to
 their booking.
 
-- *What to do:* write the rota for those weeks. The day is re-costed from the rota as soon as
-  it is saved, the managers are emailed, and the line goes. If the average day is right, there is
-  nothing to do; a day can also be fixed by typing its figure by hand in the booking's Edit dialog.
-  See [what a day costs](leave.md#what-a-day-costs).
+- *What to do:* set the shift behind each day: right-click the day on the rota grid › **Shift
+  behind the leave…** (or **Add › Shift…** on that cell), enter the shift the person would have
+  worked and save. The shift stays hidden under the leave, the day is re-costed from it, the
+  managers are emailed and the line goes. Writing the person's other days does not do it. If the
+  average day is right, there is nothing to do; or type the figure into the booking's **Allowance
+  used** box (Edit). See [what a day costs](leave.md#what-a-day-costs).
 
 **Negative leave balances** lists the first five people whose annual leave remaining (bank holidays
 included) is below zero in their current or next leave year, each a link to their statement. A year with
-no allowance entered is *Needs hours and allowances*, not a deficit.
+no allowance entered is *Needs hours and allowances*, not a deficit. GPs are never listed here, whatever
+their balance.
 
 - *What to do:* it is allowed (a manager can book past the balance, and an hours change can
   leave one negative), so decide whether to correct it with an adjustment, in which case the line

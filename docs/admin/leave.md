@@ -1,7 +1,7 @@
 # Leave
 
-**Where:** sidebar › Time off (`/time-off/`), with My leave, Year planner and, for
-managers, Waiting for approval, Bank holidays and Blackouts under it. Reports › Leave.
+**Where:** sidebar › Time off (`/time-off/`), with Requests (the list), My leave, Year
+planner and, for managers, Waiting for approval, Bank holidays and Blackouts under it. Reports › Leave.
 Settings › Leave types and Leave settings (managers). A person's statement is on their
 profile, Pay & time off tab. Everyone uses Time off; the approving, booking and
 settings are for managers.
@@ -11,7 +11,7 @@ settings are for managers.
 **Everything is in hours and minutes, for everyone.** Allowances, costs and balances
 are shown as "7 h 30 min", never as days, so a part-time nurse and a full-time receptionist
 are counted the same way. A day off costs what the person was due to work that day. A
-GP's day costs their sessions at 4 h 10 min each.
+GP's day costs their sessions at 4 h 10 min each, plus any shift typed into their cell.
 
 **The rota decides what a day costs.** Book a Holiday on a day on which someone is
 rostered 08:00 to 16:15 with a lunch break and it costs those worked hours. A day with
@@ -105,19 +105,24 @@ approved), and shown in the dialog before you save.
 | Whole day, the **whole week** has no rota | The person's **average day**: weekly hours divided by days per week | "average day — no rota yet", flagged |
 | Morning or afternoon | Half of the figure above | |
 | Times (a start and a finish) | Finish less start | |
-| A GP, whole day | Their sessions that day at 4 h 10 min each; no session, no cost | |
+| A GP, whole day | Their sessions that day at 4 h 10 min each, plus any shift typed into their cell; neither, no cost | |
 
 **The week rule.** A day counts as "rota not set" only when the person's whole Monday to
-Sunday week has no shift or session on it. A blank Wednesday in a week that has shifts is
+Sunday week has nothing on it: no entry of any kind (a comment counts as one) and no session. A blank Wednesday in a week that has shifts is
 a day off, and costs nothing. The average day comes from the allowance row in force that
 day (so a change of hours is honoured), else from the profile; with neither, the cost is 0
 and the dialog says the weekly hours are not set.
 
-**Costs to check.** A day costed on the average day is a placeholder. When the rota for
-that week is later written, the day is **re-costed** from the rota and the managers are
-emailed ("Leave cost to check for [Name]"). Until then, the Health card's *Leave costs
-to check* lists the days, each linking to its booking. A day a manager has typed a figure
-for is never re-costed.
+**Costs to check.** A day costed on the average day is a placeholder. It is **re-costed
+from the rota when a manager sets the shift behind the leave**: right-click the day on the
+grid and choose **Shift behind the leave…** (or **Add › Shift…** on that cell), enter the shift the
+person would have worked and save it. The shift stays hidden under the leave, the day's cost
+becomes that shift's hours, and the managers are emailed ("Leave cost to check for [Name]").
+Writing the person's other days does not change it. Until it is set, the Health card's *Leave
+costs to check* lists the days, each linking to its booking. The other way to settle it is to
+type the figure into the booking's **Allowance used** box (Edit). A day a manager has typed a
+figure for is never re-costed, and the shift dialog on a half-day or timed booking changes
+no cost.
 
 **Which allowance a day draws on.** The leave type decides: Holiday takes annual leave,
 TOIL takes the TOIL balance, Bank holiday takes the bank holiday allowance, and the others
@@ -172,7 +177,10 @@ to request once other requests are counted, and TOIL). Then:
 A request is refused, with the reason where the **Send request** button would be, when:
 the dates are outside this leave year and the next; any day is in a [blackout](#blackouts)
 for the person's team; it overlaps leave they already have, waiting or approved; or its
-cost is more than they have **available**. It names the day or the figure.
+cost is more than they have **available**. Where it shows depends on the check: a message at
+the top of the page for the dates, an overlap (it names the booking already there) or a
+blackout (it does not name the day); and, for too little available, there is no Send button
+and the balance line shows the figure available.
 
 Sending emails the managers who can manage the person. A waiting request is shown on the
 rota grid hatched, with the type and "requested", so colleagues can see who has asked; it
@@ -193,7 +201,8 @@ and choose **Time off…** (the person and day are filled in).
 The dialog is the staff page's with a **Staff member** (the people you manage) and the
 costs editable: **Type of time off**, **Display**, **First day off**, **Last day off**, **Days to include**, the
 per-day **Allowance used** table with its total and the balance before and after, and under
-**Advanced** the **Paid or unpaid** choice, where the type allows one, and **Manager notes**.
+**Advanced** a **Paid or unpaid** box and **Manager notes**. The paid box shows for every
+type but counts only for a type where the manager chooses; for the others it is ignored.
 It redraws as you change a field. The button is **Add time off**.
 
 - The booking is **approved at once**, the shifts are covered, and the person is told by
@@ -399,7 +408,7 @@ send never stops a booking.
 |---|---|---|
 | A request or a cancellation request is made | Every manager who can manage the person, once each, never the person | "[Name] has requested time off" or "… has asked to cancel time off" |
 | A request is approved or declined; a cancellation is approved or refused | The person | "Your time off has been approved", "…declined", "…cancelled" or "…kept" |
-| A booking with average-day (placeholder) days is made; or a rota is written for a placeholder day or changes an approved day's cost | The managers | "Leave cost to check for [Name]" |
+| A booking with average-day (placeholder) days is made; or a manager sets the shift behind a placeholder day, or a rota write changes an approved whole day's cost | The managers | "Leave cost to check for [Name]" |
 | An hours change leaves annual leave below zero | The managers | "[Name]'s leave balance is negative" |
 | A request (or a cancellation request) is still waiting after the number of working days set below | The managers, once per request | "Time off request still waiting" |
 
@@ -416,8 +425,8 @@ many working days** (3 to start; 1 to 30).
 
 GPs are booked, requested and approved exactly like anyone else, with these differences.
 
-- **Sessions come from the GP rota app.** A GP's day costs their sessions that day, 4 h 10 min each; a day with no
-  session costs nothing. A GP never has an average day.
+- **Sessions come from the GP rota app.** A GP's day costs their sessions that day, 4 h 10 min each, plus any shift
+  typed into their cell; a day with neither costs nothing. A GP never has an average day.
 - **Leave does not remove a session from the grid.** The session is the rota app's. The leave tile shows above
   it, and the rota app flags the clash (see `docs/admin/shift-central.md` in that app's repository).
 - **The GP rota app reads approved GP leave from here**, every fifteen minutes, so
@@ -445,5 +454,5 @@ Left for later releases, so do not look for them:
 - Importing FindMyShift bookings or balances. They are typed in as adjustments, as above.
 
 The Django admin (`/admin/leave/`) shows the bookings, days, adjustments and blackouts
-read-only, and lets the superuser repair a leave type, a bank holiday or the setting. It is for
-repair, not for booking.
+read-only (the superuser can delete a booking there), and lets the superuser repair a leave type, a bank holiday or the setting. It is
+for repair, not for booking.

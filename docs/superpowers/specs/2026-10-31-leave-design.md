@@ -702,8 +702,9 @@ describes the finished behaviour.
 
 ### Task 3: costing and balances
 
-14. **The plan's TOIL-earned test uses dates before today,** since TOIL earned counts shifts up to today and
-    a shift in 2027 earned nothing on the day the test was written.
+14. **The plan's TOIL-earned tests use dates before today,** since TOIL earned counts shifts up to today and
+    a shift in 2027 earned nothing on the day the test was written. Task 4's LV-16 example, which carries the
+    same TOIL arithmetic, was moved to dates before today too (10 and 20 February 2026 instead of November 2026).
 15. **TOIL is a running balance across leave years (LEAVE-24).** TOIL earned, TOIL adjustments and TOIL days
     taken are all counted over every year in the statement, not scoped to the year shown; annual leave and
     bank holiday taken and adjustments stay scoped to the year.
@@ -815,8 +816,9 @@ describes the finished behaviour.
     *Negative leave balances* looks at the current and the next leave year (a manager may overbook the next year),
     skipping a year with no allowance, and filters to people with leave taken or hours taken away before the slow
     statement is worked out.
-47. **Ranges are clamped to the calendar's window first.** A far-future or year-1 date in the report or the list
-    no longer errors; it is cut to the supported range.
+47. **A date outside the supported calendar (2000 to 2100) no longer errors in the report or the list.** The
+    view treats it as not given and falls back to the default range: the report's is the viewer's current
+    leave year, the list's is the current leave year and the next.
 48. **A type with no paid/unpaid choice records itself as unpaid only when its default is unpaid;** otherwise it has
     no paid flag. The rule is keyed to the flag, not to the name "Unpaid leave", so renaming the type is safe.
 49. **The Bank holiday type is found by what it is** (the seeded row that draws on the bank holiday account), not
@@ -885,3 +887,19 @@ describes the finished behaviour.
     "placeholder days to check") and *Negative leave balances*.
 69. **A person cannot withdraw a waiting request.** Only approved leave can be cancelled by the person (as a
     cancellation request); a manager declines or cancels a waiting one.
+
+### After the review of the documentation
+
+70. **LEAVE-06 is reachable through the shift dialog and a leave-cell menu item.** The spec re-costs a
+    placeholder-costed day when the rota for that day is written, but as first built nothing in the interface could
+    write to a day of approved leave (the cell is read-only, paste, move and clear skip it, and the shift dialog
+    showed only "is off" with a link), so a placeholder cost and its Health line could clear only through the
+    booking's Edit override. Two things were added. The shift dialog on a covered day now shows the normal shift
+    form, prefilled from the first shift the leave covers (otherwise empty), under a note that the person is off and
+    that the shift set here is what they would have worked, sets the leave's cost and stays hidden on the grid;
+    saving goes through the ordinary entries path, so the new shift is covered and a whole-day, non-overridden
+    booking is re-costed (source `rota`, no longer a placeholder) with the "Leave cost to check" email when the
+    figure changes. On a half-day, timed or overridden booking the note says the cost is not changed. And the grid
+    menu on a cell of approved leave, on a row the viewer may edit, offers **Shift behind the leave…** after
+    View time off and Cancel time off (section 5 listed only the first two); pending leave is unchanged. Writing
+    the person's other days of the week does not re-cost the day.
