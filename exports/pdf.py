@@ -1,8 +1,10 @@
 """One-page summaries as PDF (REP-04, REP-05): A4 landscape, the logo, a
 title and range, one table per section with its header repeated on each
-page, page numbers. Every cell is text."""
+page, page numbers. Every cell is text; the title, range and headings go
+through escape() because Paragraph reads mini-HTML."""
 
 import io
+from xml.sax.saxutils import escape
 
 from django.contrib.staticfiles import finders
 from django.http import HttpResponse
@@ -58,9 +60,9 @@ def document(title, subtitle, sections, footer):
     logo = _logo()
     if logo is not None:
         story += [logo, Spacer(1, 3 * mm)]
-    story += [Paragraph(title, styles["Title"]), Paragraph(subtitle, styles["Normal"]), Spacer(1, 4 * mm)]
+    story += [Paragraph(escape(title), styles["Title"]), Paragraph(escape(subtitle), styles["Normal"]), Spacer(1, 4 * mm)]
     for name, header, rows in sections:
-        story += [Paragraph(name, heading), _table(header, rows), Spacer(1, 4 * mm)]
+        story += [Paragraph(escape(name), heading), _table(header, rows), Spacer(1, 4 * mm)]
     doc.build(story, onFirstPage=page, onLaterPages=page)
     return out.getvalue()
 

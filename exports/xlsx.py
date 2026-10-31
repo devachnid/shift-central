@@ -5,11 +5,13 @@ the app can begin with one. Hours are written as decimal hours to two
 places, which is what the bureau adds up."""
 
 import io
+import re
 from datetime import date, datetime
 from decimal import Decimal
 
 from django.http import HttpResponse
 from openpyxl import Workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import Font
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -35,7 +37,7 @@ def _put(cell, value):
     elif value is None:
         cell.value = None
     else:
-        cell.value, cell.data_type = str(value), "s"
+        cell.value, cell.data_type = ILLEGAL_CHARACTERS_RE.sub("", str(value)), "s"
 
 
 def workbook(sheets):
@@ -43,7 +45,7 @@ def workbook(sheets):
     wb = Workbook()
     wb.remove(wb.active)
     for title, header, rows in sheets:
-        ws = wb.create_sheet(title=title[:31])
+        ws = wb.create_sheet(title=re.sub(r"[\\/?*\[\]:]", " ", title)[:31])
         for col, text in enumerate(header, start=1):
             c = ws.cell(row=1, column=col)
             _put(c, text)
