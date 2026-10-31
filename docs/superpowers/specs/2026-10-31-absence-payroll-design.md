@@ -493,7 +493,8 @@ today. Practice totals: people, instances (sickness bookings overlapping
 the range, dates-only included), days off sick (calendar days inside the
 range), hours off sick (costs inside the range), people at Trigger 1, 2
 and 3+ as at `to`. The same per team. Then per person: Team, Instances (in
-the rolling six months as at `to`), Days in range, Hours in range, Longest
+the rolling six months as at `to`, or as at today when `to` is in the
+future, as the leave report's column does), Days in range, Hours in range, Longest
 instance (days) and "long" where 29 or more, Trigger. Sorted by team then
 name. File names `sickness-2026-07-01-2026-12-31.pdf` / `.xlsx`.
 

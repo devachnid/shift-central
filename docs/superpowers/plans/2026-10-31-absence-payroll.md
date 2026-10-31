@@ -3941,6 +3941,7 @@ their days; they have no hours."""
 from dataclasses import dataclass
 
 from django.db.models import Sum
+from django.utils import timezone
 
 from leave.models import Booking, BookingDay
 from leave.services import hours, sickness
@@ -3986,8 +3987,9 @@ def _row(person, start, end):
     days = sum(_in_range(b, start, end) for b in in_range)
     seconds = BookingDay.objects.filter(booking__in=in_range, day__range=(start, end)).aggregate(t=Sum("cost_seconds"))["t"] or 0
     longest = max(((b.last_day - b.first_day).days + 1 for b in in_range), default=0)
-    level = sickness.level_for(person, end)
-    return PersonRow(person, person.team.name if person.team else "—", len(sickness.instances(person, end)), days, seconds, longest,
+    as_at = min(end, timezone.localdate())          # a range that runs into the future is read as at today
+    level = sickness.level_for(person, as_at)
+    return PersonRow(person, person.team.name if person.team else "—", len(sickness.instances(person, as_at)), days, seconds, longest,
                      longest >= sickness.LONG_DAYS, sickness.level_label(level), level)
 
 
