@@ -154,15 +154,22 @@ GP sync's). In `/srv/shift-central`, as root:
    `deploy/manage gp_sync` once and check it says how many GPs it read, then
    `systemctl enable --now shift-central-gp-sync.timer`. Enabled without them, the
    timer fails every fifteen minutes and fills the journal with it.
-9. **Enable the leave reminders timer**: run `deploy/manage leave_reminders` once, which
-   prints "0 reminders sent" on a new install, then `systemctl enable --now
-   shift-central-leave-reminders.timer`. It runs at 08:20 on weekdays. With `EMAIL_*` unset
-   the reminders (and every leave email) are recorded as "mail not configured" and not sent.
-10. **In the GP rota app**, set `SHIFT_CENTRAL_URL` (this box's address, `https`) and
-    `SHIFT_CENTRAL_TOKEN` (one of the `LEAVE_API_TOKENS` from step 5) in its environment file,
-    and follow its own `docs/admin/shift-central.md`. Until then the rota app has no GP leave
-    and nothing here is affected. The FindMyShift reader it had never went live, so there is
-    nothing to move across.
+9. **Enable the leave reminders timer once mail works** (`EMAIL_HOST` set and a test message
+   delivered): run `deploy/manage leave_reminders` once, which prints "0 reminders sent" on a new
+   install, then `systemctl enable --now shift-central-leave-reminders.timer`. It runs at 08:20 on
+   weekdays. Enabled earlier, each reminder is recorded as "mail not configured" and not sent,
+   and the request counts as reminded, so it is not reminded again. With `EMAIL_*` unset, every
+   other leave email is recorded the same way.
+10. **In the GP rota app**, on its own server: pull the release in `/srv/rota`, copy
+    `deploy/rota-shift-central.service` and `deploy/rota-shift-central.timer` to
+    `/etc/systemd/system/` and run `systemctl daemon-reload`, then `deploy/manage migrate` and
+    restart it. Set `SHIFT_CENTRAL_URL` (this box's address, `https`) and `SHIFT_CENTRAL_TOKEN` (one
+    of the `LEAVE_API_TOKENS` from step 5) in its environment file before the restart, and then
+    follow its own `docs/admin/shift-central.md` for the rest, in its order: give each clinician a
+    login email, map the leave types, run the first sync, enable the timer. Until then the rota app
+    has no GP leave and nothing here is affected. A box that ran the rota app's old FindMyShift
+    reader needs its timer disabled and removed: that guide's "Moving from FindMyShift" gives the
+    commands (`rota-findmyshift.timer`).
 
 Allowances already typed stand as they were. The leave pages start empty; before staff are
 asked to request 2027 leave, check that everyone has a 2027 allowance: the Health card's
@@ -207,7 +214,13 @@ From the box's own copy:
     install -o shift-central -g shift-central -m 600 /var/lib/shift-central/backups/db-<date>.sqlite3 /var/lib/shift-central/db.sqlite3
     rm -f /var/lib/shift-central/db.sqlite3-wal /var/lib/shift-central/db.sqlite3-shm
     deploy/manage migrate
-    systemctl start shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer
+    systemctl start shift-central shift-central-hr-sync.timer
+
+Then start `shift-central-gp-sync.timer` and `shift-central-leave-reminders.timer` as well, but
+only the ones that were enabled (`systemctl is-enabled shift-central-gp-sync.timer
+shift-central-leave-reminders.timer` says): a timer started before its settings are in place
+fails every fifteen minutes (the GP sync) or marks requests as reminded when no mail can go
+(the reminders).
 
 Stop first, and remove the old `-wal` and `-shm` files: otherwise SQLite replays a
 stale log into the restored file. `migrate` brings an older copy up to the current

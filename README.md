@@ -241,16 +241,22 @@ Then:
     systemctl enable --now shift-central-hr-sync.timer
     deploy/manage gp_sync
     systemctl enable --now shift-central-gp-sync.timer
-    deploy/manage leave_reminders
-    systemctl enable --now shift-central-leave-reminders.timer
 
 `hr_sync` and `gp_sync` are each run by hand once, before their timers are
 enabled, so that a wrong URL or token shows up as a message on your screen
 rather than as a failed run on the Health card an hour later. A fresh database
 has no people until `hr_sync` succeeds, and `gp_sync` needs the GPs to be there
 (and `ROTA_URL` and `ROTA_API_TOKEN` set); leave the two `gp_sync` lines out until
-the GP rota app has its sessions feed. `leave_reminders` needs `EMAIL_HOST` set to send
-anything: without it each reminder is recorded as "mail not configured".
+the GP rota app has its sessions feed.
+
+Switch the leave reminders on only once mail works (`EMAIL_HOST` set and a test
+message delivered):
+
+    deploy/manage leave_reminders
+    systemctl enable --now shift-central-leave-reminders.timer
+
+Enabled before that, each reminder is recorded as "mail not configured" and not
+sent, and the request counts as reminded, so it is not reminded again.
 
 **Run every management command through `deploy/manage`**, as root:
 `deploy/manage createsuperuser`, `deploy/manage check --deploy`, `deploy/manage
@@ -454,7 +460,13 @@ From the box's own copy (the usual case: a bad deploy or a mistaken change):
     install -o shift-central -g shift-central -m 600 /var/lib/shift-central/backups/db-<date>.sqlite3 /var/lib/shift-central/db.sqlite3
     rm -f /var/lib/shift-central/db.sqlite3-wal /var/lib/shift-central/db.sqlite3-shm
     deploy/manage migrate
-    systemctl start shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer
+    systemctl start shift-central shift-central-hr-sync.timer
+
+Then start `shift-central-gp-sync.timer` and `shift-central-leave-reminders.timer` as well, but
+only the ones that were enabled (`systemctl is-enabled shift-central-gp-sync.timer
+shift-central-leave-reminders.timer` says): a timer started before its settings are in place
+fails every fifteen minutes (the GP sync) or marks requests as reminded when no mail can go
+(the reminders).
 
 Stopping first matters: a copy dropped under a running app leaves the old
 `-wal` file beside it, and SQLite would replay it into the restored database.
