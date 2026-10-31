@@ -60,8 +60,8 @@ Editable by the managers of the person's team. Everyone can read their own.
 | **Name colour** | The colour of the person's name chip on the Staff list (and, later, on the rota). Pick from the swatches or type a hex value. Exactly `#rrggbb` is accepted; anything else is refused with "Choose a colour." Default is navy. A very pale colour makes the white name text unreadable. |
 | **Display order** | A whole number, 0 or more, default 100. People in the same team are listed by it, lowest first, then by last name, then first. Equal numbers (everyone starts at 100) therefore fall back to alphabetical. |
 | **Display on rota** | Whether the person appears on the [rota](rota.md) grid (and Who's in today). Untick for someone who should not be on it; their shifts and the hours report are unaffected. |
-| **Show to other staff** | Whether other *staff* see this person on the Staff list. Untick for someone who should not be listed to colleagues. Managers always see everyone; the person always sees themselves. |
-| **Can see other staff** | Whether the person may see colleagues on the [rota](rota.md). The requirement is that everyone sees every rota, so leave it ticked unless a manager has a reason to restrict someone: with it off they see only their own row. |
+| **Show to other staff** | Whether other *staff* see this person on the Staff list, the rota, the year planner and the Time off list. Untick for someone who should not be listed to colleagues. Managers always see everyone; the person always sees themselves. |
+| **Can see other staff** | Whether the person may see colleagues on the [rota](rota.md). The requirement is that everyone sees every rota, so leave it ticked unless a manager has a reason to restrict someone: with it off they see only their own row, and only their own time off. |
 
 ## Typed here: the Pay & time off tab
 
@@ -118,7 +118,8 @@ For a practice manager, that means another all-teams manager.
 
 **Permissions** (all-teams managers) holds two things: the team ticks, and **Own leave needs no
 approval**. The tick is for the practice manager, whose own leave is then recorded as soon as
-they add it instead of waiting for another manager; it is off for everyone else. It changes
+they add it instead of waiting for another manager; it is off for everyone else. Another
+all-teams manager ticks it: nobody can set it on their own profile. It changes
 nothing else: nobody can approve their own request on the Waiting for approval page, flag or not.
 The grant and its removal are recorded in the Activity log like any other change. See
 [Access](access.md#the-permissions-link).

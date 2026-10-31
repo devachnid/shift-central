@@ -100,7 +100,8 @@ no hours here.
   all three are there; a person's Pay & time off tab shows a dash for any year not
   entered, so check the other year there.
 - Wrong: ignoring it. A person with no hours is costed at nothing on a day with no rota,
-  and a person with no allowance shows "not set" and cannot request leave.
+  and a person with no allowance shows "not set" and cannot request annual leave (a type that takes
+  its days from nothing, such as Training, and TOIL can still be requested).
 
 **Not in Practice HR's feed for a day** lists people the last good run left out
 and who have not been in the feed for over a day. It is measured against the last
@@ -135,12 +136,13 @@ decides those), with the age of the oldest and a **Decide** link to
 day* because the person's rota for that week was not written yet, with the first five as links to
 their booking.
 
-- *What to do:* set the shift behind each day: right-click the day on the rota grid › **Shift
-  behind the leave…** (or **Add › Shift…** on that cell), enter the shift the person would have
-  worked and save. The shift stays hidden under the leave, the day is re-costed from it, the
-  managers are emailed and the line goes. Writing the person's other days does not do it. If the
-  average day is right, there is nothing to do; or type the figure into the booking's **Allowance
-  used** box (Edit). See [what a day costs](leave.md#what-a-day-costs).
+- *What to do:* for a whole day, set the shift behind it: right-click the day on the rota grid ›
+  **Shift behind the leave…**, enter the shift the person would have worked and save. The shift stays
+  hidden under the leave, the day is re-costed from it, the managers are emailed and the line goes.
+  Writing the person's other days does not do it. For a **half day** the shift behind it never clears
+  the line: type the figure into the booking's **Allowance used** box (Edit). That box is also the way
+  for a whole day: if the average day is right, type that figure to clear the line. See
+  [what a day costs](leave.md#what-a-day-costs).
 
 **Negative leave balances** lists the first five people whose annual leave remaining (bank holidays
 included) is below zero in their current or next leave year, each a link to their statement. A year with
@@ -286,8 +288,8 @@ nothing was migrated. Nothing is ever written to or by this feed in the other di
 
 - **The token** is one of `LEAVE_API_TOKENS`, comma-separated, each made with `openssl rand -hex 32`.
   The rota app has one of them as `SHIFT_CENTRAL_TOKEN`. To change it, add the new one, restart Shift Central,
-  point the rota app at it, then remove the old and restart. Unset, every call is a 401. Keep it out of files,
-  chat and tickets.
+  point the rota app at it, then remove the old and restart. Unset, every call is a 401. Keep it out of any
+  file in either repository, and out of chat and tickets.
 - **The range** is `from` and `to`, dates, `to` no earlier than `from` and at most 1,100 days after it.
 - **What is sent**: the approved bookings, and those with a cancellation waiting for a decision, of people
   marked GP who have an email, whose days overlap the range, as an email, a first and last day, a part

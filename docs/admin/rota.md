@@ -49,8 +49,10 @@ What a cell shows, one tile per line you typed:
 - A **GP session**: a pale grey-blue tile, for example `AM · Surgery · AG`. See
   [GPs](#gps).
 - A **leave tile**: the leave type's colour and name (or the text overtyped in Display), above
-  anything else in the cell, with `½ am`, `½ pm` or the hours for a part day. A hatched tile reading
-  "requested" is leave still waiting for approval. See [Time off on the grid](#time-off-on-the-grid).
+  anything else in the cell, with `½ am`, `½ pm` or the hours for a part day. Approved leave is
+  filled in the type's colour, with white or dark text, whichever reads better on it. A hatched,
+  outlined tile reading "requested", with a thick edge on its left in the type's colour, is leave still
+  waiting for approval. See [Time off on the grid](#time-off-on-the-grid).
 
 If two shifts in one cell overlap, the cell carries a small warning marker.
 
@@ -129,8 +131,9 @@ dark menu. It acts on the **whole selection**, not only the cell you clicked.
   read again as if typed.
 - **Time off…** (first on the list) opens the Add time off dialog with the person and the day
   already filled in, for a cell with no leave. On a cell that has leave it is replaced by **View time
-  off** and, for the people you manage, **Cancel time off**. See
-  [Time off on the grid](#time-off-on-the-grid).
+  off** and, for the people you manage, **Cancel time off**; on approved leave there is also
+  **Shift behind the leave…** (a whole or half day) or **Edit the day's shift…** (leave by the hour).
+  See [Time off on the grid](#time-off-on-the-grid).
 - **Cut**, **Copy**, **Paste**, **Delete**. See [Copying weeks](#copying-weeks).
 - **Select ›** Row, Column, Week or All, from the cell you clicked.
 - **Save selection as template…** See [Templates](#templates).
@@ -159,6 +162,8 @@ Monday fills next week.
 - Rows that fall below the last row, or on a person you cannot edit, are skipped,
   and the grid says how many. So is any day with **approved leave** on it, whether it is
   where you are copying from or to: the shifts hidden under the leave are never copied, moved or deleted.
+  The grid counts the two apart: "1 row and 2 leave days couldn't be pasted onto." (rows you
+  cannot edit, and approved-leave days). Waiting leave does not block a paste.
 - A day the copy did not see, such as a weekday hidden in Options, is left alone
   on the target, and so is a cell inside the block that you did not select
   (Ctrl-click a few cells, and only those are pasted). A selected cell that was
@@ -184,8 +189,9 @@ A template is a saved block, usually a week, to lay down again. Select the cells
 right-click, **Save selection as template…**, and name it. **Templates** in the top
 bar lists them with **Apply** (to the cell selected on the grid; it behaves like a
 paste, with your paste behaviour), **Rename** and **Delete**. Templates are shared
-by all managers. Applying one onto a person you cannot edit skips that row and
-tells you how many were skipped.
+by all managers. Applying one onto a person you cannot edit skips that row, and onto a day of
+approved leave skips that day, and it tells you how many of each were skipped ("1 row and 1 leave
+day couldn't be pasted onto.").
 
 ## Overtime
 
@@ -246,28 +252,36 @@ person may still be working the old rota.
 Leave is booked on the [Time off pages](leave.md); the grid shows it. What changes in the grid:
 
 - **Approved leave owns the cell.** The leave tile is drawn above whatever else is there and the
-  cell cannot be typed into, pasted over, dragged or cleared: it is skipped like a row you cannot
-  edit. It can still be focused and right-clicked. A shift on that day is not deleted: it is
-  **covered**, hidden from the grid, the hours report, Who's in today, the phone list and Notify staff,
-  and comes back when the leave is cancelled.
+  cell cannot be typed into, pasted over, dragged, cleared or changed by Find & Replace: it is
+  skipped like a row you cannot edit. It can still be focused and right-clicked, and right-clicking it
+  empties the selection, as clicking it does, so Delete or Cut afterwards acts on nothing. A shift
+  on that day is not deleted: it is **covered**, hidden from the grid, the hours report, Who's in today,
+  the phone list and Notify staff, and comes back when the leave is cancelled.
 - **Leave by the hour** shortens the shift it falls inside instead of covering it: the shift stays on
   the grid with its new times, under the tile.
 - **Waiting leave** is hatched with "requested" and covers nothing. The cell stays editable.
 - **The right-click menu** has **Time off…** on any cell you may edit (the person and day filled
   in), and **View time off** and **Cancel time off** (for people you manage) on a leave tile. On a cell
   with approved leave, or on a row you cannot edit, that is all it shows. **Rota › Time off…**
-  in the sidebar opens the same dialog without a person or day chosen. On approved leave the
-  menu also offers **Shift behind the leave…** for a row you may edit (below).
+  in the sidebar opens the same dialog without a person or day chosen. On approved leave of a row
+  you may edit the menu also offers **Shift behind the leave…**, or for leave by the hour **Edit the
+  day's shift…** (below). Waiting leave never gets either.
 - **Booking leave moves the grid and leaves a trail.** Adding or cancelling approved leave
   changes what the person sees for the day, so it appears in **Notify staff** as a change ("Holiday" in
   place of the shifts), and in the Activity log.
-- **The shift behind the leave.** Right-click a day of approved leave and choose **Shift behind the
-  leave…** (or **Add › Shift…** on that cell): the shift dialog opens with a note that the person is off,
-  prefilled from the shift the leave covers if there is one. What you save is what they would have
-  worked; it stays hidden on the grid. If the booking is a whole day costed on an average day (the week had
-  no rota), the day is re-costed from this shift and the managers are emailed ("Leave cost to check").
-  Writing the person's other days does not change it. A half-day, timed or typed-by-hand cost is left
-  alone; the other way to put a cost right is the **Allowance used** box in the booking's Edit dialog.
+- **The shift behind the leave.** Right-click a day of approved whole-day or half-day leave and choose
+  **Shift behind the leave…**: the shift dialog opens with a note that the person is off, prefilled
+  from the shift the leave covers if there is one. What you save is what they would have worked; it stays
+  hidden on the grid. If the booking is a whole day costed on an average day (the week had no rota), the
+  day is re-costed from this shift and the managers are emailed ("Leave cost to check"), even if the
+  figure is the same. Writing the person's other days does not change it. A half-day, timed or
+  typed-by-hand cost is left alone, so a half day's placeholder is settled by typing the figure in the
+  **Allowance used** box in the booking's Edit dialog, which is also the other way to put any cost right.
+- **The shift on a day of leave by the hour.** The leave has only shortened the shift, which is still on
+  the grid, so the menu says **Edit the day's shift…** and the dialog edits that shift, showing the times
+  as the grid does, with a note giving the leave's times. Saving cuts the shift around the leave again
+  and remembers the times you typed, so cancelling the leave gives them back. If the leave is the whole
+  of the shift, nothing shows and the dialog says **Add shift**; a shift added there stays visible.
 
 ## Options and Filters
 

@@ -49,7 +49,7 @@ once (or, for the Practice HR box, at the person's next sign-in).
 **Nobody manages themselves.** A manager opens their own profile read-only. Their
 hours and allowances are set by another manager, and so is their leave approved by another
 manager (the practice manager's own leave can be switched to need no approval, on their
-Permissions link).
+Permissions link, by another all-teams manager).
 
 **The Django admin (`/admin/`) is for the superuser, for setup and repair only.**
 Every day-to-day screen is the app's own. The one thing the admin is needed for
