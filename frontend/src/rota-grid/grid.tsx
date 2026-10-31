@@ -291,8 +291,11 @@ export function RotaGrid(props: GridProps) {
   }, []);
 
   const openMenu = (k: CellKey, x: number, y: number) => {
-    if (!canEdit || !g.selectable(k)) return;
-    if (!sel.has(k)) g.select(k, "set");
+    if (!canEdit || !(g.selectable(k) || g.leaveAt(k))) return;
+    // A day of approved leave is not selectable: the menu opens there with
+    // only the leave items, and the selection is left as it was.
+    if (!g.selectable(k)) g.setFocus(k);
+    else if (!sel.has(k)) g.select(k, "set");
     setMenu({ x, y, key: k });
   };
   const openMenuAtFocus = () => {

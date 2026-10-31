@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { leaveLabel, selectableWithLeave } from "./leave";
+import { leaveLabel, leaveMenuItems, selectableWithLeave } from "./leave";
 import type { LeaveJson } from "./types";
 
 const base: LeaveJson = { id: 1, type: "Holiday", colour: "#2F6FB3", part: "whole", label: "Holiday", status: "approved" };
@@ -17,4 +17,13 @@ it("approved leave makes the cell read-only; a pending request does not", () => 
   expect(selectableWithLeave(true, { ...base, status: "pending" })).toBe(true);
   expect(selectableWithLeave(true, undefined)).toBe(true);
   expect(selectableWithLeave(false, undefined)).toBe(false);
+});
+
+it("a free day offers Time off…, leave offers View and, on an editable row, Cancel", () => {
+  expect(leaveMenuItems(undefined, true, 7, "2026-11-03")).toEqual([{ label: "Time off…", href: "/time-off/add/?person=7&day=2026-11-03" }]);
+  expect(leaveMenuItems(base, true, 7, "2026-11-03")).toEqual([
+    { label: "View time off", href: "/time-off/1/" },
+    { label: "Cancel time off", href: "/time-off/1/cancel/" },
+  ]);
+  expect(leaveMenuItems(base, false, 7, "2026-11-03")).toEqual([{ label: "View time off", href: "/time-off/1/" }]);
 });

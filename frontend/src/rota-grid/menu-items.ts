@@ -1,6 +1,7 @@
 /** The right-click menu's contents, in FindMyShift's order. */
 import { shapeItem, type Actions } from "./actions";
 import type { GridState } from "./grid";
+import { leaveMenuItems } from "./leave";
 import { departmentItems, shapeItems, swatches, type MenuItem } from "./menu";
 import { key, split, weekOf, type CellKey } from "./selection";
 
@@ -21,12 +22,12 @@ export function menuItems(g: GridState, act: Actions, k: CellKey, editCell: (k: 
   ];
 
   const leave = g.leaveAt(k);
+  const leaveItems = leaveMenuItems(leave, !!g.rowOf(p)?.editable, p, d);
+  // Approved leave owns the cell, so nothing that edits it is offered.
+  if (leave?.status === "approved") return leaveItems;
 
   return [
-    ...(leave ? [
-      { label: "View time off", href: `/time-off/${leave.id}/` },
-      ...(g.rowOf(p)?.editable ? [{ label: "Cancel time off", href: `/time-off/${leave.id}/cancel/` }] : []),
-    ] : [{ label: "Time off…", href: `/time-off/add/?person=${p}&day=${d}` }]),
+    ...leaveItems,
     { label: "Add", children: [
       { label: "Shift…", href: `/rota/shift/${p}/${d}/` },
       // A new line in the cell's editor; what is typed there is parsed like any cell.
