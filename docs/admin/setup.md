@@ -162,14 +162,14 @@ GP sync's). In `/srv/shift-central`, as root:
    other leave email is recorded the same way.
 10. **In the GP rota app**, on its own server. A box that ran its old FindMyShift reader first
     has that timer disabled and removed: its guide's "Moving from FindMyShift" gives the commands
-    (`rota-findmyshift.timer`). Then, as root in `/srv/rota`, pull the release and follow the rota
-    README's *Redeploying* section: `.venv/bin/pip install -r requirements.txt`,
+    (`rota-findmyshift.timer`). Then, as root in `/srv/rota`, pull the release. Set
+    `SHIFT_CENTRAL_URL` (this box's address, `https`) and `SHIFT_CENTRAL_TOKEN` (one of the
+    `LEAVE_API_TOKENS` from step 5) in its environment file, so that `check --deploy` can check
+    them. Follow the rota README's *Redeploying* section: `.venv/bin/pip install -r requirements.txt`,
     `deploy/manage migrate`, `deploy/manage collectstatic --noinput` (this release changes the
     rota's CSS, so it is not optional) and `deploy/manage check --deploy`. Copy
     `deploy/rota-shift-central.service` and `deploy/rota-shift-central.timer` to
-    `/etc/systemd/system/` and run `systemctl daemon-reload`. Set `SHIFT_CENTRAL_URL` (this box's
-    address, `https`) and `SHIFT_CENTRAL_TOKEN` (one of the `LEAVE_API_TOKENS` from step 5) in its
-    environment file, then `systemctl restart rota`. Then follow its own
+    `/etc/systemd/system/`, run `systemctl daemon-reload`, then `systemctl restart rota`. Then follow its own
     `docs/admin/shift-central.md` for the rest, in its order: give each clinician a login email, map
     the leave types, run the first sync, enable the timer. Until then the rota app has no GP leave
     and nothing here is affected.

@@ -265,8 +265,8 @@ It redraws as you change a field. The button is **Add time off**.
   or the day's only shift; with none it says **Add shift**. Saving cuts the shift around the
   leave again: change the start to 08:00 and 08:00 to 14:00 shows, with 08:00 to 17:00
   remembered for when the leave is cancelled. The shift must include the leave: one that
-  leaves it out is refused ("The shift must include the leave, 14:00–15:30"). Another shift
-  the same day (a split day) is edited as usual.
+  leaves it out is refused ("The shift must include the leave, 14:00–15:30"). On a day with
+  more than one shift, the others can only be changed once the leave is cancelled.
 - **Booking your own leave** when you do not have *Own leave needs no approval*: the dialog
   says it will wait for another manager, and sends it as a request (so the staff rules,
   blackouts and balance included, apply to it, and only requestable types can be used).

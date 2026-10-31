@@ -961,7 +961,7 @@ These were decided when the whole branch was read against this spec, the require
     shift the leave sits in: the one it shortened, else the one it hides (the leave was the whole of it), else
     the day's only visible shift; with none it adds one. It opens on the times the person would have worked,
     leave included (the remembered original times), and refuses a shift that does not include the leave ("The
-    shift must include the leave, 14:00–15:30"); another shift on a split day is edited freely. So changing the
+    shift must include the leave, 14:00–15:30"); the day's other shifts can only be changed once the leave is cancelled (the grid offers no route to them). So changing the
     start of 09:00 to 17:00, around leave from 14:00 to 15:30, to 08:00 leaves 08:00 to 14:00 showing and 08:00 to
     17:00 remembered for when the leave is cancelled, and reopening shows 08:00 to 17:00 again. The grid menu
     words it **Edit the day's shift…**. This refines item 70 and replaces the note "stays hidden on the grid" for

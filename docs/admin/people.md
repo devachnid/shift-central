@@ -85,7 +85,7 @@ Things that surprise people:
 
 **Below the form is the person's leave statement**, which the person sees too: the pro-rated allowances, adjustments, each
 booking's days with their costs, the bank holiday balance, what is remaining and what is available, and TOIL, with a
-**Leave year** box to switch between their two years. Managers also get **Adjust…** and
+**Leave year** box to switch between the previous, current and next leave years. Managers also get **Adjust…** and
 **Add hours change…** there. How to read it is in [Leave](leave.md#the-statement-and-how-to-read-it).
 
 ## Typed here: the Notes tab
