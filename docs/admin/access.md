@@ -60,7 +60,12 @@ requirements' table.
 | History link | No | Their team's people | Everyone but themselves |
 | Health card and Sync now | No | Yes, limited to their team | Yes |
 | Departments | No | Yes | Yes |
-| Activity log | No | Entries about their team's people (rota changes included), and all department and template entries | Everything |
+| Activity log | No | Entries about their team's people (rota and leave changes included), and all department and template entries | Everything |
+| Time off list, year planner, requesting own leave | Yes (colleagues' leave by type only) | Yes | Yes |
+| Another person's leave description, pay and cost | No | Their team's people | Everyone |
+| Book, edit, approve, decline or cancel leave; Adjust; Add hours change | No | Their team's people | Everyone but themselves |
+| Bank holidays, Blackouts, Leave types, Leave settings | No | Yes | Yes |
+| Leave report | Their own row | Their team's people and themselves | Everyone |
 | Log in logs | No | No | Yes |
 
 The one case where "their team's people" and "themselves" differ: a team manager
@@ -93,9 +98,12 @@ Untick to take it away. Saving shows "Saved."
 - An inactive team is listed only for someone who still holds it, marked
   "(inactive)", so saving the dialog keeps the grant unless you untick it; untick
   it to revoke it. Left alone it is harmless once the team has no one in it.
-- Manager access is what, in later releases, lets someone build the team's rota and
-  approve its leave. In this release it governs the profile, the Staff list's
-  extra columns and the Activity log.
+- Manager access is what lets someone build the team's rota and approve and book its
+  leave, as well as seeing the profile, the Staff list's extra columns and the Activity log.
+- Below the team ticks is **Own leave needs no approval**, for the practice manager. With
+  it ticked the person's own leave is recorded as soon as they add it; without it (everyone
+  else) it waits for another manager. It is ticked and unticked here by an all-teams manager
+  and recorded in the Activity log. Nobody can approve their own request.
 
 ## Sessions and signing out
 
