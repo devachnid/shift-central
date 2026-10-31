@@ -156,6 +156,21 @@ def test_lv_16_toil_is_earned_from_marked_shifts_up_to_today_and_spent_by_toil_b
     assert balances.statement(sam, Y26).toil_remaining == 1 * 3600
 
 
+def test_toil_is_a_running_balance_across_leave_years():
+    sam = make_person(start_date=date(2020, 1, 6))
+    make_allowance(sam, Y26, 100, 0)
+    make_allowance(sam, Y27, 100, 0)
+    make_entry(sam, date(2026, 1, 10), start=time(17), finish=time(22), overtime="toil")
+    toil = make_booking(sam, date(2026, 2, 3), type_name="TOIL", status="approved")
+    BookingDay.objects.create(booking=toil, day=date(2026, 2, 3), cost_seconds=2 * 3600, source="times", account="toil")
+    Adjustment.objects.create(person=sam, leave_year=Y26, account="toil", seconds=3600, reason="TOIL brought in")
+    s = balances.statement(sam, Y27)
+    assert (s.taken["toil"], s.adjustments["toil"]) == (0, 0)                  # nothing in 2027 itself
+    assert (s.toil_taken, s.toil_adjustments) == (2 * 3600, 3600)
+    assert s.toil_remaining == 5 * 3600 + 3600 - 2 * 3600
+    assert s.toil_available == s.toil_remaining
+
+
 def test_the_statement_lines_explain_every_figure():
     sam = make_person(start_date=date(2026, 7, 6))
     make_allowance(sam, date(2026, 1, 1), 210, 0)
@@ -163,6 +178,20 @@ def test_the_statement_lines_explain_every_figure():
     kinds = [k for k, _, _ in s.lines]
     assert kinds[0] == "allowance" and "26 weeks" in s.lines[0][1] and s.lines[0][2] == 105 * 3600
     assert "remaining" in kinds
+    assert kinds[-5:] == ["remaining", "available", "toil", "toil_remaining", "toil_available"]
+    assert "pending" not in kinds
+
+
+def test_pending_requests_are_listed_but_do_not_reduce_remaining():
+    sam = make_person(start_date=date(2020, 1, 6))
+    make_allowance(sam, Y27, 100, 0)
+    make_entry(sam, date(2027, 3, 2), start=time(9), finish=time(17), break_minutes=30)
+    make_booking(sam, date(2027, 3, 2), status="pending")
+    s = balances.statement(sam, Y27)
+    assert [(k, t, n) for k, t, n in s.lines if k == "pending"] == [("pending", "Requested: Holiday 2 Mar", -27000)]
+    by_kind = {k: n for k, _, n in s.lines}
+    assert by_kind["remaining"] == 100 * 3600 and by_kind["available"] == 100 * 3600 - 27000
+    assert by_kind["toil_available"] == 0
 
 
 def test_missing_allowance_is_said_not_guessed():
