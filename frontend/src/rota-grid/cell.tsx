@@ -1,4 +1,4 @@
-import { leaveLabel } from "./leave";
+import { inkOn, leaveLabel } from "./leave";
 import type { Appearance, EntryJson, LeaveJson, Options, SessionJson } from "./types";
 
 const dash = (s: string) => s.replace("-", "–");
@@ -36,11 +36,13 @@ export function SessionTile({ session }: { session: SessionJson }) {
   return <div class="tile tile-session" title="From the GP rota app">{[session.part, session.label, session.site].filter(Boolean).join(" · ")}</div>;
 }
 
-/** Approved leave is a filled tile in the leave type's colour; a pending
- *  request is an outline, so it reads as not yet decided. */
+/** Approved leave is a filled tile in the leave type's colour, its text white
+ *  or ink for contrast; a pending request is an outline with a thick left
+ *  edge in the colour and ink text, so it reads as not yet decided. */
 export function LeaveTile({ leave }: { leave: LeaveJson }) {
   const cls = ["tile", "tile-leave", leave.status === "pending" && "is-pending"].filter(Boolean).join(" ");
-  const style = leave.status === "pending" ? { borderColor: leave.colour, color: leave.colour } : { background: leave.colour, color: "#fff" };
+  const style = leave.status === "pending" ? { borderColor: leave.colour, borderLeft: `3px solid ${leave.colour}`, color: "var(--ink)" }
+    : { background: leave.colour, color: inkOn(leave.colour) };
   const title = [leaveLabel(leave), leave.paid === false ? "unpaid" : "", leave.paid === true ? "paid" : ""].filter(Boolean).join(" · ");
   return <div class={cls} style={style} title={title}>{leaveLabel(leave)}</div>;
 }

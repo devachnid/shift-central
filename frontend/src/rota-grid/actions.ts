@@ -3,6 +3,7 @@
  *  rebuilt every render, so they always see the current selection. */
 import { fromText, load, save, toBlock, toTSV } from "./clipboard";
 import type { GridState, UndoStep } from "./grid";
+import { pasteSkipMessage } from "./leave";
 import { addDays, bounds, key, split, type CellKey } from "./selection";
 import { toItem, type Appearance, type EntryJson, type Item, type Shape } from "./types";
 
@@ -56,7 +57,7 @@ export function selectionActions(g: GridState) {
     const inWindow = new Set(g.win.days.map((d) => d.date));
     const undoable = [...targets].filter((k) => inWindow.has(split(k)[1]) && g.selectable(k));
     const res = await g.mutate("paste/", { anchor: [person, date], block: blk, mode: g.win.options.paste, row_order: g.people }, g.snapshot(undoable));
-    if (res && res.skipped) g.showBar(`${res.skipped} row${res.skipped === 1 ? "" : "s"} couldn't be pasted onto.`);
+    if (res && res.skipped) g.showBar(pasteSkipMessage(res.skipped, res.skipped_days ?? 0));
   };
 
   /** The menu's Paste: the system clipboard if the browser allows reading

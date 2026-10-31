@@ -60,6 +60,7 @@ def _person(request):
 
 def _changed(request, result):
     body = serialize.changed(result)
+    body["skipped_days"] = getattr(result, "skipped_days", 0)   # a paste's days off, counted in "skipped" too
     body["unnotified"] = window.payload_unnotified(request.user)
     return JsonResponse(body)
 

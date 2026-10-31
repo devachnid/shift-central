@@ -292,10 +292,11 @@ export function RotaGrid(props: GridProps) {
 
   const openMenu = (k: CellKey, x: number, y: number) => {
     if (!canEdit || !(g.selectable(k) || g.leaveAt(k))) return;
-    // A day of approved leave is not selectable: the menu opens there with
-    // only the leave items, and the selection is left as it was.
-    if (!g.selectable(k)) g.setFocus(k);
-    else if (!sel.has(k)) g.select(k, "set");
+    // A day of approved leave is not selectable: the menu opens there with only the leave items,
+    // and the click empties the selection (select() keeps only selectable cells) and moves focus
+    // and anchor there, as a left click does, so no key acts on the earlier selection.
+    // (Not unit-tested: the selection lives in the component's hook state; the vitest environment has no DOM.)
+    if (!sel.has(k)) g.select(k, "set");
     setMenu({ x, y, key: k });
   };
   const openMenuAtFocus = () => {

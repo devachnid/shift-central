@@ -68,4 +68,5 @@
 }
 .rota-grid .tile-leave { font-weight: 700; border: 1px solid transparent; }
 .rota-grid .tile-leave.is-pending { background: repeating-linear-gradient(135deg, transparent 0 4px, rgba(0,0,0,.06) 4px 8px); }
-.rota-grid td.is-leave { background: var(--ground); cursor: default; }
+.rota-grid td.is-leave { cursor: default; }
+.rota-grid td.is-leave:not(.is-today) { background: var(--ground); }   /* today's column keeps its highlight */

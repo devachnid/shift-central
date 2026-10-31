@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { leaveLabel, leaveMenuItems, selectableWithLeave } from "./leave";
+import { LeaveTile } from "./cell";
+import { inkOn, leaveLabel, leaveMenuItems, pasteSkipMessage, selectableWithLeave } from "./leave";
 import type { Actions } from "./actions";
 import type { GridState } from "./grid";
 import { menuItems } from "./menu-items";
@@ -52,4 +53,52 @@ it("approved leave on an editable row offers the shift behind it, at the shift d
   expect(leaveMenuItems(base, true, 7, "2026-11-03")[2]).toEqual({ label: "Shift behind the leave…", href: "/rota/shift/7/2026-11-03/" });
   expect(labels(base, false)).not.toContain("Shift behind the leave…");
   expect(labels({ ...base, status: "pending" }, true)).not.toContain("Shift behind the leave…");
+});
+
+it("a timed day offers the day's shift, not the shift behind the leave, at the same address", () => {
+  const timed: LeaveJson = { ...base, part: "times", times: "14:00–15:30" };
+  expect(leaveMenuItems(timed, true, 7, "2026-11-03")).toEqual([
+    { label: "View time off", href: "/time-off/1/" },
+    { label: "Cancel time off", href: "/time-off/1/cancel/" },
+    { label: "Edit the day's shift…", href: "/rota/shift/7/2026-11-03/" },
+  ]);
+  for (const part of ["whole", "am", "pm"] as const)
+    expect(leaveMenuItems({ ...base, part }, true, 7, "2026-11-03")[2].label).toBe("Shift behind the leave…");
+  expect(leaveMenuItems({ ...timed, status: "pending" }, true, 7, "2026-11-03").map((i) => i.label)).toEqual(["View time off", "Cancel time off"]);
+  expect(leaveMenuItems(timed, false, 7, "2026-11-03").map((i) => i.label)).toEqual(["View time off"]);
+});
+
+it("inkOn gives the seeded light colours the page's ink and a dark colour white", () => {
+  for (const light of ["#D98FB3", "#E0A458", "#9E9E9E", "#B58B4C", "#6C8EAD", "#FFE66D"]) expect(inkOn(light)).toBe("var(--ink)");
+  for (const dark of ["#2F6FB3", "#1B1F27", "#000000", "#7A1F3D"]) expect(inkOn(dark)).toBe("#fff");
+  expect(inkOn("#d98fb3")).toBe("var(--ink)");   // case does not matter
+  expect(inkOn("red")).toBe("var(--ink)");        // not #RRGGBB: the ink
+});
+
+it("inkOn picks whichever of white and ink has the higher WCAG contrast", () => {
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => { const c = parseInt(hex.slice(i, i + 2), 16) / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  for (const hex of ["#D98FB3", "#E0A458", "#9E9E9E", "#B58B4C", "#6C8EAD", "#FFE66D", "#2F6FB3", "#808080", "#7F7F7F"]) {
+    const picked = inkOn(hex) === "#fff" ? "#ffffff" : "#1B1F27";
+    const other = picked === "#ffffff" ? "#1B1F27" : "#ffffff";
+    expect(contrast(hex, picked)).toBeGreaterThanOrEqual(contrast(hex, other));
+  }
+});
+
+it("an approved tile takes its text colour from inkOn; a pending one is ink text with a thick edge in the colour", () => {
+  const style = (l: LeaveJson) => (LeaveTile({ leave: l }) as unknown as { props: { style: Record<string, string> } }).props.style;
+  expect(style({ ...base, colour: "#D98FB3" })).toEqual({ background: "#D98FB3", color: "var(--ink)" });
+  expect(style({ ...base, colour: "#2F6FB3" })).toEqual({ background: "#2F6FB3", color: "#fff" });
+  expect(style({ ...base, colour: "#D98FB3", status: "pending" })).toEqual({ borderColor: "#D98FB3", borderLeft: "3px solid #D98FB3", color: "var(--ink)" });
+});
+
+it("the paste bar counts rows and leave days apart", () => {
+  expect(pasteSkipMessage(1, 0)).toBe("1 row couldn't be pasted onto.");
+  expect(pasteSkipMessage(3, 0)).toBe("3 rows couldn't be pasted onto.");
+  expect(pasteSkipMessage(1, 1)).toBe("1 leave day couldn't be pasted onto.");
+  expect(pasteSkipMessage(3, 2)).toBe("1 row and 2 leave days couldn't be pasted onto.");
+  expect(pasteSkipMessage(4, 4)).toBe("4 leave days couldn't be pasted onto.");
 });

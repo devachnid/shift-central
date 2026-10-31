@@ -286,3 +286,21 @@ def test_a_patch_that_changes_nothing_on_the_day_records_nothing(world):
     assert not DayChange.objects.exists() and not AuditEntry.objects.filter(model="shifts.entry").exists()
     _post(world["c_lead"], f"/rota/api/entries/{e.pk}/", {"overtime": "toil"})
     assert DayChange.objects.get().before == "08:00-16:15"
+
+
+def test_a_paste_reports_the_days_off_it_skipped_apart_from_the_rows(world):
+    from leave.services import bookings
+    from tests.factories import make_type
+    nina, nurse = world["nina"], world["nurse"]
+    tue = date(2027, 3, 2)
+    bookings.book(world["lead"].user, nina, make_type("Sick leave"), tue, tue, "whole")
+    block = {"days": 2, "rows": [[[{"kind": "comment", "text": "a"}], [{"kind": "comment", "text": "b"}]],
+                                  [[{"kind": "comment", "text": "c"}], [{"kind": "comment", "text": "d"}]]]}
+    body = _post(world["c_lead"], "/rota/api/paste/", {"anchor": [nina.pk, "2027-03-01"], "block": block,
+                                                       "row_order": [nina.pk, nurse.pk]}).json()
+    # Nina's Tuesday is a day off, and Nurse's row is not the lead's to edit: `skipped` is both, `skipped_days` the first.
+    assert body["skipped"] == 2 and body["skipped_days"] == 1
+    assert not Entry.objects.filter(person=nina, day=tue, covered_by__isnull=True).exists()
+    assert Entry.objects.filter(person=nina, day=MON).exists()
+    body = _post(world["c_lead"], "/rota/api/clear/", {"cells": [[nina.pk, "2027-03-01"]]}).json()
+    assert body["skipped"] == 0 and body["skipped_days"] == 0

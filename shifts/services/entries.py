@@ -29,6 +29,7 @@ SIZES = ("sm", "md", "lg")
 class Changed:
     cells: dict = field(default_factory=dict)   # {person_id: {date: [Entry]}}
     skipped: int = 0
+    skipped_days: int = 0   # of `skipped`, the paste's days off (the rest are rows)
 
     def add(self, person, day, rows):
         self.cells.setdefault(person.pk, {})[day] = rows
@@ -328,7 +329,7 @@ def paste(user, anchor, block, mode, row_order):
     departments = _departments()
     offered = [d for d in departments.values() if not d.archived]
     start = row_order.index(anchor_pk)
-    planned, skipped = [], 0
+    planned, skipped, off_days = [], 0, 0
     people = {p.pk: p for p in Person.objects.filter(pk__in=row_order[start:start + len(rows)])}
     for r, cells in enumerate(rows):
         if start + r >= len(row_order):
@@ -349,10 +350,10 @@ def paste(user, anchor, block, mode, row_order):
                 raise ValueError("a block cell must be items, text or null")
             target = anchor_day + timedelta(days=d)
             if leave_costing.active_day(person, target) is not None:
-                skipped += 1   # a day off is not written over
+                off_days += 1   # a day off is not written over
                 continue
             planned.append((person, target, cleaned))
-    changed = Changed(skipped=skipped)
+    changed = Changed(skipped=skipped + off_days, skipped_days=off_days)
     with transaction.atomic():
         for person, day, items in planned:
             if mode == "add":
