@@ -94,3 +94,30 @@ def converted(label, dates, sick, base_url=""):
     body = (f"Your {label} for {dates} has been changed: {span(sick)} is now recorded as {sick.type.name}, "
             f"and those hours have gone back to your allowance.\n\nYour leave: {_link(base_url, '/time-off/mine/')}\n")
     return _send_all([p], "Your time off has been changed", body)
+
+
+def leaving(person, statement, bookings_after, week=False, base_url=""):
+    """NOTIF-06, the two leaver emails: the figure as at the leaving date
+    (LEAVE-14) and the bookings that run past it."""
+    from leave.services import leavers
+    when = f"{person.end_date:%-d %b %Y}"
+    lines = "".join(f"\n  {b.type.name} {span(b)}" for b in bookings_after)
+    body = (f"{person.name} {'leaves in a week' if week else 'is leaving'}, on {when}.\n\n"
+            f"As at that day: {leavers.figure_text(statement)}; TOIL remaining {hours.fmt(statement.toil_remaining)}.\n"
+            + (f"\nTime off booked after the leaving date, to shorten or cancel:{lines}\n" if bookings_after else "")
+            + f"\nProfile: {_link(base_url, f'/staff/{person.pk}/profile/?tab=hours')}\n")
+    subject = f"{person.name} leaves in a week, on {when}" if week else f"{person.name} is leaving on {when}"
+    return _send_all(recipients(person), subject, body)
+
+
+def returned(booking, statement, base_url=""):
+    """NOTIF-07: back from a long absence, with the leave still to take.
+    The allowance was not reduced by the absence (LEAVE-29)."""
+    p = booking.person
+    weeks = max(1, ((booking.last_day - booking.first_day).days + 1 + 3) // 7)       # to the nearest week
+    body = (f"{p.name} is back after {span(booking)} ({booking.type.name}).\n\n"
+            f"Annual leave remaining this leave year: {'not set' if statement.missing else hours.fmt(statement.annual_remaining)}; "
+            f"TOIL remaining {hours.fmt(statement.toil_remaining)}. The allowance is a full-year figure and was not reduced by the absence; "
+            f"leave that could not be taken may need planning or carrying over.\n\n"
+            f"Profile: {_link(base_url, f'/staff/{p.pk}/profile/?tab=hours')}\n")
+    return _send_all(recipients(p), f"{p.name} is back after {weeks} week{'' if weeks == 1 else 's'} of {booking.type.name}", body)

@@ -8,7 +8,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
 
 from leave.forms import AdjustForm, HoursChangeForm
-from leave.services import adjustments, balances, notify, sickness, years
+from leave.services import adjustments, balances, leavers, notify, sickness, years
 from people.models import Person
 from people.services import access, profiles
 
@@ -39,6 +39,7 @@ def statement_context(person, year_text, manages=False, in_dialog=False):
     between (last year's too, which an adjustment can still correct)."""
     n = len(sickness.instances(person))
     return {"statement": _statement_for(person, year_text), "person": person, "manages": manages, "in_dialog": in_dialog,
+            "leaver_text": leavers.figure_text(leavers.figure(person)[1]) if person.end_date else "",
             "sickness_count": n, "sickness_label": sickness.level_label(sickness.level(n)),
             "year_options": [(y.isoformat(), years.label(y)) for y in years.correctable(person)]}
 

@@ -1,0 +1,78 @@
+"""LEAVE-14 and NOTIF-06: when Practice HR gives someone an end date, their
+managers are told what leave is left or over as at that day and which
+bookings run past it; a week before the day they are told again. Nothing
+is cancelled for them: the manager decides."""
+
+from datetime import timedelta
+
+from django.utils import timezone
+
+from leave.models import Booking
+from leave.services import balances, hours, notify, years
+from people.models import Person
+
+WEEK = timedelta(days=7)
+
+
+def figure(person):
+    """The leaving year and its statement: the pro-rata already stops at the
+    end date, so annual_remaining is the figure LEAVE-14 asks for."""
+    year = years.year_of(person, person.end_date)
+    return year, balances.statement(person, year)
+
+
+def figure_text(statement):
+    if statement.missing:
+        return "no allowance set for the leaving year"
+    remaining = statement.annual_remaining
+    if remaining < 0:
+        return f"{hours.fmt(-remaining)} of annual leave over"
+    return f"{hours.fmt(remaining)} of annual leave remaining"
+
+
+def after_leaving(person):
+    """Live bookings with a day after the end date, to shorten or cancel."""
+    return list(Booking.objects.filter(person=person, status__in=Booking.LIVE, last_day__gt=person.end_date)
+                .select_related("type").order_by("first_day", "pk"))
+
+
+def flag(person, base_url=""):
+    """The "date entered" email, once per end date. A cleared date resets
+    both flags silently. Within a week of the date the one email covers the
+    week's reminder too."""
+    if person.end_date is None:
+        if person.leaver_flagged_for or person.leaver_week_flagged_for:
+            Person.objects.filter(pk=person.pk).update(leaver_flagged_for=None, leaver_week_flagged_for=None)
+            person.leaver_flagged_for = person.leaver_week_flagged_for = None
+        return False
+    if person.leaver_flagged_for == person.end_date:
+        return False
+    today = timezone.localdate()
+    within_week = person.end_date <= today + WEEK
+    fields = {"leaver_flagged_for": person.end_date}
+    if within_week:
+        fields["leaver_week_flagged_for"] = person.end_date
+    # Claim first, then send: two syncs seeing the same new date send one email between them.
+    if not Person.objects.filter(pk=person.pk).exclude(leaver_flagged_for=person.end_date).update(**fields):
+        return False
+    for k, v in fields.items():
+        setattr(person, k, v)
+    _, statement = figure(person)
+    notify.leaving(person, statement, after_leaving(person), week=within_week, base_url=base_url)
+    return True
+
+
+def week_flags(today=None, base_url=""):
+    """The reminder a week out, for everyone leaving in the next seven days
+    not yet reminded for that date. Run daily."""
+    today = today or timezone.localdate()
+    n = 0
+    for p in Person.objects.filter(end_date__gte=today, end_date__lte=today + WEEK).order_by("end_date", "pk"):
+        if p.leaver_week_flagged_for == p.end_date:
+            continue
+        if not Person.objects.filter(pk=p.pk).exclude(leaver_week_flagged_for=p.end_date).update(leaver_week_flagged_for=p.end_date):
+            continue           # claimed by a run alongside this one
+        _, statement = figure(p)
+        notify.leaving(p, statement, after_leaving(p), week=True, base_url=base_url)
+        n += 1
+    return n

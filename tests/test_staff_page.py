@@ -97,7 +97,7 @@ def test_health_card_figures():
     assert f["last_run"].ok and f["last_run"].people_seen == 4
     assert {p.first_name for p in f["needs_setup"]} == {"New", "Leaving", "Stale"}
     assert [p.first_name for p in f["not_seen"]] == ["Stale"]
-    assert [p.first_name for p in f["leaving_soon"]] == ["Leaving"]
+    assert [r["person"].first_name for r in f["leaving_soon"]] == ["Leaving"]
 
 
 def test_gps_do_not_need_hours():

@@ -38,10 +38,20 @@ def figures(user):
         "unnotified_old": notify.old_count(user),
         "needs_setup": needs_setup.order_by("name"),
         "not_seen": hr_sync.not_seen_recently().filter(pk__in=people).order_by("name"),
-        "leaving_soon": people.filter(end_date__gte=today, end_date__lte=today + LEAVING_WINDOW)
-                              .order_by("end_date"),
+        "leaving_soon": _leaving(people, today),
         **leave,
     }
+
+
+def _leaving(people, today):
+    """Everyone leaving in the next 30 days, with LEAVE-14's figure and the
+    count of bookings past the date, for the card's line."""
+    from leave.services import leavers
+    out = []
+    for p in people.filter(end_date__gte=today, end_date__lte=today + LEAVING_WINDOW).order_by("end_date", "last_name"):
+        _, statement = leavers.figure(p)
+        out.append({"person": p, "statement": statement, "text": leavers.figure_text(statement), "after": len(leavers.after_leaving(p))})
+    return out
 
 
 def _leave(user, people, today):

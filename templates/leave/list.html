@@ -26,7 +26,7 @@
     <td><span class="chip" style="background:{{ b.type.colour }}">{% if r.detail %}{{ b.label }}{% else %}{{ b.type.name }}{% endif %}</span></td>
     <td>{% if r.detail and b.paid is not None %}{% if b.paid %}Paid{% else %}Unpaid{% endif %}{% endif %}</td>
     <td>{% if r.detail and r.dates_only %}dates only{% elif r.cost is not None %}{{ r.cost|hm }}{% endif %}</td>
-    <td>{{ r.status }}</td>
+    <td>{{ r.status }}{% if r.after_leaving %} · after leaving date{% endif %}</td>
     <td><a href="{% url 'time-off-view' b.pk %}" data-dialog>View</a>
         {% if r.manage %} <a href="{% url 'time-off-edit' b.pk %}" data-dialog>Edit</a> <a href="{% url 'time-off-cancel' b.pk %}" data-dialog>Cancel</a>{% endif %}</td>
   </tr>

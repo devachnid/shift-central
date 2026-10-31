@@ -68,6 +68,7 @@ def visible_rows(user, start, end, filters):
             continue          # the person and their managers see the real status
         out.append({"booking": b, "detail": detail, "manage": manage, "days": (b.last_day - b.first_day).days + 1, "status": status_for(b, detail),
                     "dates_only": b.dates_only,
+                    "after_leaving": detail and b.person.end_date is not None and b.last_day > b.person.end_date,
                     "cost": None if b.dates_only else (sum(bd.cost_seconds for bd in b.booking_days.all()) if detail and b.is_active else None)})
     return out
 
