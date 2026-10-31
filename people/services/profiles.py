@@ -6,9 +6,10 @@ from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 
+from leave.services import years
 from people.models import Allowance
 from people.services import access, audit
 
@@ -40,11 +41,11 @@ def update_display(actor, person, **fields):
     return _apply(actor, person, fields)
 
 
-def update_hours(actor, person, weekly_hours, days_per_week):
+def update_hours(actor, person, weekly_hours, days_per_week, note=""):
     if person.is_gp:
         raise ValueError("a GP's sessions come from the GP rota")
     weekly_hours = Decimal(weekly_hours).quantize(Decimal("0.01")) if weekly_hours is not None else None
-    return _apply(actor, person, {"weekly_hours": weekly_hours, "days_per_week": days_per_week})
+    return _apply(actor, person, {"weekly_hours": weekly_hours, "days_per_week": days_per_week}, note=note)
 
 
 def set_allowance(actor, person, leave_year, annual_hours, bank_holiday_hours, note=""):
@@ -107,3 +108,61 @@ def reorder(actor, ids):
     with transaction.atomic():
         for n, person in enumerate(kept, start=1):
             _apply(actor, person, {"display_order": n * 10})
+
+
+def add_hours_change(actor, person, from_day, weekly_hours, days_per_week, annual_hours, bank_holiday_hours, note):
+    """A dated change of contract (PAT-06, LEAVE-12): a second Allowance row
+    for the year from `from_day`, carrying the new full-year figures and the
+    new weekly hours and days. The year's first row must exist; the first
+    day itself is set_allowance's. When the day has arrived the hours go on
+    the person now; otherwise apply_due_hours_changes() copies them on the day."""
+    if not note or not note.strip():
+        raise ValueError("A reason is needed for an hours change")
+    year = years.year_of(person, from_day)
+    if from_day == year:
+        raise ValueError("Set the year's allowance on the Pay & time off tab; a change starts after the year's first day")
+    if not Allowance.objects.filter(person=person, leave_year=year, from_day=year).exists():
+        raise ValueError(f"Set the {year.year} allowance first")
+    if Allowance.objects.filter(person=person, leave_year=year, from_day=from_day).exists():
+        raise ValueError("There is already a change from that day")
+    weekly_hours = Decimal(weekly_hours).quantize(Decimal("0.01")) if weekly_hours is not None else None
+    row = Allowance.objects.create(person=person, leave_year=year, from_day=from_day,
+                                   annual_hours=Decimal(annual_hours).quantize(Decimal("0.01")),
+                                   bank_holiday_hours=Decimal(bank_holiday_hours).quantize(Decimal("0.01")),
+                                   weekly_hours=weekly_hours, days_per_week=days_per_week)
+    audit.record(actor, row, {"annual_hours": ("", str(row.annual_hours)), "bank_holiday_hours": ("", str(row.bank_holiday_hours)),
+                              "weekly_hours": ("", str(weekly_hours or "")), "days_per_week": ("", str(days_per_week or "")),
+                              "from_day": ("", from_day.isoformat())}, note=note.strip())
+    if from_day <= timezone.localdate() and not person.is_gp and weekly_hours is not None:
+        update_hours(actor, person, weekly_hours, days_per_week)
+    return row
+
+
+def apply_due_hours_changes(today=None):
+    """Copy the hours of every change whose day has come onto its person.
+    Run by hr_sync after each good run; returns how many people changed."""
+    today = today or timezone.localdate()
+    changed = 0
+    rows = (Allowance.objects.filter(from_day__lte=today, weekly_hours__isnull=False)
+            .exclude(from_day=models.F("leave_year")).select_related("person").order_by("person_id", "-from_day"))
+    seen = set()
+    for row in rows:
+        if row.person_id in seen or row.person.is_gp:
+            continue
+        seen.add(row.person_id)
+        latest = row_in_force_for_hours(row.person, today)
+        if latest is None:
+            continue
+        p = row.person
+        if p.weekly_hours != latest.weekly_hours or p.days_per_week != latest.days_per_week:
+            update_hours(None, p, latest.weekly_hours, latest.days_per_week, note="hours change due")
+            changed += 1
+    return changed
+
+
+def row_in_force_for_hours(person, day):
+    """The latest row on or before `day` that carries hours (a change row); the
+    year's first row carries none, so a person whose only rows are first rows
+    answers None and keeps the profile's figures."""
+    return (Allowance.objects.filter(person=person, leave_year=years.year_of(person, day), from_day__lte=day,
+                                     weekly_hours__isnull=False).order_by("-from_day").first())
