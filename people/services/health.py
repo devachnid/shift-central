@@ -59,7 +59,7 @@ def _leave(user, people, today):
     are, another manager decides those), placeholder days still to be
     costed from a rota, and people whose leave year, this one or the next
     (the two a booking can be made in), has gone below zero."""
-    from leave.models import Adjustment, Booking, BookingDay
+    from leave.models import Adjustment, Booking, BookingDay, YearEnd
     from leave.services import balances, years
     me = getattr(user, "person", None)
     waiting = Booking.objects.filter(person__in=people, status__in=(Booking.Status.PENDING, Booking.Status.CANCEL_REQUESTED))
@@ -87,4 +87,5 @@ def _leave(user, people, today):
         "placeholder_count": placeholders.count(),
         "placeholders": list(placeholders.select_related("booking__person").order_by("day", "pk")[:20]),
         "negative": negative,
+        "year_end_waiting": YearEnd.objects.filter(person__in=people, decided_at__isnull=True).count(),
     }

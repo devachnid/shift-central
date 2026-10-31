@@ -1,0 +1,22 @@
+{% extends "ui/_dialog.html" %}
+{% load leave_extras %}
+{% block dialog_title %}Year end · {{ row.person.name }}{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% url 'time-off-year-end-decide' row.pk %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <p>At the end of {{ label }}: <strong>{{ row.annual_remaining|hm }}</strong> of annual leave {% if over %}over{% else %}left{% endif %}{% if row.toil_remaining > 0 %}, <strong>{{ row.toil_remaining|hm }}</strong> of TOIL left{% endif %}.{% if long %} A long absence fell in this year.{% endif %}</p>
+  <fieldset class="field"><legend>Annual leave into {{ new_year }}</legend>
+    {% for radio in form.annual_choice %}<label class="check">{{ radio.tag }} {{ radio.choice_label }}</label>{% endfor %}
+    {% if not over %}<div class="field{% if form.annual_hours.errors %} has-error{% endif %}"><label for="id_annual_hours">Hours to carry (for Carry part)</label>{{ form.annual_hours }}{% for e in form.annual_hours.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>{% endif %}
+  </fieldset>
+  {% if form.toil_choice %}
+  <fieldset class="field"><legend>TOIL</legend>
+    {% for radio in form.toil_choice %}<label class="check">{{ radio.tag }} {{ radio.choice_label }}</label>{% endfor %}
+    <div class="field{% if form.toil_hours.errors %} has-error{% endif %}"><label for="id_toil_hours">Hours to keep (for Keep part)</label>{{ form.toil_hours }}{% for e in form.toil_hours.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  </fieldset>
+  {% endif %}
+  <div class="field"><label for="id_note">Note</label>{{ form.note }}</div>
+  <button class="btn btn-dark">Save decision</button>
+</form>
+{% endblock %}

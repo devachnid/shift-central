@@ -10,7 +10,7 @@ from people.services import access
 
 
 # Models whose audit rows are filed against the person's pk.
-PERSON_MODELS = ("people.person", "shifts.entry", "leave.booking", "leave.adjustment")
+PERSON_MODELS = ("people.person", "shifts.entry", "leave.booking", "leave.adjustment", "leave.yearend")
 
 
 # Practice-wide leave settings, shown like departments and templates: not

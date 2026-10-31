@@ -28,6 +28,8 @@
     {% for p in health.not_seen|slice:":5" %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
   <div class="health-item{% if health.leaving_soon %} is-warning{% endif %}">Leaving in the next 30 days<strong>{{ health.leaving_soon|length }}</strong>
     {% for r in health.leaving_soon %}<a href="{% url 'profile' r.person.pk %}?tab=hours" data-dialog>{{ r.person.name }}</a> ({{ r.person.end_date|date:"j M" }}, {{ r.text }}{% if r.after %}, {{ r.after }} booking{{ r.after|pluralize }} after{% endif %}){% if not forloop.last %}, {% endif %}{% endfor %}</div>
+  <div class="health-item{% if health.year_end_waiting %} is-warning{% endif %}">Year-end decisions waiting<strong>{{ health.year_end_waiting }}</strong>
+    {% if health.year_end_waiting %}<a href="{% url 'time-off-year-end' %}">Decide</a>{% endif %}</div>
   <div class="health-item{% if health.unnotified_old %} is-warning{% endif %}">Unnotified rota changes over a week old<strong>{{ health.unnotified_old }}</strong>
     {% if health.unnotified_old %}<a href="{% url 'rota-notify' %}" data-dialog>Notify staff</a>{% endif %}</div>
 </section>

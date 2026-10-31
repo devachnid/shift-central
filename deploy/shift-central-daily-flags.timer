@@ -1,0 +1,10 @@
+[Unit]
+Description=Email managers the leaver, return and year-end flags, every morning
+
+[Timer]
+OnCalendar=*-*-* 08:25:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

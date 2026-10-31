@@ -61,10 +61,11 @@ def _directives(path):
     return out
 
 
-def test_there_are_seven_services():
+def test_there_are_eight_services():
     assert [p.name for p in SERVICES] == [
         "gunicorn.service", "shift-central-backup.service",
-        "shift-central-clearsessions.service", "shift-central-gp-sync.service",
+        "shift-central-clearsessions.service", "shift-central-daily-flags.service",
+        "shift-central-gp-sync.service",
         "shift-central-hr-sync.service", "shift-central-leave-reminders.service",
         "shift-central-pbs.service"]
 
@@ -133,6 +134,13 @@ def test_the_leave_reminders_run_each_weekday_morning():
     assert cmd == "/srv/shift-central/.venv/bin/python manage.py leave_reminders"
     text = (DEPLOY / "shift-central-leave-reminders.timer").read_text()
     assert "OnCalendar=Mon..Fri *-*-* 08:20:00" in text and "Persistent=true" in text
+
+
+def test_the_daily_flags_run_every_morning():
+    (cmd,) = _directives(DEPLOY / "shift-central-daily-flags.service")["ExecStart"]
+    assert cmd == "/srv/shift-central/.venv/bin/python manage.py daily_flags"
+    text = (DEPLOY / "shift-central-daily-flags.timer").read_text()
+    assert "OnCalendar=*-*-* 08:25:00" in text and "Persistent=true" in text
 
 
 def test_each_timer_names_a_service_that_exists():

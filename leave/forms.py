@@ -245,3 +245,57 @@ class TypeForm(forms.Form):
 
 class SettingsForm(forms.Form):
     reminder_working_days = forms.IntegerField(min_value=1, max_value=30, label="Remind the managers when a request has waited this many working days")
+
+
+class YearEndForm(forms.Form):
+    annual_choice = forms.ChoiceField(choices=[("all", "Carry it all"), ("none", "Lose it all"), ("part", "Carry part")], initial="all", widget=forms.RadioSelect)
+    annual_hours = forms.CharField(max_length=12, required=False, help_text="Hours to carry, e.g. 10:00")
+    toil_choice = forms.ChoiceField(choices=[("keep", "Keep it all"), ("lose", "Lose it all"), ("part", "Keep part")], initial="keep", required=False, widget=forms.RadioSelect)
+    toil_hours = forms.CharField(max_length=12, required=False)
+    note = forms.CharField(max_length=300, required=False, widget=forms.Textarea(attrs={"rows": 2}))
+
+    def __init__(self, *args, row=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.row = row
+        if row is not None and row.annual_remaining < 0:
+            self.fields["annual_choice"].choices = [("all", "Carry the deficit into the new year"), ("none", "Write it off")]
+        if row is not None and row.toil_remaining <= 0:
+            del self.fields["toil_choice"], self.fields["toil_hours"]
+
+    def _part(self, text, limit, what):
+        seconds = parse_hours(text)
+        if seconds is None:
+            raise forms.ValidationError(f"Type the {what} hours")
+        if not 0 <= seconds <= limit:
+            raise forms.ValidationError(f"Between 0 and {hours.fmt(limit)}")
+        return seconds
+
+    def clean(self):
+        d = super().clean()
+        row = self.row
+        if row is None or self.errors:
+            return d
+        choice = d.get("annual_choice")
+        if choice == "all":
+            d["annual_carry"] = row.annual_remaining
+        elif choice == "none":
+            d["annual_carry"] = 0
+        else:
+            try:
+                d["annual_carry"] = self._part(d.get("annual_hours"), row.annual_remaining, "annual leave")
+            except forms.ValidationError as e:
+                self.add_error("annual_hours", e)
+        if "toil_choice" in self.fields:
+            tc = d.get("toil_choice") or "keep"
+            if tc == "keep":
+                d["toil_keep"] = row.toil_remaining
+            elif tc == "lose":
+                d["toil_keep"] = 0
+            else:
+                try:
+                    d["toil_keep"] = self._part(d.get("toil_hours"), row.toil_remaining, "TOIL")
+                except forms.ValidationError as e:
+                    self.add_error("toil_hours", e)
+        else:
+            d["toil_keep"] = None
+        return d

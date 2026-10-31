@@ -23,7 +23,8 @@ def _items(request, role):
     if role != "staff":
         leave_children += [{"label": "Waiting for approval", "url": "/time-off/approve/"}, {"label": "Bank holidays", "url": "/time-off/bank-holidays/"},
                      {"label": "Blackouts", "url": "/time-off/blackouts/"},
-                     {"label": "Past schedule", "url": "/time-off/past/"}]
+                     {"label": "Past schedule", "url": "/time-off/past/"},
+                     {"label": "Year end", "url": "/time-off/year-end/"}]
     items.insert(1, {"key": "time-off", "label": "Time off", "icon": "calendar-off", "url": "/time-off/",
                      "active": path.startswith("/time-off/"), "children": leave_children})
     items.append({"key": "reports", "label": "Reports", "icon": "report", "url": "/reports/hours/",

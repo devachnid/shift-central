@@ -122,3 +122,16 @@ def returned(booking, statement, base_url=""):
             f"leave that could not be taken may need planning or carrying over.\n\n"
             f"Profile: {_link(base_url, f'/staff/{p.pk}/profile/?tab=hours')}\n")
     return _send_all(recipients(p), f"{p.name} is back after {weeks} week{'' if weeks == 1 else 's'} of {booking.type.name}", body)
+
+
+def year_end(manager, rows, base_url=""):
+    """NOTIF-08: one email per manager at the start of a leave year."""
+    from leave.services import years
+    lines = "\n".join(
+        f"  {r.person.name} ({years.label(r.year_ended)}): "
+        + (f"{hours.fmt(-r.annual_remaining)} over" if r.annual_remaining < 0 else f"{hours.fmt(r.annual_remaining)} of annual leave left")
+        + (f", TOIL {hours.fmt(r.toil_remaining)}" if r.toil_remaining > 0 else "") for r in rows)
+    n = len(rows)
+    body = (f"The leave year has ended for {n} of your people with annual leave or TOIL left over, or over.\n\n{lines}\n\n"
+            f"For each, choose carry all, lose all or carry part: {_link(base_url, '/time-off/year-end/')}\n")
+    return _send_all([manager], f"Year end: {n} {'person has' if n == 1 else 'people have'} leave or TOIL left", body)
