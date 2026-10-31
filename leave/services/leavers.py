@@ -38,8 +38,8 @@ def after_leaving(person):
 
 def flag(person, base_url=""):
     """The "date entered" email, once per end date. A cleared date resets
-    both flags silently. Within a week of the date the one email covers the
-    week's reminder too."""
+    both flags silently. Within a week of the date, or once it has passed,
+    the one email covers the week's reminder too."""
     if person.end_date is None:
         if person.leaver_flagged_for or person.leaver_week_flagged_for:
             Person.objects.filter(pk=person.pk).update(leaver_flagged_for=None, leaver_week_flagged_for=None)
@@ -48,17 +48,20 @@ def flag(person, base_url=""):
     if person.leaver_flagged_for == person.end_date:
         return False
     today = timezone.localdate()
-    within_week = person.end_date <= today + WEEK
+    past = person.end_date < today
+    within_week = today <= person.end_date <= today + WEEK
     fields = {"leaver_flagged_for": person.end_date}
-    if within_week:
+    if within_week or past:          # a date already gone has no week reminder to come
         fields["leaver_week_flagged_for"] = person.end_date
-    # Claim first, then send: two syncs seeing the same new date send one email between them.
+    # The figures first, so a failure here cannot leave a date claimed and never sent.
+    _, statement = figure(person)
+    after = after_leaving(person)
+    # Claim, then send: two syncs seeing the same new date send one email between them.
     if not Person.objects.filter(pk=person.pk).exclude(leaver_flagged_for=person.end_date).update(**fields):
         return False
     for k, v in fields.items():
         setattr(person, k, v)
-    _, statement = figure(person)
-    notify.leaving(person, statement, after_leaving(person), week=within_week, base_url=base_url)
+    notify.leaving(person, statement, after, week=within_week, past=past, base_url=base_url)
     return True
 
 

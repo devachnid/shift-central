@@ -96,17 +96,18 @@ def converted(label, dates, sick, base_url=""):
     return _send_all([p], "Your time off has been changed", body)
 
 
-def leaving(person, statement, bookings_after, week=False, base_url=""):
+def leaving(person, statement, bookings_after, week=False, past=False, base_url=""):
     """NOTIF-06, the two leaver emails: the figure as at the leaving date
     (LEAVE-14) and the bookings that run past it."""
     from leave.services import leavers
     when = f"{person.end_date:%-d %b %Y}"
     lines = "".join(f"\n  {b.type.name} {span(b)}" for b in bookings_after)
-    body = (f"{person.name} {'leaves in a week' if week else 'is leaving'}, on {when}.\n\n"
+    first = f"{person.name} left on {when}" if past else f"{person.name} {'leaves in a week' if week else 'is leaving'}, on {when}"
+    body = (f"{first}.\n\n"
             f"As at that day: {leavers.figure_text(statement)}; TOIL remaining {hours.fmt(statement.toil_remaining)}.\n"
             + (f"\nTime off booked after the leaving date, to shorten or cancel:{lines}\n" if bookings_after else "")
             + f"\nProfile: {_link(base_url, f'/staff/{person.pk}/profile/?tab=hours')}\n")
-    subject = f"{person.name} leaves in a week, on {when}" if week else f"{person.name} is leaving on {when}"
+    subject = first if past else (f"{person.name} leaves in a week, on {when}" if week else f"{person.name} is leaving on {when}")
     return _send_all(recipients(person), subject, body)
 
 

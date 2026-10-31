@@ -9,7 +9,7 @@
     <noscript><button class="btn btn-quiet" type="submit">Show</button></noscript>
   </form>
   {% if s.missing %}<p class="flash flash-warning">No allowance is set for this leave year yet.</p>{% endif %}
-  {% if leaver_text %}<p class="flash flash-warning">Leaves on {{ person.end_date|date:"j M Y" }}: {{ leaver_text }}.</p>{% endif %}
+  {% if leaver_text %}<p class="flash flash-warning">{% if leaver_past %}Left{% else %}Leaves{% endif %} on {{ person.end_date|date:"j M Y" }}: {{ leaver_text }}.</p>{% endif %}
   <dl class="defs">
     <dt>Annual leave allowance (pro-rated)</dt><dd>{{ s.annual_allowance|hm }}</dd>
     <dt>Bank holiday allowance (pro-rated)</dt><dd>{{ s.bank_holiday_allowance|hm }}</dd>

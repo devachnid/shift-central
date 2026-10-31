@@ -86,6 +86,16 @@ def test_a_date_within_a_week_sends_one_email_that_covers_both(boss):
     assert sam.leaver_week_flagged_for == date(2026, 11, 6) and leavers.week_flags() == 0 and len(mail.outbox) == 1
 
 
+def test_a_date_already_past_is_announced_as_left_once(boss):
+    sam = make_person(first_name="Sam", end_date=date(2026, 10, 14))
+    make_allowance(sam, Y26, Decimal("100"), 0)
+    assert leavers.flag(sam) is True
+    assert [m.subject for m in mail.outbox] == ["Sam Patel left on 14 Oct 2026"] and mail.outbox[0].body.startswith("Sam Patel left on 14 Oct 2026.")
+    sam.refresh_from_db()
+    assert sam.leaver_flagged_for == sam.leaver_week_flagged_for == date(2026, 10, 14)
+    assert leavers.week_flags() == 0 and leavers.flag(sam) is False and len(mail.outbox) == 1
+
+
 def test_the_week_reminder_goes_once_seven_days_out(boss):
     sam = make_person(first_name="Sam", end_date=date(2026, 11, 20))
     make_allowance(sam, Y26, Decimal("100"), 0)
@@ -150,6 +160,13 @@ def test_the_statement_and_the_health_card_carry_the_leaver_line(boss, leaver):
     assert "Sam Patel" in body and "1 booking after" in body
     body = c.get("/time-off/?from=2026-10-01&to=2026-10-31").content.decode()
     assert "after leaving date" in body
+
+
+def test_the_statement_says_left_for_a_date_already_past(boss, leaver):
+    c = Client()
+    c.force_login(boss.user)
+    body = c.get(f"/staff/{leaver.pk}/profile/?tab=hours").content.decode()      # the suite clock is 2 Nov: 14 Oct is behind us
+    assert "Left on 14 Oct 2026" in body and "Leaves on 14 Oct 2026" not in body
 
 
 # --- returns ---------------------------------------------------------------------
