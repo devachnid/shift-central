@@ -37,6 +37,10 @@ class Entry(models.Model):
     # bg, fg (hex), bold, italic, underline, strike, wrap (bool), size (sm/md/lg).
     # Empty means the department's colour and the defaults (ROTA-04a).
     appearance = models.JSONField(default=dict, blank=True)
+    # Set when approved leave covers this day (spec 3): the row stays, the
+    # grid, hours report, notify and the GP leave feed leave it out.
+    covered_by = models.ForeignKey("leave.BookingDay", null=True, blank=True, on_delete=models.SET_NULL,
+                                   related_name="covered_entries", db_index=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
                                    on_delete=models.SET_NULL, related_name="+")
     created_at = models.DateTimeField(auto_now_add=True)

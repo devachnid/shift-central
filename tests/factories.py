@@ -5,7 +5,8 @@ from datetime import date, time
 from django.utils import timezone
 
 from accounts.models import User
-from people.models import Department, Person, Team, TeamManager
+from leave.models import BankHoliday, Booking, LeaveType
+from people.models import Allowance, Department, Person, Team, TeamManager
 from shifts.models import Entry, GpSession
 
 _next_id = iter(range(1000, 100000))
@@ -58,3 +59,29 @@ def make_gp_session(person, day, part="AM", **kw):
     kw.setdefault("site", "AG")
     kw.setdefault("synced_at", timezone.now())
     return GpSession.objects.create(person=person, day=day, part=part, **kw)
+
+
+def make_type(name="Holiday", **kw):
+    row = LeaveType.objects.filter(name=name).first()
+    if row is None:
+        kw.setdefault("draws_from", "annual" if name == "Holiday" else "none")
+        kw.setdefault("requestable", True)
+        row = LeaveType.objects.create(name=name, **kw)
+    return row
+
+
+def make_booking(person, first, last=None, **kw):
+    kw.setdefault("type", make_type(kw.pop("type_name", "Holiday")))
+    kw.setdefault("part", "whole")
+    kw.setdefault("status", "approved")
+    return Booking.objects.create(person=person, first_day=first, last_day=last or first, **kw)
+
+
+def make_bank_holiday(day, name="Bank holiday"):
+    row, _ = BankHoliday.objects.get_or_create(day=day, defaults={"name": name})
+    return row
+
+
+def make_allowance(person, year, annual, bank_holiday, **kw):
+    kw.setdefault("from_day", year)
+    return Allowance.objects.create(person=person, leave_year=year, annual_hours=annual, bank_holiday_hours=bank_holiday, **kw)

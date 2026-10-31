@@ -46,6 +46,10 @@ class Person(models.Model):
     can_see_other_staff = models.BooleanField(default=True)
     weekly_hours = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     days_per_week = models.PositiveSmallIntegerField(null=True, blank=True)
+    # Leave (spec 3). leave_year_start is MM-DD; own_leave_without_approval
+    # is the practice manager's flag (PEOPLE-07), set on the Permissions page.
+    leave_year_start = models.CharField(max_length=5, default="01-01")
+    own_leave_without_approval = models.BooleanField(default=False)
     notes = models.TextField(blank=True, default="")
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True,

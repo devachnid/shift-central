@@ -41,7 +41,7 @@ class PersonAdmin(ReadOnlyModelAdmin):
 @admin.register(Allowance)
 class AllowanceAdmin(ReadOnlyModelAdmin):
     deletable = True
-    list_display = ("person", "leave_year", "annual_hours", "bank_holiday_hours")
+    list_display = ("person", "leave_year", "from_day", "annual_hours", "bank_holiday_hours", "weekly_hours", "days_per_week")
 
 
 @admin.register(Department)

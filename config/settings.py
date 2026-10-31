@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "people",
     "shifts",
     "messaging",
+    "leave",
     "ui",
 ]
 
