@@ -28,3 +28,9 @@ def figure(value, field_name):
         whole, half = divmod(int(value), 2)
         return f"{whole or ''}{'½' if half else ''}" or "0"
     return value
+
+
+@register.filter
+def year_label(value):
+    from leave.services import years
+    return years.label(value)

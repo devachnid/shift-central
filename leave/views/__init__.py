@@ -11,3 +11,4 @@ from .blackouts import add as blackout_add, delete as blackout_delete, edit as b
 from .settings import leave_settings, type_add, type_edit, types_index  # noqa: F401
 from .api import leave_feed  # noqa: F401
 from .yearend import decide as year_end_decide, index as year_end  # noqa: F401
+from .summary import leave_summary  # noqa: F401

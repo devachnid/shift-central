@@ -23,6 +23,7 @@ urlpatterns = [
     path("time-off/<int:pk>/cancel/", views.cancel, name="time-off-cancel"),
     path("time-off/<int:pk>/decide/", views.decide, name="time-off-decide"),
     path("reports/leave/", views.leave_report, name="report-leave"),
+    path("reports/leave-summary/", views.leave_summary, name="report-leave-summary"),
     path("settings/leave-types/", views.types_index, name="leave-types"),
     path("settings/leave-types/add/", views.type_add, name="leave-type-add"),
     path("settings/leave-types/<int:pk>/edit/", views.type_edit, name="leave-type-edit"),
