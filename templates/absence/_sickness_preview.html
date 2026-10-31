@@ -1,0 +1,12 @@
+{% with s=preview.sickness %}
+{% if s.joins %}
+  {% if editing %}<p class="flash flash-warning">This joins on to {{ s.joins.type.name }} {{ s.joins.first_day|date:"j M" }}–{{ s.joins.last_day|date:"j M Y" }}: the two count as separate instances.</p>
+  {% else %}<fieldset class="field" data-submit-on-change><legend>This joins on to {{ s.joins.type.name }} {{ s.joins.first_day|date:"j M" }}–{{ s.joins.last_day|date:"j M Y" }}</legend>
+    <label class="check"><input type="radio" name="join" value="extend"{% if join != "separate" %} checked{% endif %}> Extend that entry to {{ s.extended_first|date:"j M" }}–{{ s.extended_last|date:"j M Y" }} (one instance)</label>
+    <label class="check"><input type="radio" name="join" value="separate"{% if join == "separate" %} checked{% endif %}> Record as a separate instance</label>
+  </fieldset>{% endif %}
+{% endif %}
+{% if s.long %}<p class="flash flash-warning">This is long sickness (29 days or more): managers are emailed when the person returns.</p>{% endif %}
+{% if s.joins and not editing and join != "separate" %}<p class="field-help">Instances in the last six months after this entry: {{ s.instances_extended }}{% if s.level_label_extended %} ({{ s.level_label_extended }}){% endif %}</p>
+{% else %}<p class="field-help">Instances in the last six months after this entry: {{ s.instances_after }}{% if s.level_label %} ({{ s.level_label }}){% endif %}</p>{% endif %}
+{% endwith %}

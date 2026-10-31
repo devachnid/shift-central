@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404, render
 
 from leave.forms import BookingForm
 from leave.models import Booking
-from leave.services import balances, bookings, costing, years
+from leave.services import balances, bookings, costing, sickness, years
 from leave.services.common import LeaveError
 from people.models import Person
 from people.services import access
@@ -72,18 +72,38 @@ def _preview(form, booking=None, person=None):
         elif day in stored and day not in typed:
             row.update(cost=stored[day].cost_seconds, source="override", placeholder=False, account=stored[day].account)
         days.append(row)
+    out_sickness = _sickness_preview(person, kw["leave_type"], kw["first"], kw["last"], booking)
     account = kw["leave_type"].draws_from
     pool = POOLS.get(account)
     out = {"days": days, "total": sum(d["cost"] for d in days),
            "placeholders": any(d["placeholder"] for d in days), "unknown_hours": any(not d["hours_known"] for d in days),
            "missing_allowance": False}
     if pool is None:
-        return out | {"before": None, "after": None, "available": None, "over": False, "balances": []}
+        return out | {"before": None, "after": None, "available": None, "over": False, "balances": []} | out_sickness
     lines = _balance_lines(person, booking, pool, [(d["day"], d["account"], d["cost"]) for d in days])
     out["missing_allowance"] = any(line["missing"] for line in lines)
     first = lines[0]
     return out | {"before": first["before"], "after": first["after"], "available": first["available"],
-                  "over": any(line["over"] for line in lines), "balances": lines}
+                  "over": any(line["over"] for line in lines), "balances": lines} | out_sickness
+
+
+def _sickness_preview(person, leave_type, first, last, booking=None):
+    """For a sickness type: the entry this one joins on to (LEAVE-41) with
+    the dates an Extend would give, whether it is long, and the instances
+    and trigger after it when recorded separately. Empty for other types."""
+    if not leave_type.sickness:
+        return {}
+    joins = sickness.joins_on(person, first, last, exclude=booking)
+    others = [b for b in sickness.instances(person) if booking is None or b.pk != booking.pk]
+    count = len(others) + (1 if sickness.overlaps_window(first, last) else 0)
+    out = {"joins": joins, "extended_first": None, "extended_last": None,
+           "long": (last - first).days + 1 >= sickness.LONG_DAYS,
+           "instances_after": count, "level_label": sickness.level_label(sickness.level(count))}
+    if joins:       # Extend: the two become one instance, so the count is the other entries plus the joined one
+        out["extended_first"], out["extended_last"] = min(first, joins.first_day), max(last, joins.last_day)
+        merged = len([b for b in others if b.pk != joins.pk]) + (1 if sickness.overlaps_window(out["extended_first"], out["extended_last"]) else 0)
+        out["instances_extended"], out["level_label_extended"] = merged, sickness.level_label(sickness.level(merged))
+    return {"sickness": out}
 
 
 def _year_groups(person, pool, items):
@@ -121,20 +141,29 @@ def add(request):
         form = BookingForm(request.user, request.POST)
         preview = _preview(form)
         if form.is_valid() and not request.POST.get("preview") and "error" not in preview:
-            person = form.cleaned_data["person"]
-            kw = form.booking_kwargs()
-            note = form.cleaned_data["manager_note"]
+            s = preview.get("sickness") or {}
             base = request.build_absolute_uri("/")
-            try:
-                if bookings.may_book(request.user, person):
-                    bookings.book(request.user, person, note=note, costs=form.costs(), base_url=base, **kw)
+            if s.get("joins") is not None and request.POST.get("join", "extend") == "extend":
+                try:        # LEAVE-41: the manager chose to extend the entry this one joins on to
+                    bookings.edit(request.user, s["joins"], base_url=base, note="extended (joined on)",
+                                  first=s["extended_first"], last=s["extended_last"])
                     return JsonResponse(REFRESH)
-                if access.is_self(request.user, person):
-                    bookings.request(request.user, person, note=note, base_url=base, **kw)
-                    return render(request, "leave/add_dialog.html", {"form": form, "preview": {}, "pending_own": True, "refresh": True})
-                raise PermissionDenied
-            except LeaveError as e:
-                form.add_error(None, e.message)
+                except LeaveError as e:
+                    form.add_error(None, e.message)
+            else:
+                person = form.cleaned_data["person"]
+                kw = form.booking_kwargs()
+                note = form.cleaned_data["manager_note"]
+                try:
+                    if bookings.may_book(request.user, person):
+                        bookings.book(request.user, person, note=note, costs=form.costs(), base_url=base, **kw)
+                        return JsonResponse(REFRESH)
+                    if access.is_self(request.user, person):
+                        bookings.request(request.user, person, note=note, base_url=base, **kw)
+                        return render(request, "leave/add_dialog.html", {"form": form, "preview": {}, "pending_own": True, "refresh": True})
+                    raise PermissionDenied
+                except LeaveError as e:
+                    form.add_error(None, e.message)
     else:
         initial = {"part": "whole"}
         person = request.GET.get("person", "")
@@ -150,7 +179,8 @@ def add(request):
     # A person's own leave is costed from the rota (book() drops typed figures for it): no boxes.
     chosen = form.cleaned_data.get("person") if form.is_bound and hasattr(form, "cleaned_data") else form.initial.get("person")
     can_type = not (chosen is not None and access.is_self(request.user, chosen))
-    return render(request, "leave/add_dialog.html", {"form": form, "preview": preview, "title": "Time off", "can_type": can_type})
+    return render(request, "leave/add_dialog.html", {"form": form, "preview": preview, "title": "Time off", "can_type": can_type,
+                                                    "join": request.POST.get("join", "extend"), "editing": False})
 
 
 def _booking_data(booking):
@@ -183,4 +213,4 @@ def edit(request, pk):
         form = BookingForm(request.user, _booking_data(booking), person=booking.person, booking=booking)
         preview = _preview(form, booking, person=booking.person)
     return render(request, "leave/add_dialog.html", {"form": form, "preview": preview, "booking": booking, "title": "Edit time off",
-                                                    "can_type": booking.is_active})
+                                                    "can_type": booking.is_active, "editing": True})

@@ -21,6 +21,7 @@
     <dt>TOIL taken</dt><dd>{{ s.toil_taken|hm }}</dd>
     <dt>TOIL remaining</dt><dd>{{ s.toil_remaining|hm }}{% if s.toil_pending %} · {{ s.toil_pending|hm }} waiting for approval{% endif %}</dd>
   </dl>
+  <p>Sickness: {% if sickness_count %}{{ sickness_count }} instance{{ sickness_count|pluralize }}{% else %}none{% endif %} in the last six months{% if sickness_label %} ({{ sickness_label }}){% endif %}</p>
   <table class="table">
     <thead><tr><th>How it is worked out</th><th>Hours</th></tr></thead>
     <tbody>

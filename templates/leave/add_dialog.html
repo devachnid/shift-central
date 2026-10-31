@@ -21,12 +21,13 @@
   </div>
   <input type="hidden" name="preview" value="1">
   {% include "leave/_preview.html" with editable=can_type %}
+  {% if preview.sickness %}{% include "absence/_sickness_preview.html" %}{% endif %}
   {% if booking and not can_type and preview.days %}<p class="field-help">Costs can be set once the request is approved.</p>{% endif %}
   <details class="advanced"><summary>Advanced</summary>
     {% if form.paid %}<div class="field"><label for="id_paid">Paid or unpaid</label>{{ form.paid }}</div>{% endif %}
     {% if not booking %}<div class="field"><label for="id_manager_note">Manager notes</label>{{ form.manager_note }}</div>{% endif %}
   </details>
-  <button class="btn btn-dark" name="preview" value="">{% if booking %}Save changes{% else %}Add time off{% endif %}</button>
+  <button class="btn btn-dark" name="preview" value="">{% if booking %}Save changes{% elif preview.sickness.joins and join != "separate" %}Extend the existing entry{% else %}Add time off{% endif %}</button>
 </form>
 {% endif %}
 {% endblock %}
