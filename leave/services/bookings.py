@@ -101,13 +101,25 @@ def _new(user, person, leave_type, first, last, part, start, finish, description
                    manager_note=(note or "")[:300] if status != Booking.Status.PENDING else "")
 
 
+def _reread(booking):
+    """The booking as it stands now. The caller's instance may be stale (a
+    second worker decided it meanwhile); call inside the transaction, where
+    SQLite's IMMEDIATE mode has already serialised writers."""
+    return Booking.objects.select_related("person", "type").get(pk=booking.pk)
+
+
+def _mail(send, *args):
+    """Send after the outermost commit, never inside a write lock or before
+    a rollback; at once when no transaction is open."""
+    transaction.on_commit(lambda: send(*args))
+
+
 def request(user, person, leave_type, first, last, part, start=None, finish=None, description="", paid=None, note="", base_url=""):
     if not may_request(user, person):
         raise PermissionDenied("you can only request your own leave")
     if not leave_type.requestable:
         raise LeaveError("type", f"{leave_type.name} is recorded by a manager, not requested")
     _check_dates(person, first, last, part, start, finish)
-    _check_overlap(person, first, last)
     for day in Booking(first_day=first, last_day=last).days():
         if blackouts.blocks(person, day):
             raise LeaveError("blackout", f"Leave cannot be requested for {day:%a %-d %b}")
@@ -115,22 +127,27 @@ def request(user, person, leave_type, first, last, part, start=None, finish=None
     _check_balance(person, first, costs)
     booking = _new(user, person, leave_type, first, last, part, start, finish, description, paid, note, Booking.Status.PENDING)
     with transaction.atomic():
+        _check_overlap(person, first, last)
         booking.save()
         audit.record_as(user, "leave.booking", person.pk, {"booking": ("", describe(booking, sum(c.seconds for c in costs)))}, note="requested")
-    notify.request_made(booking, base_url)
+    _mail(notify.request_made, booking, base_url)
     return booking
 
 
 def book(user, person, leave_type, first, last, part, start=None, finish=None, description="", paid=None, note="", costs=None, base_url=""):
     """A manager's booking, approved as it is made. `costs` is {day: seconds}
-    typed on the Advanced tab; each becomes an override."""
+    typed on the Advanced tab; each becomes an override. Only a manager's
+    typed figures count: a person booking their own leave is costed from
+    the rota."""
     if not may_book(user, person):
         raise PermissionDenied("you don't manage this person")
+    if not access.can_manage(user, person):
+        costs = None
     _check_dates(person, first, last, part, start, finish)
-    _check_overlap(person, first, last)
     booking = _new(user, person, leave_type, first, last, part, start, finish, description, paid, note, Booking.Status.APPROVED)
     booking.decided_by, booking.decided_at = user, timezone.now()
     with transaction.atomic():
+        _check_overlap(person, first, last)
         booking.save()
         days = _apply(booking)
         for bd in days:
@@ -147,33 +164,46 @@ def book(user, person, leave_type, first, last, part, start=None, finish=None, d
 def approve(user, booking, note="", base_url=""):
     if not may_decide(user, booking):
         raise PermissionDenied("you don't manage this person")
-    if booking.status != Booking.Status.PENDING:
-        raise LeaveError("status", "This request has already been decided")
-    _check_overlap(booking.person, booking.first_day, booking.last_day, exclude=booking)
-    before = describe(booking)
     with transaction.atomic():
-        booking.status, booking.decided_by, booking.decided_at, booking.manager_note = Booking.Status.APPROVED, user, timezone.now(), (note or "")[:300]
-        booking.save()
-        days = _apply(booking)
-        audit.record_as(user, "leave.booking", booking.person_id, {"booking": (before, describe(booking))}, note="approved")
-    notify.decided(booking, base_url)
-    _after_apply(booking, days, base_url)
+        fresh = _reread(booking)
+        if fresh.status != Booking.Status.PENDING:
+            raise LeaveError("status", "This request has already been decided")
+        _check_overlap(fresh.person, fresh.first_day, fresh.last_day, exclude=fresh)
+        before = describe(fresh)
+        fresh.status, fresh.decided_by, fresh.decided_at, fresh.manager_note = Booking.Status.APPROVED, user, timezone.now(), (note or "")[:300]
+        fresh.save()
+        days = _apply(fresh)
+        audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh))}, note="approved")
+    booking.refresh_from_db()
+    _mail(notify.decided, fresh, base_url)
+    _after_apply(fresh, days, base_url)
 
 
 def decline(user, booking, note="", base_url=""):
     if not may_decide(user, booking):
         raise PermissionDenied("you don't manage this person")
-    if booking.status != Booking.Status.PENDING:
-        raise LeaveError("status", "This request has already been decided")
-    before = describe(booking)
     with transaction.atomic():
-        booking.status, booking.decided_by, booking.decided_at, booking.manager_note = Booking.Status.DECLINED, user, timezone.now(), (note or "")[:300]
-        booking.save()
-        audit.record_as(user, "leave.booking", booking.person_id, {"booking": (before, describe(booking))}, note="declined")
-    notify.decided(booking, base_url)
+        fresh = _reread(booking)
+        if fresh.status != Booking.Status.PENDING:
+            raise LeaveError("status", "This request has already been decided")
+        before = describe(fresh)
+        fresh.status, fresh.decided_by, fresh.decided_at, fresh.manager_note = Booking.Status.DECLINED, user, timezone.now(), (note or "")[:300]
+        fresh.save()
+        audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh))}, note="declined")
+    booking.refresh_from_db()
+    _mail(notify.decided, fresh, base_url)
 
 
 # --- apply and undo -------------------------------------------------------
+
+def _remaining(original_start, original_finish, start, finish):
+    """What is left of a shift once the leave start-finish is taken from it:
+    the leave at the start leaves the end, otherwise the shift stops where
+    the leave begins."""
+    if start == original_start:
+        return finish, original_finish
+    return original_start, start
+
 
 def _shorten(booking, day):
     """The one uncovered shift whose span contains the leave; returns the
@@ -181,12 +211,7 @@ def _shorten(booking, day):
     for e in Entry.objects.filter(person=booking.person, day=day, kind=Entry.Kind.SHIFT, covered_by__isnull=True).order_by("position"):
         if e.start <= booking.start and e.finish >= booking.finish:
             original = (e.start, e.finish)
-            if booking.start == e.start:
-                e.start = booking.finish
-            elif booking.finish == e.finish:
-                e.finish = booking.start
-            else:
-                e.finish = booking.start
+            e.start, e.finish = _remaining(*original, booking.start, booking.finish)
             if e.start >= e.finish:
                 # the leave is the whole shift: keep the row, cover it instead
                 e.start, e.finish = original
@@ -236,7 +261,7 @@ def _undo(booking):
 def _after_apply(booking, days, base_url):
     flagged = [bd for bd in days if bd.placeholder]
     if flagged:
-        notify.cost_to_check(booking.person, flagged, base_url)
+        _mail(notify.cost_to_check, booking.person, flagged, base_url)
 
 
 # --- cancel ---------------------------------------------------------------
@@ -244,50 +269,56 @@ def _after_apply(booking, days, base_url):
 def request_cancel(user, booking, note="", base_url=""):
     if not access.is_self(user, booking.person):
         raise PermissionDenied("you can only cancel your own leave")
-    if booking.status != Booking.Status.APPROVED:
-        raise LeaveError("status", "Only approved leave can be cancelled")
-    if booking.last_day < timezone.localdate():
-        raise LeaveError("dates", "Leave in the past is cancelled by a manager")
-    before = describe(booking)
     with transaction.atomic():
-        booking.status, booking.cancel_requested_at, booking.staff_note = Booking.Status.CANCEL_REQUESTED, timezone.now(), (note or "")[:300]
-        booking.save()
-        audit.record_as(user, "leave.booking", booking.person_id, {"booking": (before, describe(booking))}, note="cancellation requested")
-    notify.cancel_requested(booking, base_url)
+        fresh = _reread(booking)
+        if fresh.status != Booking.Status.APPROVED:
+            raise LeaveError("status", "Only approved leave can be cancelled")
+        if fresh.last_day < timezone.localdate():
+            raise LeaveError("dates", "Leave in the past is cancelled by a manager")
+        before = describe(fresh)
+        fresh.status, fresh.cancel_requested_at, fresh.staff_note = Booking.Status.CANCEL_REQUESTED, timezone.now(), (note or "")[:300]
+        fresh.save()
+        audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh))}, note="cancellation requested")
+    booking.refresh_from_db()
+    _mail(notify.cancel_requested, fresh, base_url)
 
 
 def decide_cancel(user, booking, approve, note="", base_url=""):
     if not may_decide(user, booking):
         raise PermissionDenied("you don't manage this person")
-    if booking.status != Booking.Status.CANCEL_REQUESTED:
-        raise LeaveError("status", "No cancellation is waiting on this booking")
-    before = describe(booking)
     with transaction.atomic():
+        fresh = _reread(booking)
+        if fresh.status != Booking.Status.CANCEL_REQUESTED:
+            raise LeaveError("status", "No cancellation is waiting on this booking")
+        before = describe(fresh)
         if approve:
-            _undo(booking)
-            booking.status = Booking.Status.CANCELLED
+            _undo(fresh)
+            fresh.status = Booking.Status.CANCELLED
         else:
-            booking.status = Booking.Status.APPROVED
-        booking.cancel_decided_by, booking.cancel_decided_at, booking.manager_note = user, timezone.now(), (note or "")[:300]
-        booking.save()
-        audit.record_as(user, "leave.booking", booking.person_id, {"booking": (before, describe(booking))},
+            fresh.status = Booking.Status.APPROVED
+        fresh.cancel_decided_by, fresh.cancel_decided_at, fresh.manager_note = user, timezone.now(), (note or "")[:300]
+        fresh.save()
+        audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh))},
                         note="cancellation approved" if approve else "cancellation refused")
-    notify.cancel_decided(booking, approve, base_url)
+    booking.refresh_from_db()
+    _mail(notify.cancel_decided, fresh, approve, base_url)
 
 
 def cancel(user, booking, note="", base_url=""):
     """A manager cancels outright, past days included."""
     if not may_decide(user, booking):
         raise PermissionDenied("you don't manage this person")
-    if booking.status not in Booking.LIVE:
-        raise LeaveError("status", "This booking is not live")
-    before = describe(booking)
     with transaction.atomic():
-        _undo(booking)
-        booking.status, booking.cancel_decided_by, booking.cancel_decided_at, booking.manager_note = Booking.Status.CANCELLED, user, timezone.now(), (note or "")[:300]
-        booking.save()
-        audit.record_as(user, "leave.booking", booking.person_id, {"booking": (before, describe(booking))}, note="cancelled by a manager")
-    notify.cancel_decided(booking, True, base_url)
+        fresh = _reread(booking)
+        if fresh.status not in Booking.LIVE:
+            raise LeaveError("status", "This booking is not live")
+        before = describe(fresh)
+        _undo(fresh)
+        fresh.status, fresh.cancel_decided_by, fresh.cancel_decided_at, fresh.manager_note = Booking.Status.CANCELLED, user, timezone.now(), (note or "")[:300]
+        fresh.save()
+        audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh))}, note="cancelled by a manager")
+    booking.refresh_from_db()
+    _mail(notify.cancel_decided, fresh, True, base_url)
 
 
 # --- edit, override, recost -----------------------------------------------
@@ -298,34 +329,54 @@ EDITABLE = ("type", "first", "last", "part", "start", "finish", "description", "
 def edit(user, booking, base_url="", **fields):
     if not may_decide(user, booking):
         raise PermissionDenied("you don't manage this person")
-    if booking.status not in (Booking.Status.APPROVED, Booking.Status.PENDING):
-        raise LeaveError("status", "Only approved or pending leave can be edited")
     unknown = set(fields) - set(EDITABLE)
     if unknown:
         raise ValueError(f"not editable: {sorted(unknown)}")
-    first = fields.get("first", booking.first_day)
-    last = fields.get("last", booking.last_day)
-    part = fields.get("part", booking.part)
-    start = fields.get("start", booking.start) if part == "times" else None
-    finish = fields.get("finish", booking.finish) if part == "times" else None
-    _check_dates(booking.person, first, last, part, start, finish)
-    _check_overlap(booking.person, first, last, exclude=booking)
-    before = describe(booking)
     with transaction.atomic():
-        was_active = booking.is_active
-        if was_active:
-            _undo(booking)
-        booking.first_day, booking.last_day, booking.part, booking.start, booking.finish = first, last, part, start, finish
-        if "type" in fields:
-            booking.type = fields["type"]
-        if "description" in fields:
-            booking.description = (fields["description"] or "").strip()[:80]
-        if "paid" in fields and booking.type.paid_choice:
-            booking.paid = bool(fields["paid"])
-        booking.save()
-        days = _apply(booking) if was_active else []
-        audit.record_as(user, "leave.booking", booking.person_id, {"booking": (before, describe(booking))}, note="edited by a manager")
-    _after_apply(booking, days, base_url)
+        fresh = _reread(booking)
+        if fresh.status not in (Booking.Status.APPROVED, Booking.Status.PENDING):
+            raise LeaveError("status", "Only approved or pending leave can be edited")
+        new_type = fields.get("type", fresh.type)
+        first = fields.get("first", fresh.first_day)
+        last = fields.get("last", fresh.last_day)
+        part = fields.get("part", fresh.part)
+        start = fields.get("start", fresh.start) if part == "times" else None
+        finish = fields.get("finish", fresh.finish) if part == "times" else None
+        relabel = (new_type.pk, first, last, part, start, finish) == (fresh.type_id, fresh.first_day, fresh.last_day, fresh.part, fresh.start, fresh.finish)
+        if not relabel:
+            _check_dates(fresh.person, first, last, part, start, finish)
+            _check_overlap(fresh.person, first, last, exclude=fresh)
+        before = describe(fresh)
+        days = []
+        if relabel:                    # only the label or the paid flag: nothing is re-costed, nothing is uncovered
+            _set_labels(fresh, fields)
+            fresh.save()
+        else:
+            was_active = fresh.is_active
+            kept = {}
+            if was_active:
+                kept = {bd.day: (bd.cost_seconds, bd.override_note, bd.override_by_id)
+                        for bd in BookingDay.objects.filter(booking=fresh, source=BookingDay.Source.OVERRIDE)}
+                _undo(fresh)
+            fresh.type, fresh.first_day, fresh.last_day, fresh.part, fresh.start, fresh.finish = new_type, first, last, part, start, finish
+            _set_labels(fresh, fields)
+            fresh.save()
+            days = _apply(fresh) if was_active else []
+            for bd in days:            # a manager's typed figure stands when the booking moves or grows
+                if bd.day in kept:
+                    bd.cost_seconds, bd.override_note, bd.override_by_id = kept[bd.day]
+                    bd.source, bd.placeholder = BookingDay.Source.OVERRIDE, False
+                    bd.save()
+        audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh))}, note="edited by a manager")
+    booking.refresh_from_db()
+    _after_apply(fresh, days, base_url)
+
+
+def _set_labels(booking, fields):
+    if "description" in fields:
+        booking.description = (fields["description"] or "").strip()[:80]
+    if "paid" in fields and booking.type.paid_choice:
+        booking.paid = bool(fields["paid"])
 
 
 def override_day(user, booking_day, seconds, note):
@@ -342,15 +393,37 @@ def override_day(user, booking_day, seconds, note):
                         {f"cost {booking_day.day.isoformat()}": (hours.fmt(before), hours.fmt(booking_day.cost_seconds))}, note=note.strip()[:300])
 
 
+def _relink(bd):
+    """A grid rewrite deletes and recreates the day's rows, so a timed day
+    loses its shortened entry (SET_NULL) or its covered one. Find the new row
+    again: the shortened span, or the shift the leave filled."""
+    booking = bd.booking
+    shifts = Entry.objects.filter(person=booking.person, day=bd.day, kind=Entry.Kind.SHIFT, covered_by__isnull=True).order_by("position")
+    if bd.original_start is None:
+        for e in shifts:
+            if e.start <= booking.start and e.finish >= booking.finish:
+                Entry.objects.filter(pk=e.pk).update(covered_by=bd)
+                return
+    elif bd.shortened_entry_id is None:
+        left = _remaining(bd.original_start, bd.original_finish, booking.start, booking.finish)
+        for e in shifts:
+            if (e.start, e.finish) == left:
+                bd.shortened_entry = e
+                bd.save(update_fields=["shortened_entry"])
+                return
+
+
 def recost(booking_day):
     """Re-cost a whole day from the rota; half-day, timed and overridden days
-    keep their cost. Covers the day's entries either way. Returns whether
-    the figure changed."""
+    keep their cost. Covers the day's entries either way (a timed day finds
+    its shortened or covered shift again). Returns whether the figure
+    changed."""
     booking = booking_day.booking
-    if booking.part == Booking.Part.TIMES or booking_day.source == BookingDay.Source.OVERRIDE:
+    if booking.part == Booking.Part.TIMES:
+        _relink(booking_day)
         return False
     Entry.objects.filter(person=booking.person, day=booking_day.day, covered_by__isnull=True).update(covered_by=booking_day)
-    if booking.part != Booking.Part.WHOLE:
+    if booking.part != Booking.Part.WHOLE or booking_day.source == BookingDay.Source.OVERRIDE:
         return False
     c = costing.cost(booking.person, booking.type, booking_day.day, "whole", include=booking_day)
     changed = c.seconds != booking_day.cost_seconds or booking_day.placeholder
@@ -362,10 +435,11 @@ def recost(booking_day):
 def after_rota_write(person, day, base_url=""):
     """Called by entries._write after writing a day that has an active
     BookingDay. Covers the new entries, re-costs, flags managers when the
-    cost changed, and returns the pks of the entries still visible."""
+    cost changed (after the outermost commit), and returns the pks of the
+    entries still visible."""
     bd = costing.active_day(person, day)
     if bd is None:
         return list(Entry.objects.filter(person=person, day=day).values_list("pk", flat=True))
     if recost(bd):
-        notify.cost_to_check(person, [bd], base_url)
+        _mail(notify.cost_to_check, person, [bd], base_url)
     return list(Entry.objects.filter(person=person, day=day, covered_by__isnull=True).values_list("pk", flat=True))

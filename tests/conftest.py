@@ -13,6 +13,23 @@ def mail_relay(settings):
     settings.EMAIL_HOST = "smtp.example.org"
 
 
+@pytest.fixture(autouse=True)
+def on_commit_runs_when_no_savepoint(monkeypatch):
+    """The test's own transaction stands in for "no transaction open": an
+    on_commit callback registered with no atomic block of the code's own
+    open runs at once, as it does in production; one registered inside a
+    nested atomic block waits (use django_capture_on_commit_callbacks)."""
+    from django.db import transaction
+    real = transaction.on_commit
+
+    def on_commit(func, using=None, robust=False):
+        if transaction.get_connection(using).savepoint_ids:
+            return real(func, using, robust)
+        return func()
+
+    monkeypatch.setattr(transaction, "on_commit", on_commit)
+
+
 @pytest.fixture
 def superuser(db):
     return User.objects.create_superuser(email="root@example.org", password="pw")

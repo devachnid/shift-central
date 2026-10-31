@@ -7,6 +7,7 @@ from decimal import Decimal
 import pytest
 from django.core import mail
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 
 from leave.models import Booking, BookingDay
 from leave.services import adjustments, bank_holidays, blackouts, bookings
@@ -14,6 +15,7 @@ from leave.services.common import LeaveError
 from messaging.models import Outbox
 from people.models import AuditEntry
 from shifts.models import DayChange, Entry
+from shifts.services import entries
 from tests.factories import (make_allowance, make_bank_holiday, make_entry, make_person, make_team, make_team_manager,
                              make_type, make_user_for)
 
@@ -142,8 +144,11 @@ def test_managers_never_approve_their_own_and_the_flag_books_own_leave_straight_
     lead.own_leave_without_approval = True
     lead.save()
     assert bookings.may_book(lead.user, lead)
-    b2 = bookings.book(lead.user, lead, make_type("Holiday"), TUE, TUE, "whole")
+    make_entry(lead, TUE, start=time(9), finish=time(17))
+    b2 = bookings.book(lead.user, lead, make_type("Holiday"), TUE, TUE, "whole", costs={TUE: 3600})
     assert b2.status == "approved"
+    bd = BookingDay.objects.get(booking=b2)
+    assert (bd.cost_seconds, bd.source) == (8 * 3600, "rota")      # a self-booker's typed costs are ignored
 
 
 def test_a_team_manager_cannot_book_for_another_team(sam, lead):
@@ -233,3 +238,96 @@ def test_describe_is_the_audit_line():
     sam = make_person()
     b = Booking(person=sam, type=make_type("Holiday"), first_day=MON, last_day=TUE, status="approved")
     assert describe(b, 45000) == "Holiday 1–2 Mar 2027, whole days, 12 h 30 min, approved"
+
+
+# --- stale instances, mail after commit, grid rewrites, edits that keep overrides -------------
+
+def test_a_stale_instance_cannot_decide_a_request_twice(sam, lead):
+    b = bookings.request(sam.user, sam, make_type("Holiday"), MON, TUE, "whole")
+    stale = Booking.objects.get(pk=b.pk)
+    bookings.approve(lead.user, b)
+    with pytest.raises(LeaveError) as e:
+        bookings.decline(lead.user, stale)
+    assert e.value.code == "status"
+    with pytest.raises(LeaveError):
+        bookings.approve(lead.user, stale)
+    assert Booking.objects.get(pk=b.pk).status == "approved" and BookingDay.objects.filter(booking=b).count() == 2
+    stale = Booking.objects.get(pk=b.pk)
+    bookings.cancel(lead.user, b)
+    with pytest.raises(LeaveError) as e:
+        bookings.decide_cancel(lead.user, stale, approve=True)
+    assert e.value.code == "status" and Booking.objects.get(pk=b.pk).status == "cancelled"
+
+
+def test_the_instance_the_caller_holds_is_brought_up_to_date(sam, lead):
+    b = bookings.request(sam.user, sam, make_type("Holiday"), MON, TUE, "whole")
+    bookings.approve(lead.user, b, "enjoy")
+    assert (b.status, b.manager_note, b.decided_by) == ("approved", "enjoy", lead.user)
+
+
+def test_mail_from_a_re_cost_waits_for_the_outermost_commit(sam, lead, django_capture_on_commit_callbacks):
+    aug = date(2027, 8, 11)
+    bookings.book(lead.user, sam, make_type("Holiday"), aug, aug, "whole")
+    mail.outbox.clear()
+    with django_capture_on_commit_callbacks(execute=True) as callbacks:
+        with transaction.atomic():
+            make_entry(sam, aug, start=time(8), finish=time(16, 15), break_minutes=60)
+            bookings.after_rota_write(sam, aug)
+            assert len(mail.outbox) == 0
+        assert len(mail.outbox) == 0
+    assert len(callbacks) == 1 and len(mail.outbox) == 1 and "cost to check" in mail.outbox[0].subject.lower()
+
+
+def test_a_rolled_back_booking_sends_no_mail(sam, lead, django_capture_on_commit_callbacks):
+    mail.outbox.clear()
+    with django_capture_on_commit_callbacks(execute=True):
+        try:
+            with transaction.atomic():
+                bookings.book(lead.user, sam, make_type("Holiday"), date(2027, 8, 11), date(2027, 8, 11), "whole")
+                raise RuntimeError("roll back")
+        except RuntimeError:
+            pass
+    assert mail.outbox == []
+
+
+def test_a_grid_rewrite_of_a_timed_day_keeps_the_leave_restorable(sam, lead):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "times", start=time(14, 0), finish=time(15, 30))
+    entries.set_cell_text(lead.user, sam, MON, "09:00-14:00")      # deletes and recreates the day's rows
+    bd = BookingDay.objects.get(booking=b)
+    assert bd.shortened_entry_id is None
+    assert bookings.after_rota_write(sam, MON) == [Entry.objects.get(person=sam, day=MON).pk]
+    bd.refresh_from_db()
+    entry = Entry.objects.get(person=sam, day=MON)
+    assert bd.shortened_entry_id == entry.pk
+    bookings.cancel(lead.user, b)
+    entry.refresh_from_db()
+    assert (entry.start, entry.finish) == (time(9), time(17))
+
+
+def test_a_grid_rewrite_of_a_day_the_leave_filled_covers_the_new_shift(sam, lead):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "times", start=time(9), finish=time(17))
+    assert Entry.objects.get(person=sam, day=MON).covered_by is not None
+    entries.set_cell_text(lead.user, sam, MON, "09:00-17:00 1 hour break")
+    assert Entry.objects.get(person=sam, day=MON).covered_by is None
+    assert bookings.after_rota_write(sam, MON) == []
+    assert Entry.objects.get(person=sam, day=MON).covered_by == BookingDay.objects.get(booking=b)
+
+
+def test_editing_the_label_of_a_bank_holiday_keeps_its_typed_cost(sam, lead):
+    make_bank_holiday(date(2027, 5, 3), "Early May bank holiday")
+    b = bank_holidays.book(lead.user, sam, date(2027, 5, 3), 27000)
+    bookings.edit(lead.user, b, description="Early May")
+    bd = BookingDay.objects.get(booking=b)
+    assert (bd.cost_seconds, bd.source, bd.override_note) == (27000, "override", "bank holiday")
+    b.refresh_from_db()
+    assert b.label == "Early May"
+
+
+def test_extending_a_booking_keeps_the_overrides_on_the_days_it_already_had(sam, lead):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    bookings.override_day(lead.user, BookingDay.objects.get(booking=b), 4 * 3600, "half pay day")
+    bookings.edit(lead.user, b, last=TUE)
+    first, second = BookingDay.objects.filter(booking=b)
+    assert (first.day, first.cost_seconds, first.source, first.override_note, first.override_by) == (MON, 14400, "override", "half pay day", lead.user)
+    assert (second.day, second.cost_seconds, second.source) == (TUE, 27000, "rota")
+    assert Entry.objects.filter(person=sam, day__in=(MON, TUE), covered_by__isnull=False).count() == 2
