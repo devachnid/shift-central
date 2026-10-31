@@ -5,7 +5,7 @@ import logging
 
 from django.conf import settings
 
-from leave.services import hours
+from leave.services import hours, sickness
 from leave.services.common import recipients, span
 from messaging import services as messaging
 
@@ -75,3 +75,13 @@ def reminder(booking, base_url=""):
     what = "cancel" if booking.status == "cancel_requested" else "take"
     body = f"{p.name}'s request to {what} {booking.type.name} for {span(booking)} is still waiting.\n\nDecide here: {_link(base_url, '/time-off/approve/')}\n"
     return _send_all(recipients(p), "Time off request still waiting", body)
+
+
+def trigger_reached(person, lvl, rows, base_url=""):
+    """NOTIF-05: the person's managers, when a sickness entry takes them to
+    a higher trigger. Dates only: no description, no note."""
+    lines = "\n".join(f"  {span(b)}" + (" (long sickness)" if sickness.is_long(b) else "") for b in rows)
+    label = sickness.level_label(lvl)
+    body = (f"{person.name} has reached {label}: {len(rows)} instances of absence in the last six months.\n\n{lines}\n\n"
+            f"Profile: {_link(base_url, f'/staff/{person.pk}/profile/?tab=hours')}\n")
+    return _send_all(recipients(person), f"{person.name} has reached {label}", body)

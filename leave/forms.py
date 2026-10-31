@@ -207,13 +207,15 @@ class TypeForm(forms.Form):
     requestable = forms.BooleanField(required=False, label="Staff can request it")
     paid_choice = forms.BooleanField(required=False, label="The manager chooses paid or unpaid")
     default_paid = forms.BooleanField(required=False, initial=True, label="Paid unless chosen otherwise")
+    sickness = forms.BooleanField(required=False, label="Counts as sickness (instances, triggers, the sickness summary)")
+    flag_return = forms.BooleanField(required=False, label="Email the managers when the person returns")
     display_order = forms.IntegerField(min_value=0, max_value=9999, required=False)
     archived = forms.BooleanField(required=False, label="Archived (no longer offered; its bookings stand)")
 
     def __init__(self, *args, row=None, **kwargs):
         if row is not None:
             kwargs.setdefault("initial", {k: getattr(row, k) for k in (
-                "name", "colour", "draws_from", "on_payroll", "requestable", "paid_choice", "default_paid", "display_order", "archived")})
+                "name", "colour", "draws_from", "on_payroll", "requestable", "paid_choice", "default_paid", "sickness", "flag_return", "display_order", "archived")})
         super().__init__(*args, **kwargs)
         self.row = row
         if row is None:
@@ -230,8 +232,9 @@ class TypeForm(forms.Form):
     def save(self, user):
         d = self.cleaned_data
         if self.row is None:
-            return types.add(user, d["name"], d["colour"], d["draws_from"], d["requestable"], d["paid_choice"], d["on_payroll"], d["default_paid"])
-        fields = {k: d[k] for k in ("name", "colour", "requestable", "paid_choice", "default_paid", "archived")}
+            return types.add(user, d["name"], d["colour"], d["draws_from"], d["requestable"], d["paid_choice"], d["on_payroll"], d["default_paid"],
+                             sickness=d["sickness"], flag_return=d["flag_return"])
+        fields = {k: d[k] for k in ("name", "colour", "requestable", "paid_choice", "default_paid", "sickness", "flag_return", "archived")}
         if d.get("display_order") is not None:
             fields["display_order"] = d["display_order"]
         for k in ("draws_from", "on_payroll"):
