@@ -1,6 +1,8 @@
 """The payroll Excel (PAY-03): three sheets from the report's rows. Hours
 are decimal hours; names and notes are text cells."""
 
+from django.utils import timezone
+
 from exports import xlsx
 from payroll.services import report
 
@@ -15,6 +17,8 @@ def _cell(value, field_name):
     """A correction's figure: hours as decimal hours, else as it is."""
     if value is None:
         return None
+    if field_name == "leave_half_days":
+        return value / 2
     return xlsx.Hours(value) if _hours_field(field_name) else value
 
 
@@ -30,7 +34,7 @@ def _row(r, names):
 
 def build(month, rows, names, corrections, run):
     header = FIXED + [h for name in names for h in (f"{name} (days)", f"{name} (hours)")] + ["Started", "Leaves", "Leaver's leave remaining"]
-    status = f"Sent {run.sent_at:%-d %b %Y}" if run else "Draft"
+    status = f"Sent {timezone.localtime(run.sent_at):%-d %b %Y}" if run else "Draft"
     payroll = [[f"{month:%B %Y} — {status}"] + [None] * (len(header) - 1)] + [_row(r, names) for r in rows]
     corr = [[c.month.strftime("%B %Y"), c.person.name, c.label, _cell(c.sent, c.field), _cell(c.now, c.field), _cell(c.delta, c.field)] for c in corrections]
     movers = [[r.person.name, r.team, r.started, r.leaves, None if r.leaver_balance is None else xlsx.Hours(r.leaver_balance)]

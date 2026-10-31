@@ -4,6 +4,7 @@ to come are taken from the rota as it stands (PAY-02). The bureau does the
 pay; this is the hours."""
 
 import calendar
+import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
@@ -56,6 +57,12 @@ class Row:
         return out
 
 
+def _in_range(first, today):
+    if first < EARLIEST or first > date(today.year + 1, today.month, 1):
+        raise ValueError("Choose a month from January 2026 to a year ahead")
+    return first
+
+
 def month_of(text):
     """"YYYY-MM" to its first day; blank or unreadable means this month;
     before January 2026 or more than a year ahead raises ValueError."""
@@ -65,9 +72,20 @@ def month_of(text):
         first = date(year, month, 1)
     except (TypeError, ValueError):
         first = today.replace(day=1)
-    if first < EARLIEST or first > date(today.year + 1, today.month, 1):
-        raise ValueError("Choose a month from January 2026 to a year ahead")
-    return first
+    return _in_range(first, today)
+
+
+def month_strict(text):
+    """Exactly "YYYY-MM" with a real month, in the same range as month_of;
+    anything else raises ValueError, never a fallback (marking a month sent
+    is a record)."""
+    if not re.fullmatch(r"\d{4}-\d{2}", text or ""):
+        raise ValueError("Say which month, as YYYY-MM")
+    try:
+        first = date(int(text[:4]), int(text[5:]), 1)
+    except ValueError:
+        raise ValueError("Say which month, as YYYY-MM") from None
+    return _in_range(first, timezone.localdate())
 
 
 def month_end(month):

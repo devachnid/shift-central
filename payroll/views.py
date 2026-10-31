@@ -1,19 +1,16 @@
 """The payroll report (PAY-01 to 03): the month on screen for the viewer's
 people, the Excel, Mark as sent to the bureau (all-teams managers)."""
 
-import re
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
+from django.utils import timezone
 
 from exports import xlsx as exports_xlsx
 from payroll.services import report, runs, xlsx
 from people.services import access
-
-MONTH = re.compile(r"^\d{4}-\d{2}$")
-
 
 def _month(request):
     try:
@@ -49,21 +46,22 @@ def payroll(request):
     totals = {f: sum(g[f] for g in teams) for f in report.FIELDS}
     previous = (month - timedelta(days=1)).replace(day=1)
     following = report.month_end(month) + timedelta(days=1)
+    today = timezone.localdate()
+    has_next = following <= date(today.year + 1, today.month, 1)
     return render(request, "payroll/report.html", {
         "page_title": "Payroll", "month": month, "teams": teams, "totals": totals, "type_names": names,
         "corrections": corrections, "movers": [r for r in rows if r.started or r.leaves], "run": run,
-        "previous": previous, "following": following, "all_teams": access.is_all_teams(request.user), "people_count": len(rows)})
+        "previous": previous, "following": following, "has_next": has_next, "all_teams": access.is_all_teams(request.user)})
 
 
 @login_required
 @access.all_teams_required
 def mark_sent(request):
     # Never a fallback here: marking "this month" sent because the parameter was unreadable is a wrong record.
-    if not MONTH.match(request.GET.get("month", "")):
-        return HttpResponseBadRequest("Say which month, as YYYY-MM")
-    month = _month(request)
-    if not hasattr(month, "year"):
-        return month
+    try:
+        month = report.month_strict(request.GET.get("month", ""))
+    except ValueError as e:
+        return HttpResponseBadRequest(str(e))
     if request.method == "POST":
         runs.mark_sent(request.user, month)
         return JsonResponse({"refresh": True})

@@ -117,3 +117,24 @@ def test_the_reports_menu(boss, staff):
     body = _client(boss).get("/reports/hours/").content.decode()
     assert 'href="/reports/payroll/"' in body
     assert 'href="/reports/payroll/"' not in _client(staff["ann"]).get("/reports/hours/").content.decode()
+
+
+@pytest.mark.parametrize("month", ["2027-13", "2027-00", "2027-01%0A", "2029-01"])
+def test_mark_as_sent_takes_only_a_real_month(boss, staff, month):
+    c = _client(boss)
+    assert c.post(f"/reports/payroll/sent/?month={month}").status_code == 400
+    assert c.get(f"/reports/payroll/sent/?month={month}").status_code == 400
+    assert PayrollRun.objects.count() == 0
+
+
+def test_the_corrections_sheet_writes_leave_days_and_leaves_a_none_difference_empty(boss, staff):
+    c = _client(boss)
+    c.post("/reports/payroll/sent/?month=2027-01")
+    bookings.book(boss.user, staff["ann"], make_type("Holiday"), date(2027, 1, 20), date(2027, 1, 20), "am")
+    bookings.book(boss.user, staff["ann"], make_type("Jury service", on_payroll="always", default_paid=True), date(2027, 1, 21), date(2027, 1, 21), "whole")
+    r = c.get("/reports/payroll/?month=2027-02&download=1")
+    rows = [[cell.value for cell in row] for row in load_workbook(io.BytesIO(r.content))["Corrections"].iter_rows(min_row=2)]
+    days = next(row for row in rows if row[2] == "Leave days")
+    assert days[3:] == [0, 0.5, 0.5]
+    appeared = next(row for row in rows if row[2] == "Jury service days")
+    assert appeared[3] is None and appeared[4] == 1 and appeared[5] is None

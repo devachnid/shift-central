@@ -9,7 +9,7 @@
 <form class="filters" method="get">
   <a class="btn btn-quiet" href="?month={{ previous|date:'Y-m' }}" aria-label="Previous month">‹</a>
   <label>Month <input type="month" name="month" value="{{ month|date:'Y-m' }}"></label>
-  <a class="btn btn-quiet" href="?month={{ following|date:'Y-m' }}" aria-label="Next month">›</a>
+  {% if has_next %}<a class="btn btn-quiet" href="?month={{ following|date:'Y-m' }}" aria-label="Next month">›</a>{% endif %}
   <button class="btn btn-quiet" type="submit">Show</button>
   <span class="muted">{% if run %}Sent to the bureau on {{ run.sent_at|date:"j M Y" }} by {{ run.sent_by.person.name|default:run.sent_by.email|default:"—" }}{% else %}Not yet sent — a draft until it is marked sent{% endif %}</span>
 </form>
