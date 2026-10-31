@@ -149,7 +149,7 @@ everyone), `note`. Staff cannot request leave on a day inside a blackout
 that names their team or names none; managers book regardless.
 
 **`BankHoliday`** — `day` (unique), `name`. Seeded: 2026 as `06` lists
-them, and 2027 for England and Wales (1 Jan, 2 Apr, 5 Apr, 3 May, 31 May,
+them, and 2027 for England and Wales (1 Jan, 26 Mar, 29 Mar, 3 May, 31 May,
 30 Aug, 27 Dec, 28 Dec). The list is a Settings page; a manager adds the
 occasional extra day by hand (LEAVE-19).
 
