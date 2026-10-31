@@ -16,6 +16,7 @@ class Allowance(models.Model):
     bank_holiday_hours = models.DecimalField(max_digits=6, decimal_places=2)
     weekly_hours = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     days_per_week = models.PositiveSmallIntegerField(null=True, blank=True)
+    hours_applied = models.BooleanField(default=False)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["person", "leave_year", "from_day"],

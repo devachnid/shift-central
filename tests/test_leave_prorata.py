@@ -113,6 +113,8 @@ def test_add_hours_change_writes_a_dated_row_and_audits_it(all_teams_user):
     assert sam.weekly_hours == Decimal("37.50")       # 1 Jul 2026 is already past, so the hours are copied straight away
     notes = set(AuditEntry.objects.filter(model="people.allowance", object_id=row.pk).values_list("note", flat=True))
     assert notes == {"full time from July"}
+    person_notes = set(AuditEntry.objects.filter(model="people.person", object_id=sam.pk).values_list("note", flat=True))
+    assert person_notes == {"full time from July"}     # the copy onto the person carries the reason too
 
 
 def test_a_future_hours_change_waits_for_its_day(all_teams_user):
@@ -137,3 +139,11 @@ def test_add_hours_change_refuses_a_year_with_no_first_row_and_a_blank_reason(al
         profiles.add_hours_change(all_teams_user, sam, date(2026, 7, 1), 30, 5, 138, 48, "  ")
     with pytest.raises(ValueError):
         profiles.add_hours_change(all_teams_user, sam, Y26, 30, 5, 138, 48, "the year's first day is set_allowance's")
+
+
+@pytest.mark.parametrize("annual, expected", [(145, "36.5"), (119, "30"), (171, "43"), (197, "49.5")])
+def test_a_quarter_hour_tie_rounds_up_from_the_exact_sum(annual, expected):
+    # 2 Oct to 31 Dec 2026 is 91 days: 13 whole weeks. 145 h over 52 weeks times 13 is 36.25 exactly.
+    sam = make_person(start_date=date(2026, 10, 2))
+    make_allowance(sam, Y26, annual, 0)
+    assert _hours(prorata.allowance(sam, Y26, "annual")) == Decimal(expected)

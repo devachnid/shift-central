@@ -7,9 +7,11 @@ half hour (ties up), then capped at the largest full-year figure among the
 rows, which is also what makes a 53-week whole year exactly the full
 allowance (LEAVE-13)."""
 
+import math
 from dataclasses import dataclass
 from datetime import timedelta
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
+from fractions import Fraction
 
 from leave.services import hours, years
 from people.models import Allowance
@@ -50,7 +52,7 @@ def allowance(person, year, account):
         return ProRata(0, [], False, missing=True)
     field = FIELD[account]
     year_end = years.year_end(year)
-    total, lines = Decimal(0), []
+    total, lines = Fraction(0), []
     for i, row in enumerate(rows):
         start = max(row.from_day, person.start_date, year)
         end = rows[i + 1].from_day - timedelta(days=1) if i + 1 < len(rows) else year_end
@@ -61,10 +63,18 @@ def allowance(person, year, account):
         days = (end - start).days + 1
         weeks = -(-days // 7)
         full = getattr(row, field)
-        share = full / Decimal(52) * weeks
+        share = Fraction(full) * weeks / 52
         total += share
-        lines.append(Line(start, end, days, weeks, full, share))
-    rounded = (total * 2).quantize(Decimal(1), rounding=ROUND_HALF_UP) / 2
-    cap = max(getattr(r, field) for r in rows)
+        lines.append(Line(start, end, days, weeks, full, _display(share)))
+    rounded = Fraction(math.floor(total * 2 + Fraction(1, 2)), 2)
+    cap = max(Fraction(getattr(r, field)) for r in rows)
     capped = rounded > cap
-    return ProRata(hours.from_hours(min(rounded, cap)), lines, capped)
+    return ProRata(hours.from_hours(_decimal(min(rounded, cap))), lines, capped)
+
+
+def _decimal(value):
+    return Decimal(value.numerator) / value.denominator
+
+
+def _display(value):
+    return _decimal(value).quantize(Decimal("0.01"))

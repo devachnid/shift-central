@@ -116,7 +116,6 @@ def sync(client=None):
         with transaction.atomic():
             _apply(records, timezone.now())
         run.ok, run.people_seen = True, len(records)
-        profiles.apply_due_hours_changes()
     except (HRError, BadRecord) as e:
         run.message = str(e)[:300]
         log.warning("hr_sync failed: %s", run.message)
@@ -126,6 +125,14 @@ def sync(client=None):
     finally:
         run.finished_at = timezone.now()
         run.save()
+    if run.ok:
+        try:
+            with transaction.atomic():
+                profiles.apply_due_hours_changes()
+        except Exception:
+            log.exception("hours changes failed")
+            run.message = (run.message + "; " if run.message else "") + "hours changes failed; see the journal"
+            run.save(update_fields=["message"])
     return run
 
 

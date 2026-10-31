@@ -12,8 +12,9 @@ import pytest
 from django.utils import timezone
 
 from people.models import AuditEntry, Person, SyncRun, Team
-from people.services import hr_sync
+from people.services import hr_sync, profiles
 from people.services.hr_client import HRClient, HRError
+from tests.factories import make_allowance
 
 pytestmark = pytest.mark.django_db
 FIXTURE = Path(__file__).parent / "fixtures" / "hr_people.json"
@@ -271,3 +272,45 @@ def test_the_health_card_reads_only_practice_hr_runs():
     hr_sync.sync(FakeClient())
     SyncRun.objects.create(source="gp-rota", ok=False, message="unreachable")
     assert hr_sync.last_run().source == "practice-hr"
+
+
+def _sam_with_a_due_change():
+    hr_sync.sync(FakeClient())
+    sam = Person.objects.get(hr_employee_id=1)
+    sam.weekly_hours, sam.days_per_week = Decimal("30"), 4
+    sam.save()
+    make_allowance(sam, date(2026, 1, 1), 138, 48)
+    make_allowance(sam, date(2026, 1, 1), Decimal("172.5"), 60, from_day=date(2026, 7, 1),
+                   weekly_hours=Decimal("37.5"), days_per_week=5)
+    return sam
+
+
+def test_a_due_hours_change_is_copied_onto_the_person_by_the_sync():
+    sam = _sam_with_a_due_change()
+    run = hr_sync.sync(FakeClient())
+    assert run.ok and run.message == ""
+    sam.refresh_from_db()
+    assert sam.weekly_hours == Decimal("37.50") and sam.days_per_week == 5
+    assert AuditEntry.objects.filter(object_id=sam.pk, model="people.person", field="weekly_hours",
+                                     note="hours change due").exists()
+
+
+def test_a_failing_hours_step_leaves_the_people_sync_ok(monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(profiles, "apply_due_hours_changes", boom)
+    run = hr_sync.sync(FakeClient())
+    run.refresh_from_db()
+    assert run.ok and "hours changes failed" in run.message
+    assert Person.objects.count() == 6
+
+
+def test_a_manager_edit_after_a_copied_change_survives_the_next_sync(all_teams_user):
+    sam = _sam_with_a_due_change()
+    hr_sync.sync(FakeClient())
+    sam.refresh_from_db()
+    assert sam.weekly_hours == Decimal("37.50")
+    profiles.update_hours(all_teams_user, sam, Decimal("30"), 4, note="reduced again")
+    hr_sync.sync(FakeClient())
+    sam.refresh_from_db()
+    assert sam.weekly_hours == Decimal("30.00") and sam.days_per_week == 4

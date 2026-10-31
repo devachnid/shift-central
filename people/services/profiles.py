@@ -6,7 +6,7 @@ from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import PermissionDenied
-from django.db import models, transaction
+from django.db import transaction
 from django.utils import timezone
 
 from leave.services import years
@@ -126,43 +126,40 @@ def add_hours_change(actor, person, from_day, weekly_hours, days_per_week, annua
     if Allowance.objects.filter(person=person, leave_year=year, from_day=from_day).exists():
         raise ValueError("There is already a change from that day")
     weekly_hours = Decimal(weekly_hours).quantize(Decimal("0.01")) if weekly_hours is not None else None
-    row = Allowance.objects.create(person=person, leave_year=year, from_day=from_day,
-                                   annual_hours=Decimal(annual_hours).quantize(Decimal("0.01")),
-                                   bank_holiday_hours=Decimal(bank_holiday_hours).quantize(Decimal("0.01")),
-                                   weekly_hours=weekly_hours, days_per_week=days_per_week)
-    audit.record(actor, row, {"annual_hours": ("", str(row.annual_hours)), "bank_holiday_hours": ("", str(row.bank_holiday_hours)),
-                              "weekly_hours": ("", str(weekly_hours or "")), "days_per_week": ("", str(days_per_week or "")),
-                              "from_day": ("", from_day.isoformat())}, note=note.strip())
-    if from_day <= timezone.localdate() and not person.is_gp and weekly_hours is not None:
-        update_hours(actor, person, weekly_hours, days_per_week)
+    copy_now = from_day <= timezone.localdate() and not person.is_gp and weekly_hours is not None
+    with transaction.atomic():
+        row = Allowance.objects.create(person=person, leave_year=year, from_day=from_day,
+                                       annual_hours=Decimal(annual_hours).quantize(Decimal("0.01")),
+                                       bank_holiday_hours=Decimal(bank_holiday_hours).quantize(Decimal("0.01")),
+                                       weekly_hours=weekly_hours, days_per_week=days_per_week,
+                                       hours_applied=copy_now)
+        audit.record(actor, row, {"annual_hours": ("", str(row.annual_hours)), "bank_holiday_hours": ("", str(row.bank_holiday_hours)),
+                                  "weekly_hours": ("", str(weekly_hours or "")), "days_per_week": ("", str(days_per_week or "")),
+                                  "from_day": ("", from_day.isoformat())}, note=note.strip())
+        if copy_now:
+            update_hours(actor, person, weekly_hours, days_per_week, note=note.strip())
     return row
 
 
 def apply_due_hours_changes(today=None):
-    """Copy the hours of every change whose day has come onto its person.
-    Run by hr_sync after each good run; returns how many people changed."""
+    """Copy each person's latest due hours change onto the person, once. A
+    change is due from its day and is marked hours_applied when copied, so
+    a manager's later edit to the profile is not overwritten by the next
+    sync. Run by hr_sync after each good run; returns how many people changed."""
     today = today or timezone.localdate()
+    due = {}
+    for row in (Allowance.objects.filter(from_day__lte=today, weekly_hours__isnull=False, hours_applied=False)
+                .select_related("person").order_by("from_day", "pk")):
+        due.setdefault(row.person_id, []).append(row)
     changed = 0
-    rows = (Allowance.objects.filter(from_day__lte=today, weekly_hours__isnull=False)
-            .exclude(from_day=models.F("leave_year")).select_related("person").order_by("person_id", "-from_day"))
-    seen = set()
-    for row in rows:
-        if row.person_id in seen or row.person.is_gp:
+    for rows in due.values():
+        latest = rows[-1]
+        person = latest.person
+        if person.is_gp:
             continue
-        seen.add(row.person_id)
-        latest = row_in_force_for_hours(row.person, today)
-        if latest is None:
-            continue
-        p = row.person
-        if p.weekly_hours != latest.weekly_hours or p.days_per_week != latest.days_per_week:
-            update_hours(None, p, latest.weekly_hours, latest.days_per_week, note="hours change due")
-            changed += 1
+        with transaction.atomic():
+            if person.weekly_hours != latest.weekly_hours or person.days_per_week != latest.days_per_week:
+                update_hours(None, person, latest.weekly_hours, latest.days_per_week, note="hours change due")
+                changed += 1
+            Allowance.objects.filter(pk__in=[r.pk for r in rows]).update(hours_applied=True)
     return changed
-
-
-def row_in_force_for_hours(person, day):
-    """The latest row on or before `day` that carries hours (a change row); the
-    year's first row carries none, so a person whose only rows are first rows
-    answers None and keeps the profile's figures."""
-    return (Allowance.objects.filter(person=person, leave_year=years.year_of(person, day), from_day__lte=day,
-                                     weekly_hours__isnull=False).order_by("-from_day").first())
