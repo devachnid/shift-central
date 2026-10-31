@@ -4,6 +4,7 @@ on the page one chooses carry all, lose all or carry part (and keep or
 lose TOIL), and the choice is written as Adjustments in the new year with
 the reason the statement then shows."""
 
+import logging
 from datetime import timedelta
 
 from django.core.exceptions import PermissionDenied
@@ -16,6 +17,8 @@ from leave.services.common import recipients
 from people.models import Person
 from people.services import access, audit
 
+log = logging.getLogger("leave.yearend")
+
 OPEN_WINDOW = timedelta(days=31)
 
 
@@ -27,23 +30,33 @@ def open_due(today=None):
     today = today or timezone.localdate()
     opened = []
     for person in Person.objects.current(on=today).order_by("pk"):
-        year = years.year_of(person, today)
-        if today - year > OPEN_WINDOW:
+        try:
+            row = _open_one(person, today)
+        except Exception:
+            log.exception("year end: person %s", person.pk)
             continue
-        ended = years.previous_year(year)
-        if YearEnd.objects.filter(person=person, year_ended=ended).exists():
-            continue
-        s = balances.statement(person, ended)
-        if s.missing:
-            continue
-        row = YearEnd(person=person, year_ended=ended, annual_remaining=s.annual_remaining, toil_remaining=s.toil_remaining)
-        if s.annual_remaining == 0 and s.toil_remaining <= 0:
-            row.decided_at, row.note = timezone.now(), "nothing left"
-            row.annual_carried = row.annual_lost = row.toil_lost = 0
-        row.save()
-        if not row.decided:
+        if row is not None and not row.decided:
             opened.append(row)
     return opened
+
+
+def _open_one(person, today):
+    """The row opened for this person today, or None when none is due."""
+    year = years.year_of(person, today)
+    if today - year > OPEN_WINDOW:
+        return None
+    ended = years.previous_year(year)
+    if YearEnd.objects.filter(person=person, year_ended=ended).exists():
+        return None
+    s = balances.statement(person, ended)
+    if s.missing:
+        return None
+    row = YearEnd(person=person, year_ended=ended, annual_remaining=s.annual_remaining, toil_remaining=s.toil_remaining)
+    if s.annual_remaining == 0 and s.toil_remaining <= 0:
+        row.decided_at, row.note = timezone.now(), "nothing left"
+        row.annual_carried = row.annual_lost = row.toil_lost = 0
+    row.save()
+    return row
 
 
 def notify_opened(rows, base_url=""):
@@ -60,8 +73,10 @@ def notify_opened(rows, base_url=""):
 
 def run(today=None, base_url=""):
     rows = open_due(today)
-    if rows:
-        notify_opened(rows, base_url)
+    # Rows saved by an earlier run that never got as far as the email are sent now.
+    pending = list(YearEnd.objects.filter(decided_at__isnull=True, notified_at__isnull=True).select_related("person__team"))
+    if pending:
+        notify_opened(pending, base_url)
     return len(rows)
 
 

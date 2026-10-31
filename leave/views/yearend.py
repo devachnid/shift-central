@@ -14,19 +14,19 @@ from people.services import access
 REFRESH = {"refresh": True}
 
 
-def _row(r):
-    return {"row": r, "label": years.label(r.year_ended), "long": yearend.long_absence(r), "over": r.annual_remaining < 0}
+def _row(r, with_long=True):
+    return {"row": r, "label": years.label(r.year_ended), "long": with_long and yearend.long_absence(r), "over": r.annual_remaining < 0}
 
 
 @login_required
 @access.manager_required
 def index(request):
     people = access.managed_people(request.user)
-    decided = (YearEnd.objects.filter(person__in=people, decided_at__isnull=False).exclude(note="nothing left")
+    decided = (YearEnd.objects.filter(person__in=people, decided_at__isnull=False).exclude(decided_by__isnull=True)       # the auto-closed "nothing left" rows
                .select_related("person__team", "decided_by").order_by("-decided_at")[:200])
     return render(request, "leave/year_end.html", {
         "page_title": "Year end", "open": [_row(r) for r in yearend.open_rows(request.user)],
-        "decided": [_row(r) for r in decided]})
+        "decided": [_row(r, with_long=False) for r in decided]})
 
 
 @login_required

@@ -128,6 +128,39 @@ def test_nothing_left_closes_at_once_and_a_missing_year_opens_nothing(boss):
     assert not YearEnd.objects.filter(person__first_name="New").exists()
 
 
+def test_a_row_never_emailed_is_sent_by_the_next_run_and_one_failure_stops_nobody(boss, sam, monkeypatch):
+    stranded = YearEnd.objects.create(person=make_person(first_name="Strand"), year_ended=Y27, annual_remaining=h("4"))
+    assert stranded.notified_at is None
+    assert yearend.run(today=J3) == 1                                         # Sam's row is the one opened today
+    stranded.refresh_from_db()
+    assert stranded.notified_at is not None
+    assert "Strand" in mail.outbox[-1].body and "Sam Patel" in mail.outbox[-1].body
+    n = len(mail.outbox)
+    assert yearend.run(today=J3) == 0 and len(mail.outbox) == n               # each is sent once
+
+    YearEnd.objects.all().delete()
+    real = balances.statement
+
+    def flaky(person, year):
+        if person == sam:
+            raise RuntimeError("broken")
+        return real(person, year)
+
+    other = make_person(first_name="Zed", start_date=date(2020, 1, 6), weekly_hours=Decimal("37.5"), days_per_week=5)
+    make_allowance(other, Y27, Decimal("7.5"), 0)
+    monkeypatch.setattr(balances, "statement", flaky)
+    assert [r.person for r in yearend.open_due(today=J3)] == [other]          # Sam fails, Zed after her still opens
+
+
+def test_a_manager_typing_nothing_left_does_not_hide_the_row(boss):
+    p = make_person(first_name="Typed")
+    row = YearEnd.objects.create(person=p, year_ended=Y27, annual_remaining=h("5"))
+    yearend.decide(boss.user, row, h("5"), note="nothing left")
+    c = Client()
+    c.force_login(boss.user)
+    assert "Typed" in c.get("/time-off/year-end/").content.decode().split("<h2>Decided</h2>")[1]
+
+
 def test_a_leave_year_starting_in_april_opens_in_april_and_the_window_is_a_month():
     sam = make_person(first_name="Sam", start_date=date(2020, 1, 6), weekly_hours=Decimal("37.5"), days_per_week=5, leave_year_start="04-01")
     make_allowance(sam, date(2027, 4, 1), Decimal("100"), 0)
@@ -177,7 +210,8 @@ def test_the_page_and_the_dialog(boss, sam, today):
     assert r.json() == {"refresh": True}
     row.refresh_from_db()
     assert row.annual_carried == h("10")
-    assert "Decided" in c.get("/time-off/year-end/").content.decode()
+    decided = c.get("/time-off/year-end/").content.decode().split("<h2>Decided</h2>")[1]
+    assert "Sam Patel" in decided and "10 h" in decided
     staff = Client()
     staff.force_login(sam.user)
     assert staff.get("/time-off/year-end/").status_code == 403
