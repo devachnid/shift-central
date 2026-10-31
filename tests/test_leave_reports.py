@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from leave.models import BankHoliday, Blackout, Booking, LeaveSetting, LeaveType
 from leave.services import adjustments, bookings
+from people.services import health
 from tests.factories import make_allowance, make_entry, make_person, make_team, make_team_manager, make_type, make_user_for
 
 pytestmark = pytest.mark.django_db
@@ -68,37 +69,6 @@ def test_the_leave_report_is_per_person_with_team_subtotals_and_a_csv(sam, lead)
     assert "Sam Patel" in body and "Lead Patel" not in body
 
 
-def test_the_planner_marks_pending_and_bank_holidays_and_hides_what_is_not_live(sam, lead):
-    holiday = make_type("Holiday")
-    bookings.request(sam.user, sam, holiday, MON, MON, "whole")
-    declined = bookings.request(sam.user, sam, holiday, TUE, TUE, "whole")
-    bookings.decline(lead.user, declined)
-    body = _client(lead).get("/time-off/planner/?year=2027").content.decode()
-    assert body.count("planner-chip is-pending") == 1 and body.count('title="Sam Patel · Holiday"') == 1
-    assert 'is-holiday" title="Good Friday"' in body          # 26 March 2027, seeded
-    assert _client(lead).get("/time-off/planner/?year=banana").status_code == 200
-    assert _client(lead).get("/time-off/planner/?year=99999").status_code == 200
-
-
-def test_a_member_of_staff_who_may_not_see_colleagues_sees_only_their_own_leave(sam, lead):
-    bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
-    nina = make_person(first_name="Nina", team=lead.team, can_see_other_staff=False)
-    assert "SP" not in _client(nina).get("/time-off/planner/?year=2027").content.decode().split('class="planner"')[1]
-
-
-def test_the_leave_report_defaults_to_the_leave_year_and_writes_names_safely(sam, lead):
-    sam.leave_year_start = "04-01"
-    sam.save()
-    me = make_person(first_name="=Eve", team=lead.team, leave_year_start="04-01")
-    assert me.name == "=Eve Patel"
-    r = _client(me).get("/reports/leave/")
-    year = timezone.localdate()
-    start = date(year.year if year >= date(year.year, 4, 1) else year.year - 1, 4, 1)
-    assert f'name="from" value="{start.isoformat()}"' in r.content.decode()
-    row = _client(me).get("/reports/leave/?download=1").content.decode().splitlines()[1]
-    assert row.startswith("'=Eve Patel,")
-
-
 def test_bank_holidays_page_lists_adds_and_books_for_everyone(sam, lead, team):
     c = _client(lead)
     body = c.get("/time-off/bank-holidays/?year=2027").content.decode()
@@ -151,6 +121,50 @@ def test_leave_settings_page(lead):
     c = _client(lead)
     assert c.post("/settings/leave/", {"reminder_working_days": "5"}).status_code == 200
     assert LeaveSetting.objects.get().reminder_working_days == 5
+
+
+def test_health_card_counts_requests_waiting_placeholders_and_negative_balances(sam, lead, monkeypatch):
+    monkeypatch.setattr(timezone, "localdate", lambda: date(2027, 2, 1))     # the figures are "this leave year"; pin it
+    bookings.request(sam.user, sam, make_type("Holiday"), MON, MON, "whole")
+    bookings.book(lead.user, sam, make_type("Holiday"), date(2027, 8, 11), date(2027, 8, 11), "whole")
+    adjustments.add(lead.user, sam, Y27, "annual", -(300 * 3600), "test")
+    f = health.figures(lead.user)
+    assert f["waiting"] == 1 and len(f["placeholders"]) == 1 and [p.pk for p in f["negative"]] == [sam.pk]
+    body = _client(lead).get("/staff/").content.decode()
+    assert "Requests waiting" in body and "Leave costs to check" in body and "Negative leave balances" in body
+
+
+# --- what the first tests do not reach --------------------------------------
+
+def test_the_planner_marks_pending_and_bank_holidays_and_hides_what_is_not_live(sam, lead):
+    holiday = make_type("Holiday")
+    bookings.request(sam.user, sam, holiday, MON, MON, "whole")
+    declined = bookings.request(sam.user, sam, holiday, TUE, TUE, "whole")
+    bookings.decline(lead.user, declined)
+    body = _client(lead).get("/time-off/planner/?year=2027").content.decode()
+    assert body.count("planner-chip is-pending") == 1 and body.count('title="Sam Patel · Holiday"') == 1
+    assert 'is-holiday" title="Good Friday"' in body          # 26 March 2027, seeded
+    assert _client(lead).get("/time-off/planner/?year=banana").status_code == 200
+    assert _client(lead).get("/time-off/planner/?year=99999").status_code == 200
+
+
+def test_a_member_of_staff_who_may_not_see_colleagues_sees_only_their_own_leave(sam, lead):
+    bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    nina = make_person(first_name="Nina", team=lead.team, can_see_other_staff=False)
+    assert "SP" not in _client(nina).get("/time-off/planner/?year=2027").content.decode().split('class="planner"')[1]
+
+
+def test_the_leave_report_defaults_to_the_leave_year_and_writes_names_safely(sam, lead):
+    sam.leave_year_start = "04-01"
+    sam.save()
+    me = make_person(first_name="=Eve", team=lead.team, leave_year_start="04-01")
+    assert me.name == "=Eve Patel"
+    r = _client(me).get("/reports/leave/")
+    year = timezone.localdate()
+    start = date(year.year if year >= date(year.year, 4, 1) else year.year - 1, 4, 1)
+    assert f'name="from" value="{start.isoformat()}"' in r.content.decode()
+    row = _client(me).get("/reports/leave/?download=1").content.decode().splitlines()[1]
+    assert row.startswith("'=Eve Patel,")
 
 
 def test_bank_holidays_page_refuses_staff_and_unknown_days_and_deletes(sam, lead):
@@ -251,3 +265,25 @@ def test_the_nav_links_all_resolve(lead, sam):
     c = _client(lead)
     for url in ("/time-off/planner/", "/time-off/bank-holidays/", "/time-off/blackouts/", "/reports/leave/", "/settings/leave-types/", "/settings/leave/"):
         assert c.get(url).status_code == 200, url
+
+
+def test_health_leaves_out_the_managers_own_request_and_dates_a_cancellation_by_its_request(sam, lead, monkeypatch):
+    monkeypatch.setattr(timezone, "localdate", lambda: date(2027, 2, 1))
+    holiday = make_type("Holiday")
+    mine = bookings.request(lead.user, lead, holiday, date(2027, 6, 7), date(2027, 6, 7), "whole")
+    assert health.figures(lead.user)["waiting"] == 0         # another manager decides that one
+    assert mine.status == "pending"
+    old = bookings.book(lead.user, sam, holiday, date(2027, 6, 8), date(2027, 6, 8), "whole")
+    bookings.request_cancel(sam.user, old)
+    Booking.objects.filter(pk=old.pk).update(requested_at=timezone.now() - timedelta(days=90),
+                                             cancel_requested_at=timezone.now() - timedelta(days=2))
+    f = health.figures(lead.user)
+    assert f["waiting"] == 1 and f["waiting_oldest_days"] == 2
+
+
+def test_the_health_card_does_not_show_other_teams_leave(sam, lead, monkeypatch):
+    monkeypatch.setattr(timezone, "localdate", lambda: date(2027, 2, 1))
+    other = make_person(first_name="Olly", team=make_team("Nursing"), start_date=date(2020, 1, 6))
+    bookings.request(make_user_for(other) and other.user, other, make_type("Holiday"), MON, MON, "whole")
+    f = health.figures(lead.user)
+    assert f["waiting"] == 0 and f["placeholders"] == [] and f["negative"] == []
