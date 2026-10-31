@@ -36,10 +36,10 @@ def test_team_managers_see_departments_and_the_activity_log_not_login_logs():
 
 def test_all_teams_managers_see_everything_in_this_release():
     body = _client_for(make_person(), is_all_teams_manager=True).get("/staff/").content.decode()
-    for item in ("rota", "staff", "departments", "activity", "reports"):
+    for item in ("rota", "time-off", "staff", "departments", "activity", "reports", "settings"):
         assert f'data-nav="{item}"' in body
     assert 'href="/activity/logins/"' in body
-    for later in ("time-off", "messages", "settings"):
+    for later in ("messages",):
         assert f'data-nav="{later}"' not in body, "later specs add their items"
 
 

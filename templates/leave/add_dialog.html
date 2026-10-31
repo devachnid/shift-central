@@ -1,0 +1,31 @@
+{% extends "ui/_dialog.html" %}
+{% load leave_extras %}
+{% block dialog_title %}{{ title|default:"Time off" }}{% endblock %}
+{% block dialog_body %}
+{% if pending_own %}<p class="flash flash-warning" {% if refresh %}data-dialog-refresh{% endif %}>Your own leave will wait for another manager to approve it. The request has been sent.</p>{% else %}
+<form method="post" action="{% if booking %}{% url 'time-off-edit' booking.pk %}{% else %}{% url 'time-off-add' %}{% endif %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  {% if preview.error %}<p class="flash flash-error">{{ preview.error }}</p>{% endif %}
+  <div class="field{% if form.person.errors %} has-error{% endif %}"><label for="id_person">Staff member</label>{{ form.person }}{% for e in form.person.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  <div class="field{% if form.type.errors %} has-error{% endif %}"><label for="id_type">Type of time off</label>{{ form.type }}{% for e in form.type.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  <div class="field"><label for="id_description">Display</label>{{ form.description }}<span class="field-help">Shown instead of the type's name, for this booking only</span></div>
+  <div class="field-row">
+    <div class="field{% if form.first_day.errors %} has-error{% endif %}"><label for="id_first_day">First day off</label>{{ form.first_day }}{% for e in form.first_day.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+    <div class="field{% if form.last_day.errors %} has-error{% endif %}"><label for="id_last_day">Last day off</label>{{ form.last_day }}{% for e in form.last_day.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  </div>
+  <div class="field"><label for="id_part">Days to include</label>{{ form.part }}{% for e in form.part.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  <div class="field-row">
+    <div class="field"><label for="id_start">Start</label>{{ form.start }}</div>
+    <div class="field"><label for="id_finish">Finish</label>{{ form.finish }}{% for e in form.finish.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  </div>
+  <input type="hidden" name="preview" value="1">
+  {% include "leave/_preview.html" with editable=True %}
+  <details class="advanced"><summary>Advanced</summary>
+    {% if form.paid %}<div class="field"><label for="id_paid">Paid or unpaid</label>{{ form.paid }}</div>{% endif %}
+    {% if not booking %}<div class="field"><label for="id_manager_note">Manager notes</label>{{ form.manager_note }}</div>{% endif %}
+  </details>
+  <button class="btn btn-dark" name="preview" value="">{% if booking %}Save changes{% else %}Add time off{% endif %}</button>
+</form>
+{% endif %}
+{% endblock %}

@@ -9,7 +9,7 @@
         <span class="nav-label">{{ item.label }}</span>
       </a>
       {% if item.children %}
-      <div class="nav-flyout">{% for child in item.children %}<a href="{{ child.url }}">{{ child.label }}</a>{% endfor %}</div>
+      <div class="nav-flyout">{% for child in item.children %}<a href="{{ child.url }}"{% if child.dialog %} data-dialog{% endif %}>{{ child.label }}</a>{% endfor %}</div>
       {% endif %}
     </div>
     {% endfor %}

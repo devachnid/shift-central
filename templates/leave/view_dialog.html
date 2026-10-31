@@ -1,0 +1,34 @@
+{% extends "ui/_dialog.html" %}
+{% load leave_extras %}
+{% block dialog_title %}Time off{% endblock %}
+{% block dialog_body %}
+<p><span class="leave-swatch" style="background:{{ b.type.colour }}"></span> <strong>{{ b.person.name }}</strong> · {{ b.type.name }}</p>
+<dl class="defs">
+  {% if detail and b.description %}<dt>Display</dt><dd>{{ b.description }}</dd>{% endif %}
+  <dt>First day off</dt><dd>{{ b.first_day|date:"D j M Y" }}</dd>
+  <dt>Last day off</dt><dd>{{ b.last_day|date:"D j M Y" }}</dd>
+  <dt>Days to include</dt><dd>{{ b.get_part_display }}{% if b.part == "times" %} {{ b.start|time:"H:i" }}–{{ b.finish|time:"H:i" }}{% endif %}</dd>
+  <dt>Status</dt><dd>{{ b.get_status_display }}</dd>
+  {% if b.decided_by %}<dt>Decided by</dt><dd>{{ b.decided_by.person.name|default:b.decided_by.email }}{% if b.decided_at %} · {{ b.decided_at|date:"j M Y" }}{% endif %}</dd>{% endif %}
+  {% if detail and b.paid is not None %}<dt>Pay</dt><dd>{% if b.paid %}Paid{% else %}Unpaid{% endif %}</dd>{% endif %}
+</dl>
+{% if detail and days %}
+<table class="table preview-table">
+  <thead><tr><th>Day</th><th>Allowance used</th><th></th></tr></thead>
+  <tbody>
+  {% for d in days %}<tr><td>{{ d.day|date:"D j M" }}</td><td>{{ d.cost_seconds|hm }}</td>
+    <td class="field-help">{% if d.source == "override" %}set by a manager{% if d.override_note %}: {{ d.override_note }}{% endif %}{% elif d.placeholder %}average day{% elif d.source == "none" %}no shift{% elif d.account == "bank_holiday" %}bank holiday allowance{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+  <tfoot><tr><td>Total</td><td>{{ total|hm }}</td><td></td></tr></tfoot>
+</table>
+{% endif %}
+{% if detail and b.staff_note %}<p><strong>Note:</strong> {{ b.staff_note }}</p>{% endif %}
+{% if detail and b.manager_note %}<p><strong>Manager notes:</strong> {{ b.manager_note }}</p>{% endif %}
+{% endblock %}
+{% block dialog_links %}
+{% if can_edit or can_cancel %}<div class="dialog-links">
+  {% if can_edit %}<a href="{% url 'time-off-edit' b.pk %}" data-dialog>Edit</a>{% endif %}
+  {% if can_cancel %}<a href="{% url 'time-off-cancel' b.pk %}" data-dialog>Cancel this time off</a>{% endif %}
+</div>{% endif %}
+{% endblock %}

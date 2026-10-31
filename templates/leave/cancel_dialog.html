@@ -1,0 +1,12 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}{% if manager %}Cancel time off{% else %}Ask to cancel time off{% endif %}{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% url 'time-off-cancel' b.pk %}" data-dialog-form>
+  {% csrf_token %}
+  <p><strong>{{ b.person.name }}</strong> · {{ b.label }} · {{ b.first_day|date:"j M Y" }}{% if b.last_day != b.first_day %} – {{ b.last_day|date:"j M Y" }}{% endif %}</p>
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  {% if not manager %}<p class="field-help">Your manager will be asked to approve the cancellation.</p>{% endif %}
+  <div class="field"><label for="id_note">Note</label>{{ form.note }}{% for e in form.note.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  <button class="btn btn-dark">{% if manager %}Cancel this time off{% else %}Ask to cancel{% endif %}</button>
+</form>
+{% endblock %}

@@ -10,15 +10,24 @@ def _items(request, role):
     path = request.path
     items = [{"key": "rota", "label": "Rota", "icon": "calendar", "url": "/rota/",
               "active": path.startswith("/rota/"),
-              "children": [{"label": "Who's in today", "url": "/rota/today/"}] if role != "staff" else []},
+              "children": ([{"label": "Who's in today", "url": "/rota/today/"}, {"label": "Time off…", "url": "/time-off/add/", "dialog": True}]
+                           if role != "staff" else [])},
              {"key": "staff", "label": "Staff", "icon": "people", "url": "/staff/",
               "active": path.startswith("/staff/"), "children": []}]
     if role != "staff":
         items.append({"key": "departments", "label": "Departments", "icon": "tag",
                       "url": "/departments/", "active": path.startswith("/departments/"),
                       "children": []})
+    leave_children = [{"label": "Requests", "url": "/time-off/"}, {"label": "My leave", "url": "/time-off/mine/"},
+                {"label": "Year planner", "url": "/time-off/planner/"}]
+    if role != "staff":
+        leave_children += [{"label": "Waiting for approval", "url": "/time-off/approve/"}, {"label": "Bank holidays", "url": "/time-off/bank-holidays/"},
+                     {"label": "Blackouts", "url": "/time-off/blackouts/"}]
+    items.insert(1, {"key": "time-off", "label": "Time off", "icon": "calendar-off", "url": "/time-off/",
+                     "active": path.startswith("/time-off/"), "children": leave_children})
     items.append({"key": "reports", "label": "Reports", "icon": "report", "url": "/reports/hours/",
-                  "active": path.startswith("/reports/"), "children": [{"label": "Hours", "url": "/reports/hours/"}]})
+                  "active": path.startswith("/reports/"),
+                  "children": [{"label": "Hours", "url": "/reports/hours/"}, {"label": "Leave", "url": "/reports/leave/"}]})
     if role != "staff":
         children = [{"label": "Activity log", "url": "/activity/"}]
         if role == "all":
@@ -26,6 +35,9 @@ def _items(request, role):
         items.append({"key": "activity", "label": "Activity logs", "icon": "history",
                       "url": "/activity/", "active": path.startswith("/activity/"),
                       "children": children})
+        items.append({"key": "settings", "label": "Settings", "icon": "settings", "url": "/settings/leave-types/",
+                      "active": path.startswith("/settings/"),
+                      "children": [{"label": "Leave types", "url": "/settings/leave-types/"}, {"label": "Leave settings", "url": "/settings/leave/"}]})
     return items
 
 
