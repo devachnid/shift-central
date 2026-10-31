@@ -168,7 +168,18 @@ def test_toil_is_a_running_balance_across_leave_years():
     assert (s.taken["toil"], s.adjustments["toil"]) == (0, 0)                  # nothing in 2027 itself
     assert (s.toil_taken, s.toil_adjustments) == (2 * 3600, 3600)
     assert s.toil_remaining == 5 * 3600 + 3600 - 2 * 3600
-    assert s.toil_available == s.toil_remaining
+    assert s.toil_available == s.toil_remaining and s.toil_pending == 0
+
+    # a pending TOIL request in 2026 still holds its hours back from a 2027 request
+    make_booking(sam, date(2026, 3, 3), type_name="TOIL", status="pending", part="times", start=time(9), finish=time(11))
+    s = balances.statement(sam, Y27)
+    assert s.toil_pending == 2 * 3600 and s.toil_available == s.toil_remaining - 2 * 3600
+    assert s.pending["toil"] == 0                                              # the 2027 share of it
+    texts = [(k, t, n) for k, t, n in s.lines if "TOIL" in t or k == "pending"]
+    assert ("adjustment", "TOIL adjustment TOIL brought in", 3600) in texts
+    assert ("booking", "Tue 3 Feb 2026: TOIL (TOIL)", -2 * 3600) in texts
+    assert ("pending", "Requested: TOIL 3 Mar 2026", -2 * 3600) in texts
+    assert [k for k, _, _ in s.lines].count("booking") == 1                    # listed once, not again in the year's lines
 
 
 def test_the_statement_lines_explain_every_figure():
