@@ -275,6 +275,9 @@ def _cut(booking, bd):
     elif entry is not None:
         bd.shortened_entry, bd.original_start, bd.original_finish = entry, s, f
         bd.save(update_fields=["shortened_entry", "original_start", "original_finish"])
+    elif bd.original_start is not None:        # no shift holds the leave now: forget the old one's times
+        bd.shortened_entry, bd.original_start, bd.original_finish = None, None, None
+        bd.save(update_fields=["shortened_entry", "original_start", "original_finish"])
 
 
 def _apply(booking):
@@ -375,6 +378,12 @@ def cancel(user, booking, note="", base_url=""):
 
 # --- edit, override, recost -----------------------------------------------
 
+def moves(booking, first, last, part, start, finish):
+    """Whether an edit changes the booking's days or times (and so is
+    checked as a booking is: dates, this leave year and the next, overlap)."""
+    return (first, last, part, start, finish) != (booking.first_day, booking.last_day, booking.part, booking.start, booking.finish)
+
+
 EDITABLE = ("type", "first", "last", "part", "start", "finish", "description", "paid")
 
 
@@ -395,7 +404,7 @@ def edit(user, booking, base_url="", costs=None, **fields):
         start = fields.get("start", fresh.start) if part == "times" else None
         finish = fields.get("finish", fresh.finish) if part == "times" else None
         relabel = (new_type.pk, first, last, part, start, finish) == (fresh.type_id, fresh.first_day, fresh.last_day, fresh.part, fresh.start, fresh.finish)
-        if not relabel:
+        if moves(fresh, first, last, part, start, finish):     # a type change on the same days is a correction, in any year
             _check_dates(fresh.person, first, last, part, start, finish)
             _check_overlap(fresh.person, first, last, exclude=fresh)
         before = describe(fresh)
