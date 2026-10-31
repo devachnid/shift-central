@@ -149,8 +149,10 @@ def test_only_a_manager_can_set_the_shift_behind_leave(sam, lead):
     c.force_login(sam.user)
     assert c.get(f"/rota/shift/{sam.pk}/{MON}/").status_code == 403
     assert c.post(f"/rota/shift/{sam.pk}/{MON}/", {"start": "08:00", "finish": "16:00", "break_minutes": "0"}).status_code == 403
-    other = make_person(first_name="Other", team=make_team("Admin"))
+    admin = make_team("Admin")
+    other = make_person(first_name="Other", team=admin)
     make_user_for(other)
+    make_team_manager(other, admin)             # a manager, but not Sam's
     c2 = Client()
     c2.force_login(other.user)
     assert c2.get(f"/rota/shift/{sam.pk}/{MON}/").status_code == 403
@@ -184,7 +186,82 @@ def test_a_cut_move_of_a_covered_day_leaves_both_days_alone(sam, lead):
     assert tue.covered_by is None and (tue.start, tue.finish) == (time(9), time(17))
 
 
+def test_find_and_replace_skips_a_day_off(sam, lead):
+    """S19: as clear and move do; the shift behind leave is set from its dialog."""
+    bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    result = entries.replace(lead.user, [(sam.pk, MON), (sam.pk, TUE)], "17:00", "16:00", False)
+    assert result.skipped == 1
+    mon, tue = Entry.objects.get(person=sam, day=MON), Entry.objects.get(person=sam, day=TUE)
+    assert mon.finish == time(17) and mon.covered_by is not None
+    assert tue.finish == time(16)
+
+
 def test_a_blank_typed_cell_on_a_covered_day_cannot_delete_the_hidden_shift(sam, lead):
     bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
     assert entries.set_cell_text(lead.user, sam, MON, "") == []
     assert Entry.objects.get(person=sam, day=MON).covered_by is not None
+
+
+# --- a timed booking and the shift set after it (S2, S3)
+
+def _timed(sam, lead, day):
+    return bookings.book(lead.user, sam, make_type("Holiday"), day, day, "times", start=time(14), finish=time(15, 30))
+
+
+def test_a_shift_set_after_timed_leave_in_an_empty_week_is_shortened_not_covered(sam, lead):
+    week = date(2027, 3, 15)
+    b = _timed(sam, lead, week)
+    entries.set_cell(lead.user, sam, week, [{"kind": "shift", "start": "09:00", "finish": "17:00", "break_minutes": 30}])
+    shift = Entry.objects.get(person=sam, day=week)
+    assert shift.covered_by_id is None and (shift.start, shift.finish) == (time(9), time(14))
+    bd = BookingDay.objects.get(booking=b)
+    assert bd.shortened_entry_id == shift.pk and (bd.original_start, bd.original_finish) == (time(9), time(17))
+    bookings.cancel(lead.user, b, "")
+    shift.refresh_from_db()
+    assert (shift.start, shift.finish) == (time(9), time(17)), "cancelling gives the shift back whole"
+
+
+def test_a_shift_that_is_the_timed_leave_is_covered_when_set_after_it(sam, lead):
+    week = date(2027, 3, 15)
+    b = _timed(sam, lead, week)
+    entries.set_cell(lead.user, sam, week, [{"kind": "shift", "start": "14:00", "finish": "15:30"}])
+    assert Entry.objects.get(person=sam, day=week).covered_by_id == BookingDay.objects.get(booking=b).pk
+
+
+def test_the_shift_dialog_on_a_timed_day_edits_the_shortened_shift(sam, lead):
+    b = _timed(sam, lead, MON)               # Sam's 09:00-17:00 is shortened to 09:00-14:00
+    shortened = Entry.objects.get(person=sam, day=MON)
+    c = Client()
+    c.force_login(lead.user)
+    body = c.get(f"/rota/shift/{sam.pk}/{MON}/").content.decode()
+    assert "Sam Patel has timed leave 14:00–15:30 this day. The shift you set here is shortened around it on the grid." in body
+    assert "stays hidden" not in body
+    assert 'value="09:00"' in body and 'value="14:00"' in body and "Update shift" in body
+    assert f"/rota/shift/{sam.pk}/{MON}/{shortened.pk}/" in body
+    r = c.post(f"/rota/shift/{sam.pk}/{MON}/", {"start": "08:00", "finish": "17:00", "break_minutes": "30", "overtime": ""})
+    assert r.json() == {"refresh": True}
+    rows = list(Entry.objects.filter(person=sam, day=MON))
+    assert len(rows) == 1, "the shift is edited, not a second one added"
+    assert (rows[0].start, rows[0].finish, rows[0].covered_by_id) == (time(8), time(14), None)
+    bd = BookingDay.objects.get(booking=b)
+    assert bd.shortened_entry_id == rows[0].pk and (bd.original_start, bd.original_finish) == (time(8), time(17))
+
+
+def test_saving_the_shortened_shift_unchanged_keeps_its_original_times(sam, lead):
+    b = _timed(sam, lead, MON)
+    c = Client()
+    c.force_login(lead.user)
+    c.post(f"/rota/shift/{sam.pk}/{MON}/", {"start": "09:00", "finish": "14:00", "break_minutes": "30", "overtime": "", "text": "x"})
+    row = Entry.objects.get(person=sam, day=MON)
+    assert (row.start, row.finish) == (time(9), time(14))
+    bd = BookingDay.objects.get(booking=b)
+    assert bd.shortened_entry_id == row.pk and (bd.original_start, bd.original_finish) == (time(9), time(17))
+
+
+def test_the_shift_dialog_on_a_timed_day_with_no_shift_adds_one(sam, lead):
+    week = date(2027, 3, 15)
+    _timed(sam, lead, week)
+    c = Client()
+    c.force_login(lead.user)
+    body = c.get(f"/rota/shift/{sam.pk}/{week}/").content.decode()
+    assert "has timed leave 14:00–15:30 this day" in body and "Add shift" in body

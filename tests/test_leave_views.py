@@ -368,3 +368,48 @@ def test_colleagues_filtering_by_cancellation_requested_see_nothing_of_others(sa
     nina = _client(make_person(first_name="Nina", team=team))
     assert "Sam Patel" not in _table(nina.get("/time-off/?status=cancel_requested"))
     assert "Sam Patel" in _table(_client(lead).get("/time-off/?status=cancel_requested"))
+
+
+# --- Edit opens with the per-day costs (S13)
+
+def test_edit_opens_with_each_days_cost_and_a_stored_figure_in_its_box(sam, lead):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, TUE, "whole", costs={TUE: 4 * 3600})
+    r = _client(lead).get(f"/time-off/{b.pk}/edit/")
+    body = r.content.decode()
+    assert f'name="cost_{MON}" value="" placeholder="7 h 30 min"' in body
+    assert f'name="cost_{TUE}" value="4:00"' in body and "set by a manager" in body
+    assert "Balance before <strong>232 h 30 min</strong>, after <strong>221 h</strong>" in body
+    assert "field-error" not in body and "flash-error" not in body
+
+
+def test_edit_of_a_pending_request_opens_with_its_costs_read_only(sam, lead):
+    b = bookings.request(sam.user, sam, make_type("Holiday"), MON, MON, "whole")
+    body = _client(lead).get(f"/time-off/{b.pk}/edit/").content.decode()
+    assert "7 h 30 min" in body and f'name="cost_{MON}"' not in body and "Costs can be set once the request is approved." in body
+
+
+# --- S20: no cost boxes on one's own leave; an archived type's booking can still be edited
+
+def test_the_add_dialog_has_no_cost_boxes_for_the_managers_own_leave(lead, sam):
+    lead.own_leave_without_approval = True
+    lead.save()
+    make_allowance(lead, Y27, Decimal("187.5"), 0)
+    c = _client(lead)
+    base = {"type": make_type("Holiday").pk, "first_day": MON, "last_day": MON, "part": "whole", "preview": "1"}
+    assert f'name="cost_{MON}"' not in c.post("/time-off/add/", {**base, "person": lead.pk}).content.decode()
+    assert f'name="cost_{MON}"' in c.post("/time-off/add/", {**base, "person": sam.pk}).content.decode()
+
+
+def test_a_booking_of_an_archived_type_can_have_its_dates_edited(sam, lead):
+    t = make_type("Old type", draws_from="none")
+    b = bookings.book(lead.user, sam, t, MON, MON, "whole")
+    t.archived = True
+    t.save()
+    c = _client(lead)
+    body = c.get(f"/time-off/{b.pk}/edit/").content.decode()
+    assert f'<option value="{t.pk}" selected>Old type</option>' in body
+    data = {"person": sam.pk, "type": t.pk, "first_day": MON, "last_day": TUE, "part": "whole"}
+    assert c.post(f"/time-off/{b.pk}/edit/", data).json() == {"refresh": True}
+    b.refresh_from_db()
+    assert b.last_day == TUE
+    assert f'<option value="{t.pk}"' not in c.get("/time-off/add/").content.decode(), "never offered for new leave"

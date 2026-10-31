@@ -51,9 +51,15 @@ def shift(request, person_pk, day, entry_pk=None):
     covered = leave_costing.active_day(person, day)
     entry = get_object_or_404(Entry, pk=entry_pk, person=person, day=day) if entry_pk else None
     if covered is not None and entry is None:
-        # A day of approved leave: the form sets the shift the person would have worked. It edits
-        # the first shift the leave covers, if any; saving re-costs a whole day (LEAVE-06).
-        entry = Entry.objects.filter(person=person, day=day, kind=Entry.Kind.SHIFT, covered_by=covered).order_by("position").first()
+        if covered.booking.part == "times":
+            # Timed leave: the form edits the visible shift the leave shortened, if any; saving
+            # cuts it around the leave again (bookings._relink).
+            entry = covered.shortened_entry
+        else:
+            # A whole or half day of leave: the form sets the shift the person would have worked
+            # behind it. It edits the first shift the leave covers, if any; saving re-costs a whole
+            # day (LEAVE-06).
+            entry = Entry.objects.filter(person=person, day=day, kind=Entry.Kind.SHIFT, covered_by=covered).order_by("position").first()
     if request.method == "POST":
         form = ShiftForm(request.POST)
         if form.is_valid():

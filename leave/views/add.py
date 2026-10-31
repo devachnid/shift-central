@@ -146,7 +146,17 @@ def add(request):
                 pass
         form = BookingForm(request.user, initial=initial)
         preview = {}
-    return render(request, "leave/add_dialog.html", {"form": form, "preview": preview, "title": "Time off", "can_type": True})
+    # A person's own leave is costed from the rota (book() drops typed figures for it): no boxes.
+    chosen = form.cleaned_data.get("person") if form.is_bound and hasattr(form, "cleaned_data") else form.initial.get("person")
+    can_type = not (chosen is not None and access.is_self(request.user, chosen))
+    return render(request, "leave/add_dialog.html", {"form": form, "preview": preview, "title": "Time off", "can_type": can_type})
+
+
+def _booking_data(booking):
+    return {"person": str(booking.person_id), "type": str(booking.type_id), "description": booking.description,
+            "first_day": booking.first_day.isoformat(), "last_day": booking.last_day.isoformat(), "part": booking.part,
+            "start": booking.start.strftime("%H:%M") if booking.start else "", "finish": booking.finish.strftime("%H:%M") if booking.finish else "",
+            "paid": {None: "unknown", True: "true", False: "false"}[booking.paid], "manager_note": ""}
 
 
 @login_required
@@ -156,7 +166,7 @@ def edit(request, pk):
     if not bookings.may_decide(request.user, booking):
         raise PermissionDenied
     if request.method == "POST":
-        form = BookingForm(request.user, request.POST, person=booking.person)
+        form = BookingForm(request.user, request.POST, person=booking.person, booking=booking)
         preview = _preview(form, booking, person=booking.person)
         if form.is_valid() and not request.POST.get("preview") and "error" not in preview:
             kw = form.booking_kwargs()
@@ -167,10 +177,9 @@ def edit(request, pk):
             except LeaveError as e:
                 form.add_error(None, e.message)
     else:
-        form = BookingForm(request.user, initial={"person": booking.person, "type": booking.type, "description": booking.description,
-                                                  "first_day": booking.first_day, "last_day": booking.last_day, "part": booking.part,
-                                                  "start": booking.start, "finish": booking.finish, "paid": booking.paid},
-                           person=booking.person)
-        preview = {}
+        # Bound from the booking, so the dialog opens with each day's cost (a
+        # manager's stored figure in its box) and the balance, as on a change.
+        form = BookingForm(request.user, _booking_data(booking), person=booking.person, booking=booking)
+        preview = _preview(form, booking, person=booking.person)
     return render(request, "leave/add_dialog.html", {"form": form, "preview": preview, "booking": booking, "title": "Edit time off",
                                                     "can_type": booking.is_active})

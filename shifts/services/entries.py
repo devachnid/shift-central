@@ -371,10 +371,14 @@ def replace(user, cells, find, replacement, match_case):
     people = _people(user, [p for p, _ in cells])
     pattern = re.compile(re.escape(find), 0 if match_case else re.IGNORECASE)
     offered = list(Department.objects.filter(archived=False))
+    from leave.services import costing as leave_costing   # local, for symmetry with _write
     changed = Changed()
     with transaction.atomic():
         for pk, day in cells:
             person = people[pk]
+            if leave_costing.active_day(person, day) is not None:
+                changed.skipped += 1   # a day off is skipped, as clear and move skip it: its hidden shift is not rewritten
+                continue
             old = list(Entry.objects.filter(person=person, day=day).select_related("department").order_by("position"))
             items, touched = [], False
             for e in old:

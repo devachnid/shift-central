@@ -106,13 +106,20 @@ def suggestion_for(person, day):
 
 # --- request and book -----------------------------------------------------
 
+def _paid_for(leave_type, paid):
+    """The paid flag a booking of the type carries: the manager's choice, or
+    the type's default when they left it at "—" (None), where the type
+    offers one; otherwise None, or False for a type that is always unpaid
+    (it says so itself, whatever it is called)."""
+    if leave_type.paid_choice:
+        return leave_type.default_paid if paid is None else bool(paid)
+    return None if leave_type.default_paid else False
+
+
 def _new(user, person, leave_type, first, last, part, start, finish, description, paid, note, status):
     if leave_type.archived:
         raise LeaveError("type", "That leave type is no longer in use")
-    if leave_type.paid_choice:
-        paid = leave_type.default_paid if paid is None else bool(paid)
-    else:
-        paid = None if leave_type.default_paid else False       # a type that is always unpaid says so itself, whatever it is called
+    paid = _paid_for(leave_type, paid)
     return Booking(person=person, type=leave_type, first_day=first, last_day=last, part=part, start=start, finish=finish,
                    description=(description or "").strip()[:80], paid=paid, status=status, requested_by=user,
                    staff_note=(note or "")[:300] if status == Booking.Status.PENDING else "",
@@ -156,7 +163,8 @@ def _type_costs(user, rows, costs, note):
     """A manager's typed figures become overrides on the booking's days (a
     typed figure is always an override, so a bank holiday day reads "bank
     holiday" even at the rota's cost). Returns the audit lines: a changed
-    figure, or the same figure that is now a manager's rather than the rota's."""
+    figure, or the same figure that is now a manager's rather than costed
+    (the rota, an average day, a half day)."""
     changes = {}
     for bd in rows:
         typed = (costs or {}).get(bd.day)
@@ -169,7 +177,7 @@ def _type_costs(user, rows, costs, note):
         if before != bd.cost_seconds:
             changes[f"cost {bd.day.isoformat()}"] = (hours.fmt(before), hours.fmt(bd.cost_seconds))
         elif was != BookingDay.Source.OVERRIDE:
-            changes[f"cost {bd.day.isoformat()}"] = (f"{hours.fmt(before)} (rota)", f"{hours.fmt(before)} (override)")
+            changes[f"cost {bd.day.isoformat()}"] = (f"{hours.fmt(before)} ({BookingDay.Source(was).label.lower()})", f"{hours.fmt(before)} (override)")
     return changes
 
 
@@ -255,6 +263,20 @@ def _shorten(booking, day):
     return None, None, None
 
 
+def _cut(booking, bd):
+    """Cover or shorten the day's shift around a timed booking and record it
+    on the BookingDay, as booking it does."""
+    entry, s, f = _shorten(booking, bd.day)
+    if entry is not None and s is None:
+        Entry.objects.filter(pk=entry.pk).update(covered_by=bd)
+        if bd.original_start is not None:      # times left from a shift since deleted
+            bd.shortened_entry, bd.original_start, bd.original_finish = None, None, None
+            bd.save(update_fields=["shortened_entry", "original_start", "original_finish"])
+    elif entry is not None:
+        bd.shortened_entry, bd.original_start, bd.original_finish = entry, s, f
+        bd.save(update_fields=["shortened_entry", "original_start", "original_finish"])
+
+
 def _apply(booking):
     """Cost each day, write its BookingDay, cover or shorten the entries,
     record a DayChange where the day's text changes. Inside the caller's
@@ -265,12 +287,7 @@ def _apply(booking):
         c = costing.cost(booking.person, booking.type, day, booking.part, booking.start, booking.finish)
         bd = BookingDay.objects.create(booking=booking, day=day, cost_seconds=c.seconds, source=c.source, account=c.account, placeholder=c.placeholder)
         if booking.part == Booking.Part.TIMES:
-            entry, s, f = _shorten(booking, day)
-            if entry is not None and s is None:
-                Entry.objects.filter(pk=entry.pk).update(covered_by=bd)
-            elif entry is not None:
-                bd.shortened_entry, bd.original_start, bd.original_finish = entry, s, f
-                bd.save(update_fields=["shortened_entry", "original_start", "original_finish"])
+            _cut(booking, bd)
         else:
             Entry.objects.filter(person=booking.person, day=day, covered_by__isnull=True).update(covered_by=bd)
         if render.day_text(booking.person, day) != before:
@@ -311,6 +328,7 @@ def request_cancel(user, booking, note="", base_url=""):
             raise LeaveError("dates", "Leave in the past is cancelled by a manager")
         before = describe(fresh)
         fresh.status, fresh.cancel_requested_at, fresh.staff_note = Booking.Status.CANCEL_REQUESTED, timezone.now(), (note or "")[:300]
+        fresh.reminded_at = None          # a new wait: the request's reminder does not stand for it
         fresh.save()
         audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh))}, note="cancellation requested")
     booking.refresh_from_db()
@@ -392,8 +410,9 @@ def edit(user, booking, base_url="", costs=None, **fields):
                 kept = {bd.day: (bd.cost_seconds, bd.override_note, bd.override_by_id)
                         for bd in BookingDay.objects.filter(booking=fresh, source=BookingDay.Source.OVERRIDE)}
                 _undo(fresh)
+            type_changed = new_type.pk != fresh.type_id
             fresh.type, fresh.first_day, fresh.last_day, fresh.part, fresh.start, fresh.finish = new_type, first, last, part, start, finish
-            _set_labels(fresh, fields)
+            _set_labels(fresh, fields, type_changed)
             fresh.save()
             days = _apply(fresh) if was_active else []
             for bd in days:            # a manager's typed figure stands when the booking moves or grows
@@ -407,11 +426,11 @@ def edit(user, booking, base_url="", costs=None, **fields):
     _after_apply(fresh, days, base_url)
 
 
-def _set_labels(booking, fields):
+def _set_labels(booking, fields, type_changed=False):
     if "description" in fields:
         booking.description = (fields["description"] or "").strip()[:80]
-    if "paid" in fields and booking.type.paid_choice:
-        booking.paid = bool(fields["paid"])
+    if type_changed or ("paid" in fields and booking.type.paid_choice):
+        booking.paid = _paid_for(booking.type, fields.get("paid"))
 
 
 def override_day(user, booking_day, seconds, note):
@@ -436,21 +455,23 @@ def override_day(user, booking_day, seconds, note):
 def _relink(bd):
     """A grid rewrite deletes and recreates the day's rows, so a timed day
     loses its shortened entry (SET_NULL) or its covered one. Find the new row
-    again: the shortened span, or the shift the leave filled."""
+    again: a shift whose times are what the leave left of the shortened one
+    is that shift, kept with its original times. Otherwise the shift set now
+    is cut around the leave as booking it would (shortened, or covered when
+    the leave is the whole of it)."""
     booking = bd.booking
-    shifts = Entry.objects.filter(person=booking.person, day=bd.day, kind=Entry.Kind.SHIFT, covered_by__isnull=True).order_by("position")
-    if bd.original_start is None:
-        for e in shifts:
-            if e.start <= booking.start and e.finish >= booking.finish:
-                Entry.objects.filter(pk=e.pk).update(covered_by=bd)
-                return
-    elif bd.shortened_entry_id is None:
+    if Entry.objects.filter(covered_by=bd).exists():
+        return
+    if bd.original_start is not None:
+        if bd.shortened_entry_id is not None:
+            return
         left = _remaining(bd.original_start, bd.original_finish, booking.start, booking.finish)
-        for e in shifts:
+        for e in Entry.objects.filter(person=booking.person, day=bd.day, kind=Entry.Kind.SHIFT, covered_by__isnull=True).order_by("position"):
             if (e.start, e.finish) == left:
                 bd.shortened_entry = e
                 bd.save(update_fields=["shortened_entry"])
                 return
+    _cut(booking, bd)
 
 
 def recost(booking_day):

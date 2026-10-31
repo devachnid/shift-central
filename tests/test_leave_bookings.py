@@ -427,3 +427,59 @@ def test_toil_is_one_pool_whatever_the_year(lead):
     with pytest.raises(LeaveError) as e:
         bookings.request(pat.user, pat, toil, date(2026, 12, 31), date(2027, 1, 1), "whole")
     assert e.value.message == "This would take 15 h of TOIL and 4 h is available"
+
+
+# --- the paid flag follows the type when an edit changes it (S7)
+
+def test_changing_the_type_derives_paid_as_booking_it_would(sam, lead):
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    assert b.paid is None
+    bookings.edit(lead.user, b, type=make_type("Compassionate"), paid=None)      # "—": the type's default
+    b.refresh_from_db()
+    assert b.paid is True
+    bookings.edit(lead.user, b, type=make_type("Unpaid leave"), paid=True)
+    b.refresh_from_db()
+    assert b.paid is False, "a type that is always unpaid says so itself"
+    bookings.edit(lead.user, b, type=make_type("Holiday"))
+    b.refresh_from_db()
+    assert b.paid is None
+
+
+def test_the_edit_dialogs_dash_means_the_types_default(sam, lead):
+    from django.test import Client
+    b = bookings.book(lead.user, sam, make_type("Holiday"), MON, MON, "whole")
+    c = Client()
+    c.force_login(lead.user)
+    data = {"person": sam.pk, "type": make_type("Compassionate").pk, "first_day": MON, "last_day": MON, "part": "whole", "paid": "unknown"}
+    assert c.post(f"/time-off/{b.pk}/edit/", data).json() == {"refresh": True}
+    b.refresh_from_db()
+    assert b.paid is True
+    assert c.post(f"/time-off/{b.pk}/edit/", {**data, "paid": "false"}).json() == {"refresh": True}
+    b.refresh_from_db()
+    assert b.paid is False
+
+
+def test_a_cancellation_request_on_a_reminded_booking_is_reminded_too(sam, lead):
+    """S9: the request's reminder went out; the cancellation request is a new wait."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from leave.services import reminders
+    b = bookings.request(sam.user, sam, make_type("Holiday"), MON, MON, "whole")
+    assert reminders.send(timezone.now() + timedelta(days=7)) == 1
+    bookings.approve(lead.user, b)
+    bookings.request_cancel(sam.user, b, "plans changed")
+    b.refresh_from_db()
+    assert b.reminded_at is None
+    assert reminders.due(timezone.now() + timedelta(days=7)) == [b]
+
+
+def test_the_audit_of_a_typed_figure_names_where_the_figure_came_from(sam, lead):
+    """S18: an average day confirmed at its own figure says "average day", not "rota"."""
+    week = date(2027, 3, 15)
+    b = bookings.book(lead.user, sam, make_type("Holiday"), week, week, "whole")
+    assert BookingDay.objects.get(booking=b).source == "placeholder"
+    bookings.edit(lead.user, b, costs={week: 27000})
+    row = AuditEntry.objects.get(model="leave.booking", object_id=sam.pk, field=f"cost {week.isoformat()}")
+    assert (row.before, row.after) == ("7 h 30 min (average day)", "7 h 30 min (override)")

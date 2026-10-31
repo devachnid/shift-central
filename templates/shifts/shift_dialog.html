@@ -2,7 +2,9 @@
 {% block dialog_title %}{{ person.name }} · {{ day|date:"D j M Y" }}{% endblock %}
 {% block dialog_body %}
 {% if covered %}
-{% if covered.booking.part == "whole" and covered.source != "override" %}
+{% if covered.booking.part == "times" %}
+<p class="field-help">{{ person.name }} has timed leave {{ covered.booking.start|time:"H:i" }}–{{ covered.booking.finish|time:"H:i" }} this day. The shift you set here is shortened around it on the grid.</p>
+{% elif covered.booking.part == "whole" and covered.source != "override" %}
 <p class="field-help">{{ person.name }} is off this day ({{ covered.booking.type.name }}). The shift you set here is what they would have worked; it sets the leave's cost and stays hidden on the grid.</p>
 {% else %}
 <p class="field-help">{{ person.name }} is off this day ({{ covered.booking.type.name }}). A shift set here stays hidden on the grid; it does not change what this leave costs, which was set another way.</p>

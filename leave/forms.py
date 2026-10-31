@@ -60,9 +60,11 @@ class BookingForm(forms.Form):
     staff_note = forms.CharField(max_length=300, required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Note")
     manager_note = forms.CharField(max_length=300, required=False, widget=forms.Textarea(attrs={"rows": 2}), label="Manager notes")
 
-    def __init__(self, user, data=None, initial=None, person=None, staff=False):
+    def __init__(self, user, data=None, initial=None, person=None, staff=False, booking=None):
         super().__init__(data, initial=initial)
         self.user, self.staff = user, staff
+        if booking is not None:            # an edit keeps the booking's own type on offer, archived or not
+            self.fields["type"].queryset = LeaveType.objects.filter(Q(archived=False) | Q(pk=booking.type_id))
         if staff:
             del self.fields["person"], self.fields["manager_note"], self.fields["paid"]
             self.fields["type"].queryset = LeaveType.objects.filter(archived=False, requestable=True)
