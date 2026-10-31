@@ -87,6 +87,11 @@ Things that surprise people:
 booking's days with their costs, the bank holiday balance, what is remaining and what is available, and TOIL, with a
 **Leave year** box to switch between the previous, current and next leave years. Managers also get **Adjust…** and
 **Add hours change…** there. How to read it is in [Leave](leave.md#the-statement-and-how-to-read-it).
+Two lines come from the absence and payroll release. For anyone with a finish date the statement
+shows a leaver's line, "Leaves on 14 Oct 2026: 18 h 30 min of annual leave remaining" (or "… over"),
+the figure at the leaving date ([Leavers](absence.md#leavers)). And a sickness line, "Sickness: 4 instances in the
+last six months (Trigger 2)" or "Sickness: none in the last six months", which the person sees on their own
+statement and My leave too ([Recording sickness](absence.md#recording-sickness)).
 
 ## Typed here: the Notes tab
 

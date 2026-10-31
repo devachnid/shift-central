@@ -1,7 +1,7 @@
 # AMG Shift Central: absence and payroll — design
 
 **Date:** 2026-10-31
-**Status:** approved in conversation; not yet built
+**Status:** approved in conversation; built and reviewed, with the deviations recorded at the end
 **Requirements:** `docs/requirements/` as amended by
 `docs/requirements/2026-10-29-proposed-amendments.md`. This spec covers
 LEAVE-14, 21, 22, 24 (the year-end half), 28, 29, 30 (the payroll half)
@@ -681,3 +681,51 @@ factories plus `make_sick(person, first, last, dates_only=False)`.
 - The year-end flag assumes a person's leave year start does not change
   between the year ending and the flag opening; a change in that window
   opens the flag for the year as it then stands.
+
+## Deviations recorded during the build
+
+Rulings the controller made while Tasks 1 to 10 were built, grouped by task. Each is a departure from, or a settlement of, the spec's text.
+
+### Before the build (the plan's pre-flight)
+1. `leave/views/detail.py` computes `can_convert` from the booking's own fields rather than importing `absence.services.convert`: the spec forbids `leave` importing `absence`. `convert.eligible` exists for the absence views.
+2. The convert dialog's button reads "Convert to sickness".
+3. From a review bot's advisory findings on the spec, before the code was built: Mark as sent answers 400 to a missing or unreadable month (never a fallback; only the report page falls back); the converted booking's tail is re-booked with the original's typed figures as its overrides; the flags claim their row with a conditional update before sending; the trigger level is read inside the write's transaction.
+
+### Task 2: sickness rules
+4. The join-on rule never bridges a gap longer than seven calendar days (`sickness.MAX_GAP_DAYS`), whatever the rota says: a week with no rota would otherwise join everything.
+5. The trigger email is queued after the transaction commits (as every other leave email is), not inside it.
+6. A sickness booking on a day with no rota still raises the LEAVE-06 "Leave cost to check" email: a sick day costed as an average day reaches the payroll report, so the manager should check it.
+7. A dates-only booking's cancel sends no email (a manager correcting typed history), and `book(dates_only=True, costs=…)` is refused as `edit` refuses it.
+
+### Task 3: converting annual leave to sickness
+8. Convert applies to approved bookings only, not cancel-requested ones (edit refuses that status, so the link led to a dead end).
+9. The audit trail of a conversion is the edited booking's "converted to sickness" note plus the sickness booking's manager note "converted from …"; the tail and a whole-booking cancel audit with their fixed notes ("booked by a manager", "cancelled by a manager"). The person is emailed "Your time off has been changed" (a new email); a whole-booking conversion also sends the cancel email.
+
+### Task 4: the join-on warning, the past schedule section, the screens
+10. "Instances as at the range's end" is read as at the range's end or today, whichever is earlier: a window that runs into the future has no data. The leave report's Instances column and the sickness one-pager both do this.
+11. The Add dialog shows the extended entry's count while Extend is selected and the separate count otherwise.
+12. Extend is not offered when the joined entry is dates-only and the new entry includes today or later (edit would refuse the past-schedule rule); the warning shows and the entry is recorded separately.
+13. Extend keeps the existing entry's own notes and flags; what the manager typed for the new entry is dropped.
+14. The grid payload reads dates-only bookings by their dates (they have no costed days), so they show as tiles with no cost.
+
+### Task 5: the leaver and return flags
+15. An end date already in the past when it arrives is announced once as "[Name] left on D", with both flag fields set so no week reminder follows; "within a week" means today to today plus seven days.
+16. A person who first appears in HR's feed already carrying an end date is not flagged (no flood on first import); the Health card's leaving-soon line still lists them.
+17. "Back after N weeks" rounds to the nearest week, minimum one.
+
+### Task 6: the year-end flag
+18. Year-end rows saved but not yet emailed (`notified_at` null) are picked up by the next daily run; one person's failing statement does not stop the others.
+19. Auto-closed "nothing left" rows are those with no deciding user (`decided_by` null), not those with that note text.
+
+### Task 7: the export writers
+20. PDF headings pass through `xml.sax.saxutils.escape` (reportlab's Paragraph parses markup); Excel strings have control characters stripped and sheet titles the characters Excel refuses replaced.
+
+### Task 8: the payroll figures
+21. A half day's other half counts as hours worked: a half-day booking covers the whole shift on the grid (leave spec, section 4), so the uncovered remainder of each covered shift under an am/pm booking is added back to Worked.
+22. `mark_sent` sets `sent_at` explicitly rather than through the model default, so it follows the app's clock.
+
+### Task 9: the payroll page
+23. Mark as sent takes only a real `YYYY-MM` month (`report.month_strict`); the Corrections sheet writes leave days (not half-days), as the Payroll sheet does.
+
+### Task 10: the one-pagers
+24. The practice and team "Instances in range" on the sickness summary count bookings overlapping the range; the per-person column is the rolling six months as at the range's end or today. The two summaries' sheets carry hours as "7 h 30 min" text; the payroll sheet alone carries decimal hours.

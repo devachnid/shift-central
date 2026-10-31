@@ -60,9 +60,9 @@ early December 2026, so it is the dependency with a date.
    the fifteen [leave types](leave.md#leave-types) and the England and Wales bank
    holidays for 2026 and 2027. Run `deploy/manage collectstatic --noinput`
    before the first start, and enable the service and the two housekeeping timers
-   as the README shows. The units for both feeds and for the leave reminders are
-   copied then too; the feeds' timers are enabled in step 5, and the reminders'
-   once mail works (step 11).
+   as the README shows. The units for both feeds, the leave reminders and the daily flags are
+   copied then too; the feeds' timers are enabled in step 5, and the reminders' and the
+   daily flags' once mail works (step 11).
 
 4. **Create the superuser**: `deploy/manage createsuperuser`, with a long password.
    It is the break-glass account: it signs in at `/admin/` with a password even
@@ -118,36 +118,44 @@ early December 2026, so it is the dependency with a date.
     enable `shift-central-leave-reminders.timer`. Then, for the practice manager only,
     tick *Own leave needs no approval* under their Permissions link, and look over
     Settings › Leave types, Bank holidays and Leave settings; see [Leave](leave.md).
+    Then run `deploy/manage daily_flags` once (it prints three counts) and enable
+    `shift-central-daily-flags.timer`, which sends the leaver, return and year-end emails
+    at 08:25 every day; see [Absence and payroll](absence.md#the-daily-command).
 
 When the Health card shows the feed green, no one needing hours, and nobody in "not
 in the feed", the foundation is ready for the rota grid. Then lay the rotas out
 (see [the rota](rota.md)), and press **Notify staff** when each team's is ready.
 
-## Upgrading a box that runs the Foundation or the rota grid
+## Upgrading a box that runs an earlier release
 
 A server already running Shift Central takes the release like any other pull, plus the
-new settings and units. This is the checklist for the leave release, and it also
-carries a box from the Foundation through the rota grid's steps (6 and 8 are the
-GP sync's). In `/srv/shift-central`, as root:
+new settings and units. This is the checklist for the absence and payroll release, and it also
+carries a box from the Foundation, the rota grid or the leave release through their steps (6 and 8 are the
+GP sync's, 9 the leave reminders'). In `/srv/shift-central`, as root:
 
 1. `git pull`.
 2. `.venv/bin/pip install -r requirements.txt`. Only that file: `requirements-dev.txt`
-   is the browser test's (Playwright), and the server never needs it.
+   is the browser test's (Playwright), and the server never needs it. The absence and payroll
+   release adds `openpyxl` (the Excel files) and `reportlab` (the PDFs): both pure Python, so
+   nothing is compiled and no system package is needed.
 3. `deploy/manage migrate`. For leave it creates the `leave` tables and fills them: the
    fifteen leave types and the bank holidays for 2026 and 2027. It also adds the allowance
    periods (each existing allowance row gains the first day of its year as its start, and
    a place for weekly hours, days per week and "hours already copied", so every figure
    already typed stands as it was) and the column that lets a rota entry be covered by
    leave. A box from before the rota grid also gets the `shifts` and `messaging` tables and
-   the seventeen departments. Nothing existing is changed or removed.
-4. `deploy/manage collectstatic --noinput`, then `deploy/manage check --deploy`.
+   the seventeen departments. For absence and payroll it adds the two leave type flags (Sick
+   leave counts as sickness; Maternity and Adoption flag the return), dates-only bookings, the
+   year-end table, the leaver flag dates on each person and the payroll run table. Nothing existing
+   changes.
+4. `deploy/manage collectstatic --noinput` (it copies the PDF's logo), then `deploy/manage check --deploy`.
 5. **Add the new variables** to `/etc/shift-central.env`: `LEAVE_API_TOKENS` (a token for
    the GP rota app, made with `openssl rand -hex 32`; see go-live step 2), `ROTA_URL` and
    `ROTA_API_TOKEN` and the `EMAIL_*` values if they are not there yet (go-live steps 1
    and 2). `API_RATE_LIMIT_PER_MINUTE` is optional. Any can wait; see step 2 for what
    works without them.
 6. **Copy the units**: `cp deploy/shift-central-gp-sync.* deploy/shift-central-leave-reminders.*
-   /etc/systemd/system/`, and `cp deploy/gunicorn.service /etc/systemd/system/shift-central.service`
+   deploy/shift-central-daily-flags.* /etc/systemd/system/`, and `cp deploy/gunicorn.service /etc/systemd/system/shift-central.service`
    if it changed.
 7. `systemctl daemon-reload`, then `systemctl restart shift-central`.
 8. **Enable the GP timer only once `ROTA_URL` and `ROTA_API_TOKEN` are set**: run
@@ -160,7 +168,12 @@ GP sync's). In `/srv/shift-central`, as root:
    weekdays. Enabled earlier, each reminder is recorded as "mail not configured" and not sent,
    and the request counts as reminded, so it is not reminded again. With `EMAIL_*` unset, every
    other leave email is recorded the same way.
-10. **In the GP rota app**, on its own server. A box that ran its old FindMyShift reader first
+10. **Enable the daily flags timer once mail works**: run `deploy/manage daily_flags` once (it prints
+    three counts: leaver reminders, return flags and year-end flags) then
+    `systemctl enable --now shift-central-daily-flags.timer`. It runs at 08:25 every day. Enabled
+    before mail works, each leaver, return and year-end email is recorded as "mail not configured"
+    and counts as sent, so it is not sent again later. See [Absence and payroll](absence.md#the-daily-command).
+11. **In the GP rota app**, on its own server. A box that ran its old FindMyShift reader first
     has that timer disabled and removed: its guide's "Moving from FindMyShift" gives the commands
     (`rota-findmyshift.timer`). Then, as root in `/srv/rota`, pull the release. Set
     `SHIFT_CENTRAL_URL` (this box's address, `https`) and `SHIFT_CENTRAL_TOKEN` (one of the
@@ -211,7 +224,7 @@ migration that went wrong.
 
 From the box's own copy:
 
-    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer
+    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer shift-central-daily-flags.timer
     ls -l /var/lib/shift-central/backups
     cp -p /var/lib/shift-central/db.sqlite3 /root/db-before-restore.sqlite3
     install -o shift-central -g shift-central -m 600 /var/lib/shift-central/backups/db-<date>.sqlite3 /var/lib/shift-central/db.sqlite3
@@ -219,11 +232,12 @@ From the box's own copy:
     deploy/manage migrate
     systemctl start shift-central shift-central-hr-sync.timer
 
-Then start `shift-central-gp-sync.timer` and `shift-central-leave-reminders.timer` as well, but
-only the ones that were enabled (`systemctl is-enabled shift-central-gp-sync.timer
-shift-central-leave-reminders.timer` says): a timer started before its settings are in place
-fails every fifteen minutes (the GP sync) or marks requests as reminded when no mail can go
-(the reminders).
+Then start `shift-central-gp-sync.timer`, `shift-central-leave-reminders.timer` and
+`shift-central-daily-flags.timer` as well, but only the ones that were enabled (`systemctl
+is-enabled shift-central-gp-sync.timer shift-central-leave-reminders.timer
+shift-central-daily-flags.timer` says): a timer started before its settings are in place
+fails every fifteen minutes (the GP sync) or marks requests and flags as sent when no mail can go
+(the reminders and the daily flags).
 
 Stop first, and remove the old `-wal` and `-shm` files: otherwise SQLite replays a
 stale log into the restored file. `migrate` brings an older copy up to the current

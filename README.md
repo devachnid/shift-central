@@ -10,7 +10,7 @@ typed in twice.
 Built so far: the foundation (sign-in, people fed from Practice HR every
 fifteen minutes, teams, departments, who may manage whom, staff profiles with
 hours and leave allowances, the activity and log-in logs, and the Staff list's
-Health card), the rota grid release, and leave:
+Health card), the rota grid release, leave, and absence and payroll:
 
 - **The rota grid**: a spreadsheet-style grid of days and people that managers
   type shifts into, drag, copy, template, mark as overtime and print, with
@@ -32,10 +32,18 @@ Health card), the rota grid release, and leave:
 - **The leave feed**: approved GP leave is served to the GP rota app at
   `/api/v1/leave`, behind a bearer token (see "The leave feed" below). The rota app
   reads it every fifteen minutes in place of FindMyShift.
+- **Absence and payroll**: sickness as bookings of Sick leave, counted as instances over a
+  rolling six months with Trigger 1, 2 and 3+ (and the managers emailed when one is
+  reached), the join-on warning, long sickness and the return flag; converting holiday to
+  sickness; the past schedule section for 2026 sickness; the leaver, return and year-end
+  flags, emailed by `shift-central-daily-flags.timer`; the monthly payroll report with its
+  Excel, Mark as sent and the corrections to months already sent; and the sickness and
+  leave one-pagers as a page, a PDF or an Excel file.
 
-Sickness records, the payroll report, the leaver and year-end flags and the phone
-app's push notifications follow in later specs. Managers' guides:
-[docs/admin/leave.md](docs/admin/leave.md) and [docs/admin/rota.md](docs/admin/rota.md).
+Push notifications to the phone app, and the dashboard, shifts and staff-by-hour reports,
+follow in later specs (push notifications and the reports are spec 5's). Managers' guides:
+[docs/admin/absence.md](docs/admin/absence.md), [docs/admin/leave.md](docs/admin/leave.md)
+and [docs/admin/rota.md](docs/admin/rota.md).
 
 The practice manager's requirements, approved on 29 October 2026, are in
 [docs/requirements/](docs/requirements/README.md): thirteen documents from
@@ -45,6 +53,8 @@ become the leave calculation's tests. The foundation's design is in
 [docs/superpowers/specs/2026-10-29-foundation-design.md](docs/superpowers/specs/2026-10-29-foundation-design.md)
 and the leave release's, with the deviations recorded while it was built, in
 [docs/superpowers/specs/2026-10-31-leave-design.md](docs/superpowers/specs/2026-10-31-leave-design.md);
+the absence and payroll release's, with its deviations, in
+[docs/superpowers/specs/2026-10-31-absence-payroll-design.md](docs/superpowers/specs/2026-10-31-absence-payroll-design.md);
 later specs and the plans go in `docs/superpowers/specs/` and
 `docs/superpowers/plans/`, as in the rota and HR repositories.
 
@@ -65,6 +75,10 @@ The browser tests (the grid, and booking and cancelling leave from its menu, dri
 out of `requirements.txt` so the VPS never installs them), then
 `python -m playwright install chromium`, then `E2E=1 python -m pytest -q tests/e2e`.
 Where Chromium is already installed elsewhere, set `E2E_CHROMIUM` to its path.
+
+The payroll and one-pager downloads use two libraries, `openpyxl` (Excel) and `reportlab`
+(PDF). Both are pure Python and installed from `requirements.txt`, so a server needs no
+system package for them.
 
 `DEBUG=1` is what lets `manage.py` start on a box with no `SECRET_KEY` in the
 environment. It then uses a key of this checkout's own, generated once into the
@@ -234,7 +248,7 @@ Then:
     deploy/manage migrate
     deploy/manage createsuperuser
     cp deploy/gunicorn.service /etc/systemd/system/shift-central.service
-    cp deploy/shift-central-backup.* deploy/shift-central-clearsessions.* deploy/shift-central-hr-sync.* deploy/shift-central-gp-sync.* deploy/shift-central-leave-reminders.* /etc/systemd/system/
+    cp deploy/shift-central-backup.* deploy/shift-central-clearsessions.* deploy/shift-central-hr-sync.* deploy/shift-central-gp-sync.* deploy/shift-central-leave-reminders.* deploy/shift-central-daily-flags.* /etc/systemd/system/
     systemctl daemon-reload
     systemctl enable --now shift-central shift-central-backup.timer shift-central-clearsessions.timer
     deploy/manage hr_sync
@@ -254,9 +268,12 @@ message delivered):
 
     deploy/manage leave_reminders
     systemctl enable --now shift-central-leave-reminders.timer
+    deploy/manage daily_flags
+    systemctl enable --now shift-central-daily-flags.timer
 
 Enabled before that, each reminder is recorded as "mail not configured" and not
-sent, and the request counts as reminded, so it is not reminded again.
+sent, and the request counts as reminded, so it is not reminded again; the daily
+flags (leavers, returns, the year end) are claimed the same way.
 
 **Run every management command through `deploy/manage`**, as root:
 `deploy/manage createsuperuser`, `deploy/manage check --deploy`, `deploy/manage
@@ -318,7 +335,10 @@ later and sign-in stops until all three agree.
 the quarter hour (so the two never coincide),
 `shift-central-leave-reminders.timer` runs `leave_reminders` at 08:20 on weekdays
 (it emails the managers about leave requests left waiting longer than the Leave
-settings page allows, once per request), and
+settings page allows, once per request),
+`shift-central-daily-flags.timer` runs `daily_flags` at 08:25 every day (the leaver
+reminder a week out, the return from a long absence and the year-end flag, each
+emailed to the managers once), and
 `shift-central-clearsessions.timer` clears expired sessions nightly (a session
 lasts ten minutes from the last request, and each sign-in leaves a row).
 
@@ -454,7 +474,7 @@ plaintext. It is optional: a host without it still backs up locally.
 
 From the box's own copy (the usual case: a bad deploy or a mistaken change):
 
-    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer
+    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer shift-central-daily-flags.timer
     ls -l /var/lib/shift-central/backups
     cp -p /var/lib/shift-central/db.sqlite3 /root/db-before-restore.sqlite3
     install -o shift-central -g shift-central -m 600 /var/lib/shift-central/backups/db-<date>.sqlite3 /var/lib/shift-central/db.sqlite3
@@ -462,11 +482,12 @@ From the box's own copy (the usual case: a bad deploy or a mistaken change):
     deploy/manage migrate
     systemctl start shift-central shift-central-hr-sync.timer
 
-Then start `shift-central-gp-sync.timer` and `shift-central-leave-reminders.timer` as well, but
-only the ones that were enabled (`systemctl is-enabled shift-central-gp-sync.timer
-shift-central-leave-reminders.timer` says): a timer started before its settings are in place
-fails every fifteen minutes (the GP sync) or marks requests as reminded when no mail can go
-(the reminders).
+Then start `shift-central-gp-sync.timer`, `shift-central-leave-reminders.timer` and
+`shift-central-daily-flags.timer` as well, but only the ones that were enabled (`systemctl
+is-enabled shift-central-gp-sync.timer shift-central-leave-reminders.timer
+shift-central-daily-flags.timer` says): a timer started before its settings are in place
+fails every fifteen minutes (the GP sync) or marks requests and flags as sent when no mail can go
+(the reminders and the daily flags).
 
 Stopping first matters: a copy dropped under a running app leaves the old
 `-wal` file beside it, and SQLite would replay it into the restored database.
