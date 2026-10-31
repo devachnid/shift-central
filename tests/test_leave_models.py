@@ -48,7 +48,7 @@ def test_bank_holidays_for_2026_and_2027_are_seeded():
     assert BankHoliday.objects.filter(day__year=2026).count() == 8
     assert BankHoliday.objects.get(day=date(2026, 12, 28)).name == "Boxing Day (substitute day)"
     assert BankHoliday.objects.filter(day__year=2027).count() == 8
-    assert BankHoliday.objects.filter(day=date(2027, 4, 2)).exists()
+    assert BankHoliday.objects.filter(day=date(2027, 3, 26)).exists()
 
 
 def test_a_booking_is_whole_days_unless_it_is_one_day():

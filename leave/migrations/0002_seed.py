@@ -24,7 +24,7 @@ TYPES = [
 BANK_HOLIDAYS = {
     2026: [("01-01", "New Year's Day"), ("04-03", "Good Friday"), ("04-06", "Easter Monday"), ("05-04", "Early May bank holiday"),
            ("05-25", "Spring bank holiday"), ("08-31", "Summer bank holiday"), ("12-25", "Christmas Day"), ("12-28", "Boxing Day (substitute day)")],
-    2027: [("01-01", "New Year's Day"), ("04-02", "Good Friday"), ("04-05", "Easter Monday"), ("05-03", "Early May bank holiday"),
+    2027: [("01-01", "New Year's Day"), ("03-26", "Good Friday"), ("03-29", "Easter Monday"), ("05-03", "Early May bank holiday"),
            ("05-31", "Spring bank holiday"), ("08-30", "Summer bank holiday"), ("12-27", "Christmas Day (substitute day)"), ("12-28", "Boxing Day (substitute day)")],
 }
 
