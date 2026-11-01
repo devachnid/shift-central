@@ -12,6 +12,9 @@ from django.conf import settings
 
 log = logging.getLogger("shifts.gp_sync")
 
+# See people/services/hr_client.py: Cloudflare refuses urllib's default agent.
+USER_AGENT = "ShiftCentral/1.0"
+
 
 class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -36,7 +39,8 @@ class GpClient:
         if urlparse(url).scheme != "https" and not settings.DEBUG:
             raise GpError("ROTA_URL is not https; the token was not sent")
         req = urllib.request.Request(url, method="GET", headers={
-            "Accept": "application/json", "Authorization": f"Bearer {self._token}"})
+            "Accept": "application/json", "Authorization": f"Bearer {self._token}",
+            "User-Agent": USER_AGENT})
         try:
             with self._open(req) as resp:
                 raw = resp.read()
