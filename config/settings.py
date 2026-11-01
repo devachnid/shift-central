@@ -174,6 +174,18 @@ EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
 EMAIL_TIMEOUT = 10
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "webmaster@localhost")
 
+# Web push (spec 5). Push is off unless all three are set and the key file
+# exists. The private key is a file, never an environment line (a PEM folded
+# onto one line arrives broken), readable by the app's group only.
+VAPID_PRIVATE_KEY_FILE = os.environ.get("VAPID_PRIVATE_KEY_FILE", "").strip()
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "").strip()
+# The only hosts a phone may register as its push address (the server calls
+# whatever address is stored, so it must not be a person's choice of host).
+# Each entry matches the host itself and its subdomains; add more here.
+PUSH_ENDPOINT_HOSTS = ("fcm.googleapis.com", "push.services.mozilla.com", "push.apple.com", "notify.windows.com") + tuple(
+    h.strip() for h in os.environ.get("PUSH_ENDPOINT_HOSTS", "").split(",") if h.strip())
+
 if not DEBUG:
     SECURE_SSL_REDIRECT = not _TESTING
     SESSION_COOKIE_SECURE = True

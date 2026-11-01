@@ -44,6 +44,8 @@ def _items(request, role):
         items.append({"key": "settings", "label": "Settings", "icon": "settings", "url": "/settings/leave-types/",
                       "active": path.startswith("/settings/"),
                       "children": [{"label": "Leave types", "url": "/settings/leave-types/"}, {"label": "Leave settings", "url": "/settings/leave/"}]})
+    items.append({"key": "notifications", "label": "Notifications", "icon": "bell", "url": "/notifications/",
+                  "active": path.startswith("/notifications/"), "children": []})
     return items
 
 

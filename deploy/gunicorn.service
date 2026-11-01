@@ -50,6 +50,13 @@ UMask=0077
 #   OIDC_RP_CLIENT_ID=…           # both printed once by Practice HR's
 #   OIDC_RP_CLIENT_SECRET=…       #   register_oidc_client --name shift-central
 #
+# Phone notifications are optional (README, Phone notifications); with these
+# three set the app queues a push beside every email:
+#
+#   VAPID_PRIVATE_KEY_FILE=/etc/shift-central/vapid.pem
+#   VAPID_PUBLIC_KEY=<printed by manage vapid_keys>
+#   VAPID_SUBJECT=mailto:webmaster@example.org
+#
 # and, once the app sends email (nothing in this release does), the mail
 # relay: EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD,
 # EMAIL_USE_TLS (on by default) and DEFAULT_FROM_EMAIL.

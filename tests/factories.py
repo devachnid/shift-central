@@ -116,3 +116,11 @@ def make_open_shift(team=None, day=None, **kw):
 def make_claim(open_shift, person, **kw):
     from shifts.models import OpenShiftClaim
     return OpenShiftClaim.objects.create(open_shift=open_shift, person=person, **kw)
+
+
+def make_push_device(person, endpoint=None, **kw):
+    from messaging.models import PushDevice
+    endpoint = endpoint or f"https://push.example.net/send/{next(_next_id)}"
+    kw.setdefault("p256dh", "BNcPublic")
+    kw.setdefault("auth", "authsecret")
+    return PushDevice.objects.create(person=person, endpoint=endpoint, **kw)

@@ -26,3 +26,21 @@ class Outbox(models.Model):
         ordering = ["-queued_at"]
         verbose_name_plural = "outbox"
         indexes = [models.Index(fields=["channel", "sent_at"])]
+
+
+class PushDevice(models.Model):
+    """One phone or browser that said yes to notifications (spec 5)."""
+    person = models.ForeignKey("people.Person", on_delete=models.CASCADE, related_name="push_devices")
+    endpoint = models.TextField(unique=True)
+    p256dh = models.CharField(max_length=200)
+    auth = models.CharField(max_length=100)
+    label = models.CharField(max_length=80, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_ok_at = models.DateTimeField(null=True, blank=True)
+    failures = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+    def __str__(self):
+        return f"{self.label or 'device'} of person {self.person_id}"
