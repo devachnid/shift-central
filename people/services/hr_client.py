@@ -15,6 +15,11 @@ from django.conf import settings
 
 log = logging.getLogger("people.hr_sync")
 
+# An honest product name. The standard library's default ("Python-urllib/3.x")
+# is refused by Cloudflare's bot checks in front of the tunnel (a 403 before
+# the request reaches the app), so every outbound client names itself.
+USER_AGENT = "ShiftCentral/1.0"
+
 
 class _RefuseRedirects(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -39,7 +44,8 @@ class HRClient:
         if urlparse(url).scheme != "https" and not settings.DEBUG:
             raise HRError("PRACTICE_HR_URL is not https; the token was not sent")
         req = urllib.request.Request(url, method="GET", headers={
-            "Accept": "application/json", "Authorization": f"Bearer {self._token}"})
+            "Accept": "application/json", "Authorization": f"Bearer {self._token}",
+            "User-Agent": USER_AGENT})
         try:
             with self._open(req) as resp:
                 raw = resp.read()
