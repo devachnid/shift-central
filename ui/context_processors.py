@@ -30,7 +30,7 @@ def _items(request, role, badges):
                      {"label": "Year end", "url": "/time-off/year-end/"}]
     items.insert(1, {"key": "time-off", "label": "Time off", "icon": "calendar-off", "url": "/time-off/",
                      "active": path.startswith("/time-off/"), "children": leave_children})
-    report_children = [{"label": "Hours", "url": "/reports/hours/"}, {"label": "Leave", "url": "/reports/leave/"}]
+    report_children = ([{"label": "Dashboard", "url": "/reports/dashboard/"}] if role != "staff" else []) + [{"label": "Hours", "url": "/reports/hours/"}, {"label": "Leave", "url": "/reports/leave/"}]
     if role != "staff":
         report_children += [{"label": "Payroll", "url": "/reports/payroll/"}, {"label": "Sickness summary", "url": "/reports/sickness/"},
                             {"label": "Leave summary", "url": "/reports/leave-summary/"}, {"label": "Sent messages", "url": "/outbox/"}]

@@ -12,6 +12,7 @@ urlpatterns = [
     path("departments/", views.departments.index, name="departments"),
     path("departments/add/", views.departments.add, name="department-add"),
     path("departments/<int:pk>/edit/", views.departments.edit, name="department-edit"),
+    path("reports/dashboard/", views.dashboard.index, name="report-dashboard"),
     path("activity/", views.activity, name="activity"),
     path("activity/logins/", views.logins, name="activity-logins"),
 ]

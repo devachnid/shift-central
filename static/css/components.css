@@ -169,3 +169,7 @@ fieldset.field { border: 0; padding: 0; } fieldset.field legend { font-size: var
 .notice-cards { display: grid; gap: var(--sp-4); max-width: 46rem; }
 .notice-card { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: var(--sp-4); }
 .notice-card.is-pinned { border-color: var(--navy); }
+.dash { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--sp-4); }
+.dash-card { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: var(--sp-4); }
+.dash-card h3 { font-size: var(--fs-md); margin: var(--sp-3) 0 var(--sp-1); }
+.dash-card ul { margin: 0; padding-left: 1.1rem; }
