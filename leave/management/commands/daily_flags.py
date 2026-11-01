@@ -1,5 +1,6 @@
 """The daily flags (spec 4, section 6): the leaver reminder a week out, the
-return from a long absence, the year-end flag. Each step fails on its own
+return from a long absence, the year-end flag, and the yearly blanking of
+Outbox message text. Each step fails on its own
 so one bad row never stops the others; the command exits 0 regardless so
 the timer does not go red for one person. Run by
 shift-central-daily-flags.timer at 08:25 every day."""
@@ -10,6 +11,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from leave.services import leavers, returns, yearend
+from messaging.services import outbox
 
 log = logging.getLogger("leave.daily_flags")
 
@@ -21,7 +23,8 @@ class Command(BaseCommand):
         base = (settings.CSRF_TRUSTED_ORIGINS or [""])[0]
         steps = (("leaver reminders", lambda: leavers.week_flags(base_url=base)),
                  ("return flags", lambda: returns.send(base_url=base)),
-                 ("year-end flags", lambda: yearend.run(base_url=base)))
+                 ("year-end flags", lambda: yearend.run(base_url=base)),
+                 ("outbox bodies blanked", outbox.blank_old_bodies))
         for name, step in steps:
             try:
                 n = step()

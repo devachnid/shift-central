@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Outbox · AMG Shift Central{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <label>Status <select name="status"><option value="">Any</option>{% for s in statuses %}<option value="{{ s }}"{% if s == state %} selected{% endif %}>{{ s|capfirst }}</option>{% endfor %}</select></label>
+  <label>Person <select name="person"><option value="">Anyone</option>{% for p in people %}<option value="{{ p.pk }}"{% if person and p.pk == person.pk %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></label>
+  <label>From <input type="date" name="from" value="{{ date_from }}"></label>
+  <label>To <input type="date" name="to" value="{{ date_to }}"></label>
+  <button class="btn btn-quiet" type="submit">Refresh</button>
+</form>
+<table class="table">
+  <thead><tr><th>Queued</th><th>To</th><th>Channel</th><th>Subject</th><th>Status</th><th>Text</th></tr></thead>
+  <tbody>
+  {% for r in page %}
+    <tr><td>{{ r.queued_at|date:"j M H:i" }}</td><td>{{ r.to_person.name|default:r.to_email|default:"—" }}</td><td>{{ r.get_channel_display }}</td>
+        <td>{{ r.subject }}</td>
+        <td>{{ r.state|capfirst }}{% if r.state == "failed" %}: {{ r.error }}{% endif %}</td>
+        <td>{% if r.body %}<details><summary>Show</summary><pre class="outbox-body">{{ r.body }}</pre></details>{% else %}—{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="6">Nothing here.</td></tr>{% endfor %}
+  </tbody>
+</table>
+<p class="pager">
+  {% if page.has_previous %}<a href="?{{ query }}&amp;page={{ page.previous_page_number }}">‹ Newer</a>{% endif %}
+  Page {{ page.number }} of {{ page.paginator.num_pages }}
+  {% if page.has_next %}<a href="?{{ query }}&amp;page={{ page.next_page_number }}">Older ›</a>{% endif %}
+</p>
+{% endblock %}

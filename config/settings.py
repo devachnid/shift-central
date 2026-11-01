@@ -151,6 +151,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # deploy/backup.sh archives it each night with the database.
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT") or Path(DATABASES["default"]["NAME"]).parent / "media")
 UPLOAD_MAX_BYTES = int(os.environ.get("UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))
+OUTBOX_BODY_MONTHS = int(os.environ.get("OUTBOX_BODY_MONTHS", "12"))
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {

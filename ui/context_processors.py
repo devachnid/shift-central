@@ -4,6 +4,7 @@ item appears only when its spec has built it; later specs append here."""
 from django.conf import settings
 
 from messaging.services import messages as message_service
+from messaging.services import outbox
 from people.services import access
 
 
@@ -32,13 +33,16 @@ def _items(request, role, badges):
     report_children = [{"label": "Hours", "url": "/reports/hours/"}, {"label": "Leave", "url": "/reports/leave/"}]
     if role != "staff":
         report_children += [{"label": "Payroll", "url": "/reports/payroll/"}, {"label": "Sickness summary", "url": "/reports/sickness/"},
-                            {"label": "Leave summary", "url": "/reports/leave-summary/"}]
+                            {"label": "Leave summary", "url": "/reports/leave-summary/"}, {"label": "Sent messages", "url": "/outbox/"}]
     message_children = [{"label": "Inbox", "url": "/messages/"}]
     if role != "staff":
         message_children += [{"label": "Send a message…", "url": "/messages/new/", "dialog": True},
                              {"label": "Sent messages", "url": "/messages/sent/"}]
     items.append({"key": "messages", "label": "Messages", "icon": "mail", "url": "/messages/",
                   "active": path.startswith("/messages/"), "children": message_children})
+    if role != "staff":
+        items.append({"key": "outbox", "label": "Outbox", "icon": "outbox", "url": "/outbox/",
+                      "active": path.startswith("/outbox/"), "children": []})
     items.append({"key": "notices", "label": "Notice board", "icon": "notice", "url": "/notices/",
                   "active": path.startswith("/notices/"), "children": []})
     items.append({"key": "uploads", "label": "Uploads", "icon": "folder", "url": "/uploads/",
@@ -66,6 +70,8 @@ def shell(request):
     user = getattr(request, "user", None)
     role = access.role(user) if user is not None and user.is_authenticated else "staff"
     badges = {"messages": message_service.unread_count(user) if user is not None else 0, "outbox": 0}
+    if role != "staff":
+        badges["outbox"] = outbox.failure_count(user)
     return {
         "settings_practice_hr_url": settings.PRACTICE_HR_URL,
         "role": role,
