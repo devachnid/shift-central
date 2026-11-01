@@ -166,3 +166,6 @@ fieldset.field { border: 0; padding: 0; } fieldset.field legend { font-size: var
 .open-card header { font-size: var(--fs-lg); margin-bottom: var(--sp-2); }
 .open-claim { border-top: 1px solid var(--hairline); padding-top: var(--sp-2); margin-top: var(--sp-2); }
 .open-past { margin-top: var(--sp-5); }
+.notice-cards { display: grid; gap: var(--sp-4); max-width: 46rem; }
+.notice-card { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: var(--sp-4); }
+.notice-card.is-pinned { border-color: var(--navy); }

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from messaging.views import app, messages, push
+from messaging.views import app, messages, notices, push
 
 urlpatterns = [
     path("manifest.webmanifest", app.manifest, name="manifest"),
@@ -14,4 +14,8 @@ urlpatterns = [
     path("messages/new/", messages.new, name="message-new"),
     path("messages/sent/", messages.sent, name="messages-sent"),
     path("messages/<int:pk>/", messages.detail, name="message"),
+    path("notices/", notices.board, name="notices"),
+    path("notices/new/", notices.new, name="notice-new"),
+    path("notices/<int:pk>/edit/", notices.edit, name="notice-edit"),
+    path("notices/<int:pk>/remove/", notices.remove, name="notice-remove"),
 ]

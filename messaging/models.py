@@ -72,3 +72,22 @@ class MessageRecipient(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["message", "person"], name="one_receipt_per_person")]
         indexes = [models.Index(fields=["person", "read_at"])]
+
+
+class Notice(models.Model):
+    """A notice-board post (spec 5): plain text for everyone or chosen teams."""
+    title = models.CharField(max_length=120)
+    body = models.TextField()
+    everyone = models.BooleanField(default=False)
+    teams = models.ManyToManyField("people.Team", blank=True, related_name="+")
+    pinned = models.BooleanField(default=False)
+    show_until = models.DateField(null=True, blank=True)
+    posted_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="+")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-pinned", "-created_at", "-pk"]
+
+    def __str__(self):
+        return self.title

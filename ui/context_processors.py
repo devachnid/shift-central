@@ -39,6 +39,8 @@ def _items(request, role, badges):
                              {"label": "Sent messages", "url": "/messages/sent/"}]
     items.append({"key": "messages", "label": "Messages", "icon": "mail", "url": "/messages/",
                   "active": path.startswith("/messages/"), "children": message_children})
+    items.append({"key": "notices", "label": "Notice board", "icon": "notice", "url": "/notices/",
+                  "active": path.startswith("/notices/"), "children": []})
     items.append({"key": "reports", "label": "Reports", "icon": "report", "url": "/reports/hours/",
                   "active": path.startswith("/reports/"), "children": report_children})
     if role != "staff":
