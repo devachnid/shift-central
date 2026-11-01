@@ -193,6 +193,25 @@ def set_cell(user, person, day, items):
         return _write(user, person, day, cleaned, keep_appearance=False)
 
 
+def add_item(user, person, day, raw, via_open_shift=False):
+    """Add one shift to the person's cell, keeping what is already there
+    (overtime beside a normal shift, a split day). The same writer as
+    set_cell, so the day is recorded for Notify staff, leave covers it as it
+    covers any shift, and the cell change is audited.
+
+    `via_open_shift` is for open_shifts.approve only: that service has
+    already checked the user manages the post's owning team, whatever team
+    the claimant is in, so only the "you manage this person" check is
+    skipped. The item is validated either way."""
+    if not via_open_shift:
+        _check(user, person)
+    item = _clean_item(raw, _departments())
+    if item["kind"] != Entry.Kind.SHIFT:
+        raise ValueError("only a shift can be added this way")
+    with transaction.atomic():
+        return _write(user, person, day, [*_items_of(person, day), item], keep_appearance=True)
+
+
 PATCHABLE = ("department", "break_minutes", "overtime", "wfh", "appearance", "text")
 
 

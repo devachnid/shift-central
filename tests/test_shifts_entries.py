@@ -273,3 +273,70 @@ def test_cell_text_past_2000_characters_is_cut_not_refused(world):
     nina = world["nina"]
     entries.set_cell_text(world["u_lead"], nina, MON, "x" * 2500 + "\n08:00-12:00")
     assert [e.kind for e in _lines(nina, MON)] == ["comment"]
+
+
+# --- add_item (spec 5, section 3) ---------------------------------------------
+
+def _shift(start="13:00", finish="17:00", **kw):
+    return {"kind": "shift", "start": start, "finish": finish, "break_minutes": 0, **kw}
+
+
+def test_add_item_appends_beside_the_existing_shift(db):
+    team = make_team("Reception")
+    lead = make_person(first_name="Lead", team=team)
+    make_team_manager(lead, team)
+    user = make_user_for(lead)
+    sam = make_person(first_name="Sam", team=team)
+    make_entry(sam, MON, start=time(8), finish=time(12))
+    rows = entries.add_item(user, sam, MON, _shift(overtime="toil", text="Cover"))
+    assert [(e.start, e.finish, e.overtime, e.text) for e in rows] == [
+        (time(8), time(12), "", ""), (time(13), time(17), "toil", "Cover")]
+    assert Entry.objects.filter(person=sam, day=MON).count() == 2
+
+
+def test_add_item_on_an_empty_day_makes_the_only_shift(db):
+    team = make_team("Reception")
+    lead = make_person(first_name="Lead", team=team)
+    make_team_manager(lead, team)
+    sam = make_person(first_name="Sam", team=team)
+    (row,) = entries.add_item(make_user_for(lead), sam, MON, _shift())
+    assert row.person == sam and row.day == MON and row.start == time(13)
+
+
+def test_add_item_is_refused_for_a_manager_of_another_team(db):
+    mine, theirs = make_team("Nursing"), make_team("Reception")
+    lead = make_person(first_name="Lead", team=mine)
+    make_team_manager(lead, mine)
+    sam = make_person(first_name="Sam", team=theirs)
+    with pytest.raises(PermissionDenied):
+        entries.add_item(make_user_for(lead), sam, MON, _shift())
+
+
+def test_add_item_through_an_open_shift_skips_only_the_team_check(db):
+    mine, theirs = make_team("Nursing"), make_team("Reception")
+    lead = make_person(first_name="Lead", team=mine)
+    make_team_manager(lead, mine)
+    sam = make_person(first_name="Sam", team=theirs)
+    (row,) = entries.add_item(make_user_for(lead), sam, MON, _shift(), via_open_shift=True)
+    assert row.person == sam
+    with pytest.raises(ValueError):          # the item is still validated
+        entries.add_item(make_user_for(make_person(first_name="X", team=mine)), sam, MON, _shift("17:00", "13:00"), via_open_shift=True)
+
+
+def test_add_item_takes_a_shift_and_nothing_else(db):
+    team = make_team("Reception")
+    lead = make_person(first_name="Lead", team=team)
+    make_team_manager(lead, team)
+    sam = make_person(first_name="Sam", team=team)
+    with pytest.raises(ValueError):
+        entries.add_item(make_user_for(lead), sam, MON, {"kind": "comment", "text": "hi"})
+
+
+def test_add_item_records_the_day_for_notify_staff(db):
+    from shifts.models import DayChange
+    team = make_team("Reception")
+    lead = make_person(first_name="Lead", team=team)
+    make_team_manager(lead, team)
+    sam = make_person(first_name="Sam", team=team)
+    entries.add_item(make_user_for(lead), sam, MON, _shift())
+    assert DayChange.objects.filter(person=sam, day=MON).exists()
