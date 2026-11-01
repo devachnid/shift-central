@@ -106,6 +106,8 @@ POLICY = "; ".join((
     "script-src 'self' 'nonce-{nonce}'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
+    "worker-src 'self'",
+    "manifest-src 'self'",
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'self'{hr}",
