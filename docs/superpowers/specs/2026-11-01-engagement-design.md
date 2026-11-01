@@ -647,7 +647,7 @@ Pytest under the existing clock fixtures, with factories extended
 - A claim made by seed_demo is written directly: claiming through the service needs
   a signed-in login in the audience, and the fictional cast may not have signed in.
 - Approving an open shift refuses a whole day of approved leave (spec section 3,
-  restated here because it goes beyond "clashes only warn").
+  restated here because it goes beyond "clashes only warn"; widened during the build: see below).
 
 ### While building
 

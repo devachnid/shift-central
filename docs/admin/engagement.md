@@ -293,8 +293,12 @@ the Turn off button there.
 - The device was removed, either by the person (Remove) or because the phone's push service said it no longer exists
   (app uninstalled, data cleared, or a long time offline). The person turns notifications on again.
 - A new key was made on the server (below). Every phone has to turn them on again.
-- The push timer is not running, or a phone was switched off for more than 24 hours: a notification not delivered
-  within that time is dropped, as the email is the record. The Outbox shows these as Failed with "expired".
+- The push timer is not running, or every try to hand the notification to the push service failed: a notification
+  the server has not handed over within 24 hours is dropped, and the Outbox shows it as Failed with "expired".
+  Check the System card on the Dashboard and the timer.
+- The phone was switched off or out of signal. The push service accepted the notification, so the Outbox says Sent;
+  it keeps it for 24 hours and, if the phone is still off after that, drops it and the phone never shows it.
+  The email is the record.
 - On an iPhone, the app was opened from Safari rather than the Home Screen icon.
 
 ## Setting up phone notifications (for whoever runs the server)

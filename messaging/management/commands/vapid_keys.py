@@ -1,9 +1,10 @@
 """Make the push keys, once:
 
-    cd /srv/shift-central && .venv/bin/python manage.py vapid_keys \\
-        --out /etc/shift-central/vapid.pem --group shift-central
+    deploy/manage vapid_keys --out /etc/shift-central/vapid.pem \\
+        --group shift-central --subject mailto:you@example.org
 
-Run it as root: the key file belongs in /etc, readable by the app's group
+Run it as root through deploy/manage (a bare manage.py fails without the
+settings in /etc/shift-central.env): the key file belongs in /etc, readable by the app's group
 (mode 640). It refuses to overwrite a key: replacing one cuts off every
 registered phone until each person turns notifications on again."""
 
