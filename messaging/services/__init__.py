@@ -6,16 +6,20 @@ only; the relay's own log has the rest.
 There is no console fallback: with no EMAIL_HOST nothing is tried and the
 row says "mail not configured", so a box without a relay keeps every change
 for Notify staff rather than printing mail nobody reads. A caller sending a
-batch passes one open connection (`notify.send` does), so the relay sees
-one login, not one per person."""
+batch passes one open connection (`batch()` gives one, `notify.send` makes
+its own), so the relay sees one login, not one per person.
+
+`url` is the page a push notification opens (spec 5); until push exists it
+is accepted and ignored."""
 
 import logging
+from contextlib import contextmanager
 
 from django.conf import settings
-from django.core.mail import send_mail
+from django.core.mail import get_connection, send_mail
 from django.utils import timezone
 
-from .models import Outbox
+from messaging.models import Outbox
 
 log = logging.getLogger("messaging")
 NOT_CONFIGURED = "mail not configured"
@@ -25,7 +29,36 @@ def configured():
     return bool(settings.EMAIL_HOST)
 
 
-def send(person, subject, body, connection=None):
+def absolute_link(base_url, path):
+    """An absolute link: the request's own address, or, for mail sent with
+    none (a timer, a rota write), the first trusted origin."""
+    base_url = base_url or (settings.CSRF_TRUSTED_ORIGINS or [""])[0]
+    return (base_url.rstrip("/") + path) if base_url else path
+
+
+@contextmanager
+def batch():
+    """One open relay connection for a run of sends; None when no relay is
+    configured or it cannot be reached (each send then records its own
+    failure)."""
+    connection = None
+    if configured():
+        connection = get_connection()
+        try:
+            connection.open()
+        except Exception:  # whatever open() raises, the relay cannot be reached
+            connection = None
+    try:
+        yield connection
+    finally:
+        if connection is not None:
+            try:
+                connection.close()
+            except Exception:  # closing a dead connection is not news
+                pass
+
+
+def send(person, subject, body, connection=None, url=None):
     """Send one message, on `connection` when given. Returns the Outbox row;
     its `sent_at` is None when nothing was sent."""
     row = Outbox.objects.create(to_person=person, to_email=person.email or "", subject=subject, body=body)

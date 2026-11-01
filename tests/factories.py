@@ -93,3 +93,12 @@ def make_bank_holiday(day, name="Bank holiday"):
 def make_allowance(person, year, annual, bank_holiday, **kw):
     kw.setdefault("from_day", year)
     return Allowance.objects.create(person=person, leave_year=year, annual_hours=annual, bank_holiday_hours=bank_holiday, **kw)
+
+
+def client_for(person, **user_kw):
+    """A test client signed in as the person: their existing login, else a
+    new one made with `user_kw` (is_all_teams_manager=True and the like)."""
+    from django.test import Client
+    client = Client()
+    client.force_login(person.user if person.user_id else make_user_for(person, **user_kw))
+    return client
