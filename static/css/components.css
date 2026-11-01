@@ -173,3 +173,7 @@ fieldset.field { border: 0; padding: 0; } fieldset.field legend { font-size: var
 .dash-card { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: var(--sp-4); }
 .dash-card h3 { font-size: var(--fs-md); margin: var(--sp-3) 0 var(--sp-1); }
 .dash-card ul { margin: 0; padding-left: 1.1rem; }
+
+.table-scroll { overflow-x: auto; }
+.staff-by-hour td, .staff-by-hour th { text-align: center; }
+.staff-by-hour td:first-child { text-align: left; white-space: nowrap; }

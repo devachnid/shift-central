@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Shifts · AMG Shift Central{% endblock %}
+{% block topbar_actions %}<a class="topbar-action" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}download=1">Download</a>{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <label>From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
+  <label>To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <label>Team <select name="team"><option value="">All</option>{% for t in teams %}<option value="{{ t.pk }}"{% if team and t.pk == team.pk %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></label>
+  <label>Department <select name="department"><option value="">All</option>{% for d in departments %}<option value="{{ d.pk }}"{% if department and d.pk == department.pk %} selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></label>
+  <label>Person <select name="person"><option value="">Anyone</option>{% for p in people %}<option value="{{ p.pk }}"{% if person and p.pk == person.pk %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></label>
+  <button class="btn btn-quiet" type="submit">Refresh</button>
+</form>
+{% for b in data.blocks %}
+<section class="report-block">
+  <h2>{{ b.person.name }} — {{ b.rows|length }} shift{{ b.rows|length|pluralize }} / {{ b.total_text }}{% if b.overtime %} ({{ b.overtime_text }} overtime){% endif %}</h2>
+  <table class="table">
+    <thead><tr><th>Date</th><th>Start</th><th>Finish</th><th>Break</th><th>Net hours</th><th>Overtime</th><th>Department</th><th>Comment</th></tr></thead>
+    <tbody>
+    {% for e in b.rows %}
+      <tr><td>{{ e.day|date:"D j M Y" }}</td><td>{{ e.start|time:"H:i" }}</td><td>{{ e.finish|time:"H:i" }}</td>
+          <td>{% if e.break_minutes %}{{ e.break_minutes }} min{% endif %}</td><td>{{ e.hours_text }}</td>
+          <td>{% if e.overtime %}{{ e.get_overtime_display }}{% endif %}</td><td>{{ e.department.name|default:"" }}</td><td>{{ e.text }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% empty %}<p>No shifts in this range.</p>{% endfor %}
+{% if data.blocks %}<p><strong>Total: {{ grand_text }}</strong></p>{% endif %}
+{% endblock %}

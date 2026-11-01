@@ -7,7 +7,10 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
-from shifts.services import csv_safe, hours
+from exports import xlsx
+from people.models import Department, Team
+from people.services import access
+from shifts.services import csv_safe, hours, shift_report, staff_by_hour
 from shifts.services import render as fmt
 from shifts.services.window import monday, parse_day
 
@@ -50,3 +53,56 @@ def hours_report(request):
                 r["overtime_text"] = fmt.duration(r["overtime"]) if r["overtime"] else ""
     return render(request, "shifts/hours.html", {"page_title": "Hours", "blocks": blocks, "start": start, "end": end,
                                                  "multi_week": monday(start) != monday(end)})
+
+
+def _pick(model, value):
+    """The row with this id from a filter (a model or a queryset), else None."""
+    rows = model.objects.all() if hasattr(model, "objects") else model
+    return rows.filter(pk=int(value)).first() if value and value.isascii() and value.isdigit() else None
+
+
+@login_required
+@access.manager_required
+def shifts_report(request):
+    start, end = _dates(request)
+    person_choices = access.managed_people(request.user).order_by("name")
+    team, department = _pick(Team, request.GET.get("team")), _pick(Department, request.GET.get("department"))
+    person = _pick(person_choices, request.GET.get("person"))
+    data = shift_report.report(request.user, start, end, team, department, person)
+    if request.GET.get("download"):
+        rows = [[e.day, e.day.strftime("%a"), e.person.name, e.person.team.name if e.person.team else "",
+                 e.department.name if e.department else "", e.start.strftime("%H:%M"), e.finish.strftime("%H:%M"),
+                 e.break_minutes, xlsx.Hours(int(e.hours.total_seconds())),
+                 e.get_overtime_display() if e.overtime else "", e.text]
+                for b in data["blocks"] for e in b["rows"]]
+        rows.append(["Total", "", "", "", "", "", "", "", xlsx.Hours(int(data["grand_total"].total_seconds())), "", ""])
+        header = ["Date", "Day", "Name", "Team", "Department", "Start", "Finish", "Break (min)", "Net hours", "Overtime", "Comment"]
+        return xlsx.response(xlsx.workbook([("Shifts", header, rows)]), f"shifts-{data['start']}-{data['end']}.xlsx")
+    for b in data["blocks"]:
+        b["total_text"], b["overtime_text"] = fmt.duration(b["total"]), fmt.duration(b["overtime"])
+        for e in b["rows"]:
+            e.hours_text = fmt.duration(e.hours)
+    return render(request, "shifts/shifts_report.html", {
+        "page_title": "Shifts", "data": data, "grand_text": fmt.duration(data["grand_total"]), "start": data["start"], "end": data["end"],
+        "teams": access.managed_teams(request.user).filter(active=True), "departments": Department.objects.filter(archived=False),
+        "people": person_choices, "team": team, "department": department, "person": person})
+
+
+@login_required
+@access.manager_required
+def staff_by_hour_report(request):
+    start, end = _dates(request)
+    site = request.GET.get("site", "")
+    site = site if site in ("AG", "PMC") else ""
+    team = _pick(Team, request.GET.get("team"))
+    data = staff_by_hour.report(request.user, start, end, site, team)
+    if request.GET.get("download"):
+        rows = []
+        for r in data["rows"]:
+            rows.append([r["day"], r["day"].strftime("%a"), *r["counts"], r["peak"]])
+            rows.append([r["day"], "of which WFH", *r["wfh"], ""])
+        return xlsx.response(xlsx.workbook([("Staff by hour", ["Date", "Day", *data["labels"], "Peak"], rows)]),
+                             f"staff-by-hour-{data['start']}-{data['end']}.xlsx")
+    return render(request, "shifts/staff_by_hour.html", {
+        "page_title": "Staff by hour", "data": data, "start": data["start"], "end": data["end"], "site": site, "team": team,
+        "teams": access.managed_teams(request.user).filter(active=True)})
