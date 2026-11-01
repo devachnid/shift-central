@@ -150,3 +150,19 @@ def old_count(user):
     old = (DayChange.objects.filter(person__in=access.managed_people(user), at__lt=timezone.now() - OLD)
            .values_list("person", flat=True).distinct())
     return sum(1 for person in access.managed_people(user).filter(pk__in=old) if lines(person))
+
+
+def settle_baseline(actor, people, since, note):
+    """Mark every change written since `since` for these people as already
+    told, without telling anyone: the unnotified rows (and so the next Notify
+    staff) are dropped. For a rota written as the starting point, which no
+    one needs an email about (the demo seed); one audit line per person
+    says so. Returns the number of days settled."""
+    total = 0
+    with transaction.atomic():
+        for person in people:
+            days = DayChange.objects.filter(person=person, at__gte=since).delete()[0]
+            if days:
+                audit.record_as(actor, "shifts.entry", person.pk, {"baseline": ("", f"{days} days, nobody emailed")}, note=note)
+                total += days
+    return total
