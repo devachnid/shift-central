@@ -165,7 +165,7 @@ def test_deliver_maps_the_library_outcomes(push_on, monkeypatch):
     assert push.deliver(device, {"title": "T", "body": "B", "url": "/rota/"}) == "ok"
     kw = sent[0]
     assert kw["subscription_info"] == {"endpoint": device.endpoint, "keys": {"p256dh": device.p256dh, "auth": device.auth}}
-    assert kw["timeout"] == 5 and kw["vapid_claims"]["sub"] == "mailto:test@example.org"
+    assert kw["timeout"] == 5 and kw["ttl"] == 24 * 3600 and kw["vapid_claims"]["sub"] == "mailto:test@example.org"
 
     def boom(status):
         def raiser(**kw):

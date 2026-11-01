@@ -98,7 +98,8 @@ def deliver(device, payload):
     try:
         webpush(subscription_info={"endpoint": device.endpoint, "keys": {"p256dh": device.p256dh, "auth": device.auth}},
                 data=json.dumps(payload), vapid_private_key=settings.VAPID_PRIVATE_KEY_FILE,
-                vapid_claims={"sub": settings.VAPID_SUBJECT}, timeout=TIMEOUT)
+                vapid_claims={"sub": settings.VAPID_SUBJECT}, timeout=TIMEOUT,
+                ttl=int(EXPIRY.total_seconds()))   # without a ttl the push service drops it if the phone is offline
     except WebPushException as e:
         status = getattr(getattr(e, "response", None), "status_code", None)
         return "gone" if status in (404, 410) else "failed"
