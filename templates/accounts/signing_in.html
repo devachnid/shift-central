@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Signing in · AMG Shift Central{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="2;url=/">{% endblock %}
+{% block auth %}
+<div class="auth-card">
+  <img src="{% static 'img/logo-dark.svg' %}" alt="AMG Shift Central">
+  <h1>Signing you in</h1>
+  <p>Shift Central is finishing your sign-in and will open in a moment.</p>
+  <p><a class="btn" href="/">Continue</a></p>
+</div>
+{% endblock %}
