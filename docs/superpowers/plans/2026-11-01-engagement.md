@@ -2203,7 +2203,7 @@ from messaging.services import push
 from tests.factories import client_for, make_person, make_push_device
 
 pytestmark = pytest.mark.django_db
-GOOD = {"endpoint": "https://push.example.net/send/abc123", "keys": {"p256dh": "BNc-key_1=", "auth": "au-th_2"}}
+GOOD = {"endpoint": "https://fcm.googleapis.com/fcm/send/abc123", "keys": {"p256dh": "BNc-key_1=", "auth": "au-th_2"}}
 
 
 def post_json(client, url, data):
@@ -2248,11 +2248,19 @@ def test_subscribing_again_updates_rather_than_duplicates_and_moves_to_the_new_o
     assert d.person == b
 
 
+FCM = "https://fcm.googleapis.com/fcm/send/"
+
+
 @pytest.mark.parametrize("bad", [
-    {}, {"endpoint": "http://insecure.example/x", "keys": {"p256dh": "a", "auth": "b"}},
-    {"endpoint": "https://x.example/" + "a" * 1100, "keys": {"p256dh": "a", "auth": "b"}},
-    {"endpoint": "https://x.example/a", "keys": {"p256dh": "not valid!", "auth": "b"}},
-    {"endpoint": "https://x.example/a", "keys": {}},
+    {}, {"endpoint": "http://fcm.googleapis.com/x", "keys": {"p256dh": "a", "auth": "b"}},          # not https
+    {"endpoint": FCM + "a" * 1100, "keys": {"p256dh": "a", "auth": "b"}},                            # too long
+    {"endpoint": FCM + "a", "keys": {"p256dh": "not valid!", "auth": "b"}},                          # bad key
+    {"endpoint": FCM + "a", "keys": {}},
+    {"endpoint": "https://hr.devachnid.co.uk/oidc/token/", "keys": {"p256dh": "a", "auth": "b"}},   # not a push service
+    {"endpoint": "https://fcm.googleapis.com.evil.example/x", "keys": {"p256dh": "a", "auth": "b"}},  # look-alike host
+    {"endpoint": "https://user:pw@fcm.googleapis.com/x", "keys": {"p256dh": "a", "auth": "b"}},      # credentials
+    {"endpoint": "https://fcm.googleapis.com:8443/x", "keys": {"p256dh": "a", "auth": "b"}},         # odd port
+    {"endpoint": "https://127.0.0.1/x", "keys": {"p256dh": "a", "auth": "b"}},                        # an address
 ])
 def test_a_bad_subscription_is_refused(push_on, bad):
     r = post_json(client_for(make_person()), "/push/subscribe/", bad)
@@ -2264,6 +2272,14 @@ def test_subscribing_needs_a_person_keys_and_a_sign_in(push_on, settings):
     assert post_json(Client(), "/push/subscribe/", GOOD).status_code == 302          # to the sign-in
     settings.VAPID_PUBLIC_KEY = ""
     assert post_json(client_for(make_person()), "/push/subscribe/", GOOD).status_code == 400
+
+
+def test_the_known_push_services_and_added_hosts_are_accepted(push_on, settings):
+    for host in ("fcm.googleapis.com", "updates.push.services.mozilla.com", "web.push.apple.com", "db5p.notify.windows.com"):
+        assert push.endpoint_allowed(f"https://{host}/send/x"), host
+    assert not push.endpoint_allowed("https://push.example.net/send/x")
+    settings.PUSH_ENDPOINT_HOSTS = (*settings.PUSH_ENDPOINT_HOSTS, "push.example.net")
+    assert push.endpoint_allowed("https://push.example.net/send/x")
 
 
 def test_a_device_label_is_taken_from_the_user_agent(push_on):
@@ -2346,6 +2362,11 @@ Expected: FAIL.
 VAPID_PRIVATE_KEY_FILE = os.environ.get("VAPID_PRIVATE_KEY_FILE", "").strip()
 VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
 VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "").strip()
+# The only hosts a phone may register as its push address (the server calls
+# whatever address is stored, so it must not be a person's choice of host).
+# Each entry matches the host itself and its subdomains; add more here.
+PUSH_ENDPOINT_HOSTS = ("fcm.googleapis.com", "push.services.mozilla.com", "push.apple.com", "notify.windows.com") + tuple(
+    h.strip() for h in os.environ.get("PUSH_ENDPOINT_HOSTS", "").split(",") if h.strip())
 ```
 
 `messaging/models.py`, append:
@@ -2409,12 +2430,25 @@ send_pending)."""
 
 import os
 import re
+from urllib.parse import urlsplit
 
 from django.conf import settings
 
 from messaging.models import PushDevice
 
 _B64URL = re.compile(r"^[A-Za-z0-9_\-=]+$")
+
+
+def endpoint_allowed(endpoint):
+    """An https address on a known push service: no credentials, the default
+    port. The server will POST to it, so it is never a free choice of host."""
+    try:
+        parts = urlsplit(endpoint)
+        host, port = (parts.hostname or "").lower(), parts.port
+    except ValueError:
+        return False
+    return (parts.scheme == "https" and parts.username is None and port in (None, 443)
+            and any(host == h or host.endswith("." + h) for h in settings.PUSH_ENDPOINT_HOSTS))
 
 
 def configured():
@@ -2435,7 +2469,7 @@ def label_for(user_agent):
 def register(person, endpoint, p256dh, auth, user_agent=""):
     """Add (or take over) the device behind this subscription. ValueError
     with a sentence when the subscription is not one a push service made."""
-    if not (isinstance(endpoint, str) and endpoint.startswith("https://") and len(endpoint) <= 1000):
+    if not (isinstance(endpoint, str) and len(endpoint) <= 1000 and endpoint_allowed(endpoint)):
         raise ValueError("That is not a push address.")
     for value, limit in ((p256dh, 200), (auth, 100)):
         if not (isinstance(value, str) and 0 < len(value) <= limit and _B64URL.match(value)):
@@ -6184,7 +6218,7 @@ Add the guide to `docs/admin/README.md`'s list.
 - [ ] **Step 3: The README**
 
 `README.md`:
-- Environment table: add one row for `VAPID_PRIVATE_KEY_FILE`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` ("Phone notifications; all three, with the key file present, or push is off"), one for `MEDIA_ROOT`, `UPLOAD_MAX_BYTES` (default `<state dir>/media`... note the systemd unit's state directory: set `MEDIA_ROOT=/var/lib/shift-central/media`), and one for `OUTBOX_BODY_MONTHS` (default 12, 0 keeps text).
+- Environment table: add one row for `VAPID_PRIVATE_KEY_FILE`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` ("Phone notifications; all three, with the key file present, or push is off") and `PUSH_ENDPOINT_HOSTS` (optional extra push-service hosts; the built-in list is Google, Mozilla, Apple and Windows), one for `MEDIA_ROOT`, `UPLOAD_MAX_BYTES` (default `<state dir>/media`... note the systemd unit's state directory: set `MEDIA_ROOT=/var/lib/shift-central/media`), and one for `OUTBOX_BODY_MONTHS` (default 12, 0 keeps text).
 - A new section **Phone notifications (optional)** after the Notify-staff/mail section:
 
 ```bash

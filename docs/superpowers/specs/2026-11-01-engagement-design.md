@@ -273,6 +273,13 @@ first, then open the app from there" while it is running in the browser.
 A person's registered devices are listed with their labels and can be
 removed. Everyone can use the page; it needs no role.
 
+The server later calls the address a phone registers, so it accepts only an
+`https` address with no credentials and no unusual port, on a known push
+service: Google (`fcm.googleapis.com`), Mozilla (`push.services.mozilla.com`),
+Apple (`push.apple.com`) and Windows (`notify.windows.com`), or a host added
+in `PUSH_ENDPOINT_HOSTS`. A signed-in person cannot make the server call an
+address of their choosing.
+
 ### Keys and switching it on
 
 `VAPID_PRIVATE_KEY_FILE` (a file, like the OIDC key: owner root, group the
