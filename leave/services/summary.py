@@ -3,7 +3,7 @@ person, with team and practice totals. A person whose leave year starts on
 another day is reported for the year of theirs that holds the chosen
 year's first day, and a footnote says so."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from leave.services import balances, hours, years
 from people.services import access
@@ -33,7 +33,6 @@ class LeaveRow:
     remaining: int = 0
     toil: int = 0
     pending: int = 0
-    lines: list = field(default_factory=list)
 
 
 def _row(person, year):

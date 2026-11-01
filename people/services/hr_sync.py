@@ -132,11 +132,17 @@ def sync(client=None):
         run.save()
     if run.ok:
         from leave.services import leavers       # people → leave only here, at call time
+        flag_failed = False
         for person in leaving:
             try:
                 leavers.flag(person)
             except Exception:
                 log.exception("leaver flag failed for person %s", person.pk)
+                flag_failed = True
+        if flag_failed:
+            # Shown on the Health card's sync line: the date is not "changed" on the next sync, so nothing retries it.
+            run.message = (run.message + "; " if run.message else "") + "leaver flag failed; see the journal"
+            run.save(update_fields=["message"])
         try:
             with transaction.atomic():
                 profiles.apply_due_hours_changes()

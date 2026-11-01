@@ -132,6 +132,6 @@ def year_end(manager, rows, base_url=""):
         + (f"{hours.fmt(-r.annual_remaining)} over" if r.annual_remaining < 0 else f"{hours.fmt(r.annual_remaining)} of annual leave left")
         + (f", TOIL {hours.fmt(r.toil_remaining)}" if r.toil_remaining > 0 else "") for r in rows)
     n = len(rows)
-    body = (f"The leave year has ended for {n} of your people with annual leave or TOIL left over, or over.\n\n{lines}\n\n"
+    body = (f"The leave year has ended for {n} of your people with annual leave or TOIL left, or annual leave over.\n\n{lines}\n\n"
             f"For each, choose carry all, lose all or carry part: {_link(base_url, '/time-off/year-end/')}\n")
     return _send_all([manager], f"Year end: {n} {'person has' if n == 1 else 'people have'} leave or TOIL left", body)

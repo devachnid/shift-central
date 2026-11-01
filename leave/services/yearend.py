@@ -5,7 +5,7 @@ lose TOIL), and the choice is written as Adjustments in the new year with
 the reason the statement then shows."""
 
 import logging
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
@@ -20,6 +20,7 @@ from people.services import access, audit
 log = logging.getLogger("leave.yearend")
 
 OPEN_WINDOW = timedelta(days=31)
+LAUNCH = date(2027, 1, 1)     # go-live: a leave year that ended before it was settled by hand (MIG-04)
 
 
 def open_due(today=None):
@@ -46,6 +47,8 @@ def _open_one(person, today):
     if today - year > OPEN_WINDOW:
         return None
     ended = years.previous_year(year)
+    if years.year_end(ended) < LAUNCH:
+        return None
     if YearEnd.objects.filter(person=person, year_ended=ended).exists():
         return None
     s = balances.statement(person, ended)
@@ -88,6 +91,25 @@ def long_absence(row):
     return any(b.type.flag_return or (b.type.sickness and sickness.is_long(b)) for b in rows)
 
 
+def _now(person, year_ended):
+    """(annual_remaining, toil_remaining) for the ended year as they stand
+    today, or None when its allowance is no longer set."""
+    s = balances.statement(person, year_ended)
+    return None if s.missing else (s.annual_remaining, s.toil_remaining)
+
+
+def live(row):
+    """An open row with its figures as they stand today, not as the flag
+    found them: last year's statement is put right in January, a conversion
+    gives hours back and TOIL runs on. Not saved; a decided row is returned
+    as it is."""
+    if not row.decided:
+        figures = _now(row.person, row.year_ended)
+        if figures is not None:
+            row.annual_remaining, row.toil_remaining = figures
+    return row
+
+
 def open_rows(user):
     return list(YearEnd.objects.filter(person__in=access.managed_people(user), decided_at__isnull=True).select_related("person__team"))
 
@@ -99,6 +121,9 @@ def decide(user, row, annual_carry, toil_keep=None, note=""):
         fresh = YearEnd.objects.select_related("person").get(pk=row.pk)
         if fresh.decided:
             raise ValueError("Already decided")
+        figures = _now(fresh.person, fresh.year_ended)      # the figures now, not those the flag found
+        if figures is not None:
+            fresh.annual_remaining, fresh.toil_remaining = figures
         remaining = fresh.annual_remaining
         low, high = (remaining, 0) if remaining < 0 else (0, remaining)
         if not (low <= int(annual_carry) <= high):

@@ -226,3 +226,45 @@ def test_the_daily_command_and_its_units(boss, sam, today):
     assert "manage.py daily_flags" in unit
     timer = (ROOT / "deploy" / "shift-central-daily-flags.timer").read_text()
     assert "OnCalendar=*-*-* 08:25:00" in timer and "Persistent=true" in timer
+
+
+def test_a_year_that_ended_before_go_live_opens_nothing(boss):
+    jan = make_person(first_name="Jan", start_date=date(2020, 1, 6), weekly_hours=Decimal("37.5"), days_per_week=5)
+    make_allowance(jan, date(2026, 1, 1), Decimal("172.5"), 0)                 # a 2026 allowance typed in: settled by hand (MIG-04)
+    make_allowance(jan, Y27, Decimal("172.5"), 0)
+    assert yearend.open_due(today=date(2027, 1, 3)) == [] and not YearEnd.objects.exists()
+    april = make_person(first_name="April", start_date=date(2020, 1, 6), weekly_hours=Decimal("37.5"), days_per_week=5, leave_year_start="04-01")
+    make_allowance(april, date(2026, 4, 1), Decimal("100"), 0)                 # 2026/27 ends 31 Mar 2027, after go-live
+    make_allowance(april, date(2027, 4, 1), Decimal("100"), 0)
+    (row,) = yearend.open_due(today=date(2027, 4, 3))
+    assert row.person == april and row.year_ended == date(2026, 4, 1)
+
+
+def test_a_correction_after_the_flag_opened_changes_what_carry_all_carries(boss, sam):
+    (row,) = yearend.open_due(today=J3)
+    assert row.annual_remaining == h("20")
+    adjustments.add(boss.user, sam, Y27, "annual", h("5"), "missed in 2027")    # last year's statement put right in January
+    c = Client()
+    c.force_login(boss.user)
+    assert "25 h" in c.get("/time-off/year-end/").content.decode().split("<h2>Decided</h2>")[0]
+    assert "25 h" in c.get(f"/time-off/year-end/{row.pk}/decide/").content.decode()
+    r = c.post(f"/time-off/year-end/{row.pk}/decide/", {"annual_choice": "all", "annual_hours": "", "note": ""})
+    assert r.json() == {"refresh": True}
+    row.refresh_from_db()
+    assert (row.annual_remaining, row.annual_carried, row.annual_lost) == (h("25"), h("25"), 0)
+    assert Adjustment.objects.get(person=sam, leave_year=Y28).seconds == h("25")
+
+
+def test_toil_used_after_the_flag_opened_is_not_lost_twice(boss):
+    sam = make_person(first_name="Sam", start_date=date(2020, 1, 6), weekly_hours=Decimal("37.5"), days_per_week=5)
+    make_allowance(sam, Y27, Decimal("172.5"), 0)
+    make_allowance(sam, Y28, Decimal("172.5"), 0)
+    make_entry(sam, date(2027, 10, 11), start=time(17), finish=time(22), break_minutes=0, overtime="toil")      # 5 h TOIL
+    (row,) = yearend.open_due(today=J3)
+    assert row.toil_remaining == h("5")
+    make_entry(sam, date(2027, 11, 15), start=time(9), finish=time(12), break_minutes=0)
+    bookings.book(boss.user, sam, make_type("TOIL", draws_from="toil"), date(2027, 11, 15), date(2027, 11, 15), "whole")   # 3 h of it used since
+    yearend.decide(boss.user, row, h("172.5"), toil_keep=0)                   # lose all
+    row.refresh_from_db()
+    assert row.toil_remaining == h("2") and row.toil_lost == h("2")
+    assert balances.statement(sam, Y28).toil_remaining == 0

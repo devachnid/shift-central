@@ -3,6 +3,7 @@ managers are told what leave is left or over as at that day and which
 bookings run past it; a week before the day they are told again. Nothing
 is cancelled for them: the manager decides."""
 
+import logging
 from datetime import timedelta
 
 from django.utils import timezone
@@ -10,6 +11,8 @@ from django.utils import timezone
 from leave.models import Booking
 from leave.services import balances, hours, notify, years
 from people.models import Person
+
+log = logging.getLogger("leave.leavers")
 
 WEEK = timedelta(days=7)
 
@@ -67,15 +70,22 @@ def flag(person, base_url=""):
 
 def week_flags(today=None, base_url=""):
     """The reminder a week out, for everyone leaving in the next seven days
-    not yet reminded for that date. Run daily."""
+    not yet reminded for that date. Run daily; one person's failure is
+    logged and the others still go."""
     today = today or timezone.localdate()
     n = 0
     for p in Person.objects.filter(end_date__gte=today, end_date__lte=today + WEEK).order_by("end_date", "pk"):
         if p.leaver_week_flagged_for == p.end_date:
             continue
-        if not Person.objects.filter(pk=p.pk).exclude(leaver_week_flagged_for=p.end_date).update(leaver_week_flagged_for=p.end_date):
-            continue           # claimed by a run alongside this one
-        _, statement = figure(p)
-        notify.leaving(p, statement, after_leaving(p), week=True, base_url=base_url)
+        try:
+            # The figures first, so a failure here cannot leave a date claimed and never sent.
+            _, statement = figure(p)
+            after = after_leaving(p)
+            if not Person.objects.filter(pk=p.pk).exclude(leaver_week_flagged_for=p.end_date).update(leaver_week_flagged_for=p.end_date):
+                continue           # claimed by a run alongside this one
+            notify.leaving(p, statement, after, week=True, base_url=base_url)
+        except Exception:
+            log.exception("leaver week reminder: person %s", p.pk)
+            continue
         n += 1
     return n

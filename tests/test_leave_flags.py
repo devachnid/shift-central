@@ -201,3 +201,60 @@ def test_a_leaver_is_not_flagged_on_return(boss):
     sam = make_person(first_name="Sam", start_date=date(2020, 1, 6), end_date=date(2026, 10, 2))
     make_sick(sam, date(2026, 9, 1), date(2026, 10, 2))
     assert returns.due(today=date(2026, 10, 3)) == []
+
+
+def test_one_failing_person_stops_neither_the_week_reminders_nor_the_returns(boss, monkeypatch):
+    ann = make_person(first_name="Ann", start_date=date(2020, 1, 6), end_date=date(2026, 11, 20))
+    zed = make_person(first_name="Zed", start_date=date(2020, 1, 6), end_date=date(2026, 11, 20))
+    for p in (ann, zed):
+        make_allowance(p, Y26, Decimal("100"), 0)
+    real = leavers.balances.statement
+
+    def flaky(person, year):
+        if person == ann:
+            raise RuntimeError("broken")
+        return real(person, year)
+
+    monkeypatch.setattr(leavers.balances, "statement", flaky)
+    assert leavers.week_flags(today=date(2026, 11, 13)) == 1 and "Zed" in mail.outbox[-1].subject
+    ann.refresh_from_db()
+    assert ann.leaver_week_flagged_for is None                       # not claimed, so tomorrow's run tries again
+    monkeypatch.setattr(leavers.balances, "statement", real)
+    assert leavers.week_flags(today=date(2026, 11, 14)) == 1 and "Ann" in mail.outbox[-1].subject
+
+    a_sick = make_sick(make_person(first_name="Amy", start_date=date(2020, 1, 6)), date(2026, 9, 1), date(2026, 10, 2))
+    z_sick = make_sick(make_person(first_name="Zoe", start_date=date(2020, 1, 6)), date(2026, 9, 1), date(2026, 10, 2))
+
+    def flaky_return(person, year):
+        if person == a_sick.person:
+            raise RuntimeError("broken")
+        return real(person, year)
+
+    monkeypatch.setattr(returns.balances, "statement", flaky_return)
+    assert returns.send(today=date(2026, 10, 3)) == 1 and "Zoe" in mail.outbox[-1].subject
+    a_sick.refresh_from_db()
+    z_sick.refresh_from_db()
+    assert a_sick.return_flagged_at is None and z_sick.return_flagged_at is not None
+
+
+def test_a_failed_leaver_flag_shows_on_the_sync_line(boss, monkeypatch):
+    payload = json.loads(FIXTURE.read_text())
+
+    class Fake:
+        def people(self):
+            return payload["people"]
+
+    hr_sync.sync(Fake())
+    for rec in payload["people"]:
+        if rec["id"] == 1:
+            rec["employment"]["end"] = "2026-12-31"
+
+    def broken(person, base_url=""):
+        raise RuntimeError("broken")
+
+    monkeypatch.setattr(leavers, "flag", broken)
+    run = hr_sync.sync(Fake())
+    assert run.ok and run.message == "leaver flag failed; see the journal"
+    c = Client()
+    c.force_login(boss.user)
+    assert "leaver flag failed; see the journal" in c.get("/staff/").content.decode()

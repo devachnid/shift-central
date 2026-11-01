@@ -25,7 +25,7 @@ def index(request):
     decided = (YearEnd.objects.filter(person__in=people, decided_at__isnull=False).exclude(decided_by__isnull=True)       # the auto-closed "nothing left" rows
                .select_related("person__team", "decided_by").order_by("-decided_at")[:200])
     return render(request, "leave/year_end.html", {
-        "page_title": "Year end", "open": [_row(r) for r in yearend.open_rows(request.user)],
+        "page_title": "Year end", "open": [_row(yearend.live(r)) for r in yearend.open_rows(request.user)],
         "decided": [_row(r, with_long=False) for r in decided]})
 
 
@@ -35,6 +35,7 @@ def decide(request, pk):
     row = get_object_or_404(YearEnd.objects.select_related("person"), pk=pk)
     if not access.can_manage(request.user, row.person):
         raise PermissionDenied
+    row = yearend.live(row)
     form = YearEndForm(request.POST or None, row=row)
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data

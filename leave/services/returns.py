@@ -3,6 +3,7 @@ type that flags the return (maternity, adoption), the managers are told
 the person is back and what leave they have, so it can be planned. Once
 per booking; a run that missed a day catches up for a fortnight."""
 
+import logging
 from datetime import timedelta
 
 from django.db.models import Q
@@ -10,6 +11,8 @@ from django.utils import timezone
 
 from leave.models import Booking
 from leave.services import balances, notify, sickness, years
+
+log = logging.getLogger("leave.returns")
 
 CATCH_UP = timedelta(days=14)
 
@@ -25,13 +28,20 @@ def due(today=None):
 
 
 def send(today=None, base_url=""):
+    """One email per booking due; one booking's failure is logged and the
+    others still go."""
     today = today or timezone.localdate()
     n = 0
     for b in due(today):
-        # Claim the row first: a second run alongside this one finds it claimed and sends nothing.
-        if not Booking.objects.filter(pk=b.pk, return_flagged_at__isnull=True).update(return_flagged_at=timezone.now()):
+        try:
+            # The figures first, so a failure here cannot leave a booking claimed and never sent.
+            statement = balances.statement(b.person, years.year_of(b.person, today))
+            # Claim, then send: a second run alongside this one finds it claimed and sends nothing.
+            if not Booking.objects.filter(pk=b.pk, return_flagged_at__isnull=True).update(return_flagged_at=timezone.now()):
+                continue
+            notify.returned(b, statement, base_url)
+        except Exception:
+            log.exception("return flag: booking %s", b.pk)
             continue
-        statement = balances.statement(b.person, years.year_of(b.person, today))
-        notify.returned(b, statement, base_url)
         n += 1
     return n
