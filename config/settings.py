@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "people",
     "shifts",
     "messaging",
+    "uploads",
     "leave",
     "absence",
     "payroll",
@@ -143,6 +144,12 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Uploaded documents (spec 5). Outside anything the web server serves; the
+# app writes here and the download view reads it. In production this is
+# under the systemd StateDirectory, so it is backed up with the database.
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT") or BASE_DIR / "media")
+UPLOAD_MAX_BYTES = int(os.environ.get("UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {

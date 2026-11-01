@@ -22,6 +22,7 @@
 <div class="dialog-links">
   {% if is_all_teams %}<a href="{% url 'permissions' person.pk %}" data-dialog>Permissions</a>{% endif %}
   <a href="{% url 'profile-history' person.pk %}" data-dialog>History</a>
+  {% if can_manage_files %}<a href="{% url 'person-uploads' person.pk %}">Uploads</a>{% endif %}
 </div>
 {% endif %}
 {% endblock %}

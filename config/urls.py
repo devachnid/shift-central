@@ -13,5 +13,6 @@ urlpatterns = [
     path("", include("absence.urls")),
     path("", include("payroll.urls")),
     path("", include("messaging.urls")),
+    path("", include("uploads.urls")),
     path("", home, name="home"),
 ]

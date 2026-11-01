@@ -34,7 +34,7 @@ def profile(request, pk):
         raise Http404
     if (tab == "notes" or request.method == "POST") and not manages:
         raise PermissionDenied      # staff read their own profile, never write it
-    context = {"person": person, "tab": tab, "manages": manages, "saved": False,
+    context = {"person": person, "tab": tab, "manages": manages, "can_manage_files": access.can_manage(request.user, person), "saved": False,
                "title": "Your profile" if access.is_self(request.user, person) else f"{person.name}'s profile"}
     if tab == "display":
         _display(request, person, context)
