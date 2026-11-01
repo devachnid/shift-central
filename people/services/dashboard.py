@@ -6,29 +6,29 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-from leave.models import Booking, BookingDay
+from leave.models import Booking
 from leave.services import returns, sickness
 from messaging.services import outbox, push
 from people.services import access, health, hr_sync
-from shifts.models import Entry, OpenShift
+from shifts.models import OpenShift
 from shifts.services import gp_sync, open_shifts
-from shifts.services.today import SITES, site_of
+from shifts.services import today as today_board
 
 NEXT_DAYS = 14
 
 
 def today_card(people, today):
-    by_site = {site: set() for site in SITES}
-    home = set()
-    shifts = Entry.objects.filter(person__in=people, day=today, kind=Entry.Kind.SHIFT, covered_by__isnull=True).select_related("department")
-    for e in shifts:
-        if e.wfh:
-            home.add(e.person_id)
-        else:
-            by_site[site_of(e)].add(e.person_id)
-    off = (BookingDay.objects.filter(booking__person__in=people, day=today, booking__status__in=Booking.ACTIVE)
-           .values("booking__person").distinct().count())
-    return {"sites": [(site, len(ids)) for site, ids in by_site.items() if ids], "wfh": len(home), "off": off}
+    """The Who's in today board (so the card and that page agree), narrowed
+    to the people this manager manages."""
+    mine = set(people.values_list("pk", flat=True))
+    board = today_board.board(today)
+    sites = []
+    for site in board["sites"]:
+        ids = {m["person"].pk for team in site["teams"] for m in team["people"] if m["person"].pk in mine}
+        if ids:
+            sites.append((site["name"], len(ids)))
+    return {"sites": sites, "wfh": len({m["person"].pk for m in board["wfh"]} & mine),
+            "off": len({o["person"].pk for o in board["off"]} & mine)}
 
 
 def waiting_card(user, people, today):

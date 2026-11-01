@@ -9,8 +9,8 @@ import pytest
 from leave.services import bookings
 from people.services import dashboard
 from shifts.services import open_shifts
-from tests.factories import (client_for, make_booking, make_department, make_entry, make_person, make_sick, make_team,
-                             make_team_manager, make_type, make_user_for)
+from tests.factories import (client_for, make_booking, make_department, make_entry, make_gp_session, make_person, make_sick,
+                             make_team, make_team_manager, make_type, make_user_for)
 
 pytestmark = pytest.mark.django_db
 TODAY = date(2026, 11, 2)       # the pinned Monday
@@ -44,6 +44,15 @@ def test_the_today_card_counts_people_in_by_site_working_from_home_and_off(cast)
     card = dashboard.build(cast.boss.user, TODAY)["today"]
     assert dict(card["sites"]) == {"PMC": 1, "AG": 1, "Either": 1}
     assert card["wfh"] == 1 and card["off"] == 1
+
+
+def test_the_today_card_agrees_with_the_whos_in_today_board(cast):
+    hidden = make_person(first_name="Hidden", team=cast.reception, start_date=date(2020, 1, 6), display_on_rota=False)
+    make_entry(hidden, TODAY, department=make_department("Reception PMC"))
+    gp = make_person(first_name="Doc", team=cast.reception, start_date=date(2020, 1, 6), is_gp=True)
+    make_gp_session(gp, TODAY, part="AM", site="AG")
+    card = dashboard.build(cast.lead.user, TODAY)["today"]
+    assert dict(card["sites"]) == {"AG": 1}                                     # the GP, not the hidden person
 
 
 def test_a_team_manager_sees_only_their_own_teams_people(cast):
@@ -104,3 +113,21 @@ def test_the_page(cast):
     assert "System" not in page
     assert "System" in client_for(cast.boss).get("/reports/dashboard/").content.decode()
     assert 'href="/reports/dashboard/"' in client_for(cast.lead).get("/rota/").content.decode()
+
+
+def test_the_next_and_flags_cards_leave_out_other_teams_people(cast):
+    make_booking(cast.nina, TODAY + timedelta(days=5))
+    post = open_shifts.post(cast.boss.user, cast.nursing, TODAY + timedelta(days=3), time(9), time(13), audience_teams=[cast.nursing])
+    for n in range(3):
+        make_sick(cast.nina, TODAY - timedelta(days=60 - 14 * n))
+    cast.nina.end_date = TODAY + timedelta(days=10)
+    cast.nina.save()
+    returning = make_booking(cast.nina, TODAY - timedelta(days=20), TODAY - timedelta(days=2), type=make_type("Maternity", flag_return=True))
+    mine = dashboard.build(cast.lead.user, TODAY)
+    assert mine["next"]["leave"] == [] and mine["next"]["open_shifts"] == []
+    assert mine["flags"]["triggers"] == [] and mine["flags"]["leaving"] == [] and mine["flags"]["returning"] == []
+    everyone = dashboard.build(cast.boss.user, TODAY)
+    assert [b.person for b in everyone["next"]["leave"]] == [cast.nina] and everyone["next"]["open_shifts"] == [post]
+    assert [t["person"] for t in everyone["flags"]["triggers"]] == [cast.nina]
+    assert [r["person"] for r in everyone["flags"]["leaving"]] == [cast.nina]
+    assert everyone["flags"]["returning"] == [returning]
