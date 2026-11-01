@@ -1,7 +1,7 @@
 # AMG Shift Central: engagement — design
 
 **Date:** 2026-11-01
-**Status:** approved in conversation, section by section; awaiting the written-spec review
+**Status:** approved in conversation, section by section; the written spec approved 2026-11-01
 **Requirements:** `docs/requirements/` as amended by
 `docs/requirements/2026-10-29-proposed-amendments.md`. This spec covers
 ROTA-11 and REQ-16 (open shifts); NOTIF-01 (push, for every notification
