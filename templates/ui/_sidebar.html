@@ -16,7 +16,7 @@
     {% endfor %}
   </nav>
   <div class="sidebar-foot">
-    <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+    <form method="post" action="{% url 'logout' %}" data-logout data-unsubscribe-url="{% url 'push-unsubscribe' %}">{% csrf_token %}
       <button type="submit" aria-label="Log out"><svg class="nav-icon" aria-hidden="true"><use href="{% static 'img/icons.svg' %}#logout"></use></svg><span class="nav-label">Log out</span></button>
     </form>
   </div>

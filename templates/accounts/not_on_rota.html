@@ -6,6 +6,6 @@
   <h1>You're not yet on the rota</h1>
   <p>You've signed in as <strong>{{ user.email }}</strong>, but Shift Central hasn't received your record from Practice HR yet. Your record usually arrives within fifteen minutes; this page checks each time you reload it.</p>
   <p>If this carries on, ask the practice manager to check your record in Practice HR.</p>
-  <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn">Log out</button></form>
+  <form method="post" action="{% url 'logout' %}" data-logout data-unsubscribe-url="{% url 'push-unsubscribe' %}">{% csrf_token %}<button class="btn">Log out</button></form>
 </div>
 {% endblock %}

@@ -185,3 +185,47 @@ def test_endpoint_allowed_refuses_the_kelvin_sign():
     assert not push.endpoint_allowed("https://\u212aexample.fcm.googleapis.com/x")
     assert not push.endpoint_allowed("https://example.fcm.googleapis.com/\u212a")
     assert push.endpoint_allowed("https://Kexample.fcm.googleapis.com/x")      # ASCII capitals are still fine
+
+
+# --- the phone and the server agreeing (staging: a phone subscribed while signed
+# in as the superuser, refused for having no person, then showed "on" for the
+# next account while the server held no device) --------------------------------
+
+def test_an_account_with_no_staff_record_is_told_why_and_offered_no_button(push_on, superuser):
+    from django.test import Client
+    c = Client()
+    c.force_login(superuser)
+    body = c.get("/notifications/").content.decode()
+    assert "no staff record" in body and 'id="push-card"' not in body
+
+
+def test_subscribing_without_a_staff_record_says_why(push_on, superuser, caplog):
+    from django.test import Client
+    c = Client()
+    c.force_login(superuser)
+    r = post_json(c, "/push/subscribe/", GOOD)
+    assert r.status_code == 400 and "no staff record" in r.json()["error"]
+    assert "no staff record" in caplog.text
+
+
+def test_subscribing_says_whether_the_device_is_new(push_on):
+    c = client_for(make_person())
+    assert post_json(c, "/push/subscribe/", GOOD).json()["created"] is True
+    assert post_json(c, "/push/subscribe/", GOOD).json()["created"] is False      # the page's check on each visit
+
+
+def test_a_refused_address_is_logged_by_its_host_alone(push_on, caplog):
+    bad = {"endpoint": "https://push.example.net/secret/token", "keys": {"p256dh": "a", "auth": "b"}}
+    assert post_json(client_for(make_person()), "/push/subscribe/", bad).status_code == 400
+    assert "push.example.net" in caplog.text and "secret" not in caplog.text
+
+
+def test_a_refused_address_with_odd_characters_logs_nothing_odd(push_on, caplog):
+    bad = {"endpoint": "https://evil\n.example/x", "keys": {"p256dh": "a", "auth": "b"}}
+    post_json(client_for(make_person()), "/push/subscribe/", bad)
+    assert "\n.example" not in caplog.text
+
+
+def test_the_log_out_forms_say_to_clear_this_phone_first(push_on):
+    body = client_for(make_person()).get("/rota/").content.decode()
+    assert 'data-logout data-unsubscribe-url="/push/unsubscribe/"' in body

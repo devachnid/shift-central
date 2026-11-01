@@ -287,6 +287,14 @@ email the app sends about open shifts, messages, notices (if "also tell staff" w
 as before. **Remove** beside a device in *Your devices* stops the server sending to that phone; to switch it off from the phone itself, use
 the Turn off button there.
 
+**Log out turns them off on that phone**, so a phone handed to someone else shows nothing more of the last person's. Being
+signed out after ten idle minutes does not: that is what lets notifications reach the phone while the app is closed. After
+logging out, turn them on again from the Notifications page.
+
+**Notifications follow whoever is signed in.** Each time the Notifications page opens it re-registers the phone for the person signed in
+now, so a phone last used by someone else moves to them. An account with no staff record (the superuser) cannot receive
+notifications, and the page says so. When the server refuses a phone, the page shows the reason.
+
 **If a phone stops getting notifications:**
 
 - The phone's permission was blocked or turned off. The Notifications page says "Notifications are blocked for this site in your

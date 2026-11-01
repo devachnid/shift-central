@@ -6,6 +6,8 @@
   <h2>Notifications on this phone</h2>
   {% if not configured %}
     <p>Phone notifications are not switched on for this practice yet. Everything still reaches you by email.</p>
+  {% elif not has_person %}
+    <p>{{ no_person }}</p>
   {% else %}
   <div id="push-card" data-key="{{ public_key }}" data-subscribe-url="{% url 'push-subscribe' %}" data-unsubscribe-url="{% url 'push-unsubscribe' %}">
     <p data-push-status>Checking this device…</p>
