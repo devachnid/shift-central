@@ -386,3 +386,15 @@ def test_a_refused_approval_leaves_the_claim_waiting_and_the_seed_completes(peop
     assert engagement() == {"OpenShift": 3, "OpenShiftClaim": 2, "Notice": 2, "Message": 1, "UploadedFile": 1}
     assert not OpenShift.objects.filter(state="filled").exists()
     assert "1 open shift claim left waiting: the approval was refused" in report
+
+
+def test_the_mail_stub_takes_every_argument_messaging_send_takes():
+    """_no_mail swaps the stub in for messaging.send, so a leave notice sent
+    straight from the seed (not through on_commit) must still find a stub it
+    can call: the leave notifiers pass push_subject."""
+    import inspect
+
+    from messaging import services as messaging
+    from people.management.commands.seed_demo import _dropped_send
+    sent = set(inspect.signature(messaging.send).parameters)
+    assert sent <= set(inspect.signature(_dropped_send).parameters)

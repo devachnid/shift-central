@@ -129,7 +129,7 @@ SHIFTS = {
 ANNUAL_WEEKS, BANK_HOLIDAY_WEEKS = D("5"), D("1.6")
 
 
-def _dropped_send(person, subject, body, connection=None, url=None):
+def _dropped_send(person, subject, body, connection=None, url=None, push_subject=None):
     """Stands in for messaging.send: nothing is written or sent."""
     return Outbox(to_person=person, to_email=person.email or "", subject=subject, body=body, error="not sent: seed_demo")
 
