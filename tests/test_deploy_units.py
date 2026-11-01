@@ -259,6 +259,16 @@ def test_collectstatic_stays_root_and_world_readable():
     assert "UMask=0022" in branch and "--uid" not in branch
 
 
+def test_vapid_keys_runs_as_root_with_the_settings():
+    """The key file goes in /etc, which the app's user cannot write, and Django
+    needs the settings (a SECRET_KEY) even though the command never opens the database."""
+    script = (DEPLOY / "manage").read_text()
+    start = script.index("= collectstatic ]")
+    head = script[start - 12:script.index("\nelse\n", start)]
+    assert "= vapid_keys ]" in head and "--uid" not in head
+    assert "-p EnvironmentFile=/etc/shift-central.env" in script
+
+
 @pytest.mark.skipif(os.geteuid() == 0, reason="the refusal is for non-root callers")
 def test_the_wrapper_refuses_to_run_without_root():
     r = subprocess.run(["sh", str(DEPLOY / "manage"), "check"],
