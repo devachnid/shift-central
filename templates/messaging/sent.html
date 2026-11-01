@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Sent messages · AMG Shift Central{% endblock %}
+{% block topbar_actions %}<a class="topbar-action is-primary" href="{% url 'message-new' %}" data-dialog>Send a message +</a>{% endblock %}
+{% block content %}
+<table class="table">
+  <thead><tr><th>Subject</th><th>From</th><th>Sent</th><th>To</th><th>Read</th></tr></thead>
+  <tbody>
+  {% for m in rows %}
+    <tr><td><a href="{% url 'message' m.pk %}">{{ m.subject }}</a></td><td>{{ m.sender.person.name|default:"—" }}</td><td>{{ m.created_at|date:"j M Y H:i" }}</td>
+        <td>{% for r in m.recipients.all %}{{ r.person.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td>{% for r in m.recipients.all %}{% if r.read_at %}{{ r.person.first_name }}{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %}</td></tr>
+  {% empty %}<tr><td colspan="5">Nothing sent.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

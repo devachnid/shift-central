@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · AMG Shift Central{% endblock %}
+{% block content %}
+<div class="dash">
+  <section class="dash-card"><h2>Today</h2>
+    <p class="muted">{{ cards.day|date:"l j F" }}</p>
+    <ul>{% for site, n in cards.today.sites %}<li><strong>{{ n }}</strong> in at {% if site == "Either" %}no site{% else %}{{ site }}{% endif %}</li>{% empty %}<li>Nobody on shift.</li>{% endfor %}
+      <li><strong>{{ cards.today.wfh }}</strong> working from home</li><li><strong>{{ cards.today.off }}</strong> off</li></ul>
+    <a href="{% url 'rota-today' %}">Who's in today</a></section>
+  <section class="dash-card"><h2>Waiting for you</h2>
+    <ul><li><strong>{{ cards.waiting.leave }}</strong> leave request{{ cards.waiting.leave|pluralize }}{% if cards.waiting.leave %}, the oldest {{ cards.waiting.leave_oldest_days }} day{{ cards.waiting.leave_oldest_days|pluralize }} · <a href="{% url 'time-off-approve' %}">Decide</a>{% endif %}</li>
+      <li><strong>{{ cards.waiting.claims }}</strong> open shift claim{{ cards.waiting.claims|pluralize }}{% if cards.waiting.claims %} · <a href="{% url 'open-shifts' %}">Decide</a>{% endif %}</li></ul></section>
+  <section class="dash-card"><h2>Next 14 days</h2>
+    <h3>Leave starting</h3>
+    <ul>{% for b in cards.next.leave %}<li>{{ b.person.name }} · {{ b.type.name }} · {{ b.first_day|date:"D j M" }}</li>{% empty %}<li>None.</li>{% endfor %}</ul>
+    <h3>Open shifts</h3>
+    <ul>{% for s in cards.next.open_shifts %}<li><a href="{% url 'open-shift-detail' s.pk %}">{{ s.day|date:"D j M" }} {{ s.start|time:"H:i" }}–{{ s.finish|time:"H:i" }}</a> · {{ s.team.name }}</li>{% empty %}<li>None unfilled.</li>{% endfor %}</ul></section>
+  <section class="dash-card"><h2>Flags</h2>
+    <h3>Sickness triggers</h3>
+    <ul>{% for t in cards.flags.triggers %}<li>{{ t.person.name }} · {{ t.label }}</li>{% empty %}<li>None.</li>{% endfor %}</ul>
+    <h3>Leaving in 30 days</h3>
+    <ul>{% for r in cards.flags.leaving %}<li>{{ r.person.name }} · {{ r.person.end_date|date:"j M" }}</li>{% empty %}<li>None.</li>{% endfor %}</ul>
+    <h3>Returning from absence</h3>
+    <ul>{% for b in cards.flags.returning %}<li>{{ b.person.name }} · {{ b.type.name }} ended {{ b.last_day|date:"j M" }}</li>{% empty %}<li>None.</li>{% endfor %}</ul></section>
+  {% if cards.system %}
+  <section class="dash-card"><h2>System</h2>
+    <ul><li>Practice HR: {% if cards.system.hr %}{{ cards.system.hr.finished_at|date:"j M H:i" }}{% else %}never read{% endif %}</li>
+      <li>GP rota: {% if not cards.system.gp_configured %}not configured{% elif cards.system.gp %}{{ cards.system.gp.finished_at|date:"j M H:i" }}{% else %}never read{% endif %}</li>
+      <li>Phone notifications: {% if cards.system.push.configured %}{{ cards.system.push.devices }} device{{ cards.system.push.devices|pluralize }}, {{ cards.system.push.queued }} queued{% else %}not configured{% endif %}</li>
+      <li>Failed or stuck messages this week: <strong>{{ cards.system.outbox_failures }}</strong>{% if cards.system.outbox_failures %} · <a href="{% url 'outbox' %}?status=failed">Outbox</a>{% endif %}</li></ul></section>
+  {% endif %}
+</div>
+{% endblock %}

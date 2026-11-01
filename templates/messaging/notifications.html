@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Notifications · AMG Shift Central{% endblock %}
+{% block content %}
+<section class="notifications">
+  <h2>Notifications on this phone</h2>
+  {% if not configured %}
+    <p>Phone notifications are not switched on for this practice yet. Everything still reaches you by email.</p>
+  {% else %}
+  <div id="push-card" data-key="{{ public_key }}" data-subscribe-url="{% url 'push-subscribe' %}" data-unsubscribe-url="{% url 'push-unsubscribe' %}">
+    <p data-push-status>Checking this device…</p>
+    <p data-push-hint hidden>On an iPhone or iPad, add this app to your Home Screen first (Share, then Add to Home Screen), then open it from there and come back to this page.</p>
+    <button type="button" class="btn btn-dark" data-push-on hidden>Turn on notifications on this phone</button>
+    <button type="button" class="btn btn-quiet" data-push-off hidden>Turn off notifications on this phone</button>
+  </div>
+  <script src="{% static 'js/push.js' %}" defer></script>
+  {% endif %}
+  <p class="muted">Email keeps working whatever you choose here. A notification shows only the subject, never the message.</p>
+  <h3>Your devices</h3>
+  <table class="table"><tbody>
+  {% for d in devices %}
+    <tr><td>{{ d.label|default:"Device" }}</td><td>added {{ d.created_at|date:"j M Y" }}</td>
+        <td><form method="post" action="{% url 'push-device-remove' d.pk %}">{% csrf_token %}<button class="btn btn-quiet">Remove</button></form></td></tr>
+  {% empty %}<tr><td colspan="3">No devices are registered.</td></tr>{% endfor %}
+  </tbody></table>
+</section>
+{% endblock %}

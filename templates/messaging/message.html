@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}{{ message.subject }} · AMG Shift Central{% endblock %}
+{% block content %}
+<article class="message">
+  <h2>{{ message.subject }}</h2>
+  <p class="muted">From {{ message.sender.person.name|default:"a manager" }} · {{ message.created_at|date:"l j F Y H:i" }}</p>
+  <div class="message-body">{{ message.body|linebreaks }}</div>
+</article>
+<p><a href="{% url 'messages-inbox' %}">Back to messages</a></p>
+{% endblock %}

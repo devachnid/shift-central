@@ -1,0 +1,20 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}Send a message{% endblock %}
+{% block dialog_body %}
+{% if sent_to is not None %}
+  <p class="flash">Sent to {{ sent_to }} {{ sent_to|pluralize:"person,people" }}.</p>
+  <button type="button" class="btn btn-quiet" data-dialog-close>Close</button>
+{% else %}
+<form method="post" action="{% url 'message-new' %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  {% include "ui/_field.html" with field=form.subject %}
+  {% include "ui/_field.html" with field=form.body %}
+  {% include "ui/_field.html" with field=form.people %}
+  {% include "ui/_field.html" with field=form.teams %}
+  <div class="field"><label>{{ form.everyone }} {{ form.everyone.label }}</label></div>
+  <p class="field-help">Everyone chosen gets the message by email, and by notification if they have turned it on.</p>
+  <button class="btn btn-dark">Send</button>
+</form>
+{% endif %}
+{% endblock %}

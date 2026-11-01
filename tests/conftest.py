@@ -106,3 +106,14 @@ def all_teams_client(all_teams_user):
 def oidc_on(settings):
     settings.PRACTICE_HR_URL = "https://hr.example"
     settings.OIDC_RP_CLIENT_ID = "abc"
+
+
+@pytest.fixture
+def push_on(settings, tmp_path):
+    """Web push configured, as on the practice's box (no real key needed:
+    the sender is always faked in tests)."""
+    key = tmp_path / "vapid.pem"
+    key.write_text("test key")
+    settings.VAPID_PRIVATE_KEY_FILE = str(key)
+    settings.VAPID_PUBLIC_KEY = "BPublicKeyForTests"
+    settings.VAPID_SUBJECT = "mailto:test@example.org"

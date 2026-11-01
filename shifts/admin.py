@@ -5,7 +5,7 @@ from django.contrib import admin
 
 from people.admin import ReadOnlyModelAdmin
 
-from .models import DayChange, Entry, GpSession, GridOptions, Template
+from .models import DayChange, Entry, GpSession, GridOptions, OpenShift, OpenShiftClaim, Template
 
 
 @admin.register(Entry)
@@ -38,3 +38,13 @@ class GpSessionAdmin(ReadOnlyModelAdmin):
 @admin.register(GridOptions)
 class GridOptionsAdmin(ReadOnlyModelAdmin):
     list_display = ("user",)
+
+
+@admin.register(OpenShift)
+class OpenShiftAdmin(ReadOnlyModelAdmin):
+    list_display = ("day", "start", "finish", "team", "state")
+
+
+@admin.register(OpenShiftClaim)
+class OpenShiftClaimAdmin(ReadOnlyModelAdmin):
+    list_display = ("open_shift", "person", "state", "created_at")

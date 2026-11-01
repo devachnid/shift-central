@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Documents · AMG Shift Central{% endblock %}
+{% block content %}
+<form class="filters" method="post" enctype="multipart/form-data">{% csrf_token %}
+  <strong>Add a document</strong>
+  {% for e in form.non_field_errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+  <label>Title {{ form.title }}</label>
+  <label>File {{ form.file }}</label>{% for e in form.file.errors %}<span class="field-error">{{ e }}</span>{% endfor %}
+  <button class="btn btn-quiet" type="submit">Upload</button>
+</form>
+<table class="table">
+  <thead><tr><th>Document</th><th>File</th><th>Size</th><th>Added</th><th></th></tr></thead>
+  <tbody>
+  {% for f in files %}
+    <tr><td><a href="{% url 'upload-download' f.pk %}">{{ f.title }}</a></td><td>{{ f.original_name }}</td><td>{{ f.size|filesizeformat }}</td>
+        <td>{{ f.created_at|date:"j M Y" }}{% if f.uploaded_by.person %} · {{ f.uploaded_by.person.name }}{% endif %}</td>
+        <td><form method="post" action="{% url 'upload-delete' f.pk %}">{% csrf_token %}<button class="btn btn-quiet">Delete</button></form></td></tr>
+  {% empty %}<tr><td colspan="5">No documents yet.</td></tr>{% endfor %}
+  </tbody>
+</table>
+<p><a href="{% url 'profile' owner.pk %}" data-dialog>Back to the profile</a></p>
+{% endblock %}

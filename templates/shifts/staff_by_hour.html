@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Staff by hour · AMG Shift Central{% endblock %}
+{% block topbar_actions %}<a class="topbar-action" href="?{{ request.GET.urlencode }}{% if request.GET %}&amp;{% endif %}download=1">Download</a>{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <label>From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
+  <label>To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <label>Site <select name="site"><option value="">Both</option><option value="AG"{% if site == "AG" %} selected{% endif %}>AG</option><option value="PMC"{% if site == "PMC" %} selected{% endif %}>PMC</option></select></label>
+  <label>Team <select name="team"><option value="">All</option>{% for t in teams %}<option value="{{ t.pk }}"{% if team and t.pk == team.pk %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></label>
+  <button class="btn btn-quiet" type="submit">Refresh</button>
+</form>
+<p class="muted">People working at any point in each hour; breaks are not taken off. Shifts whose department has no AG or PMC in its name show under Both only. GPs are not included: their sessions have no clock times here.</p>
+<div class="table-scroll"><table class="table staff-by-hour">
+  <thead><tr><th>Day</th>{% for label in data.labels %}<th>{{ label }}</th>{% endfor %}<th>Peak</th></tr></thead>
+  <tbody>
+  {% for r in data.rows %}
+    <tr><td>{{ r.day|date:"D j M" }}</td>{% for n in r.counts %}<td>{{ n }}</td>{% endfor %}<td><strong>{{ r.peak }}</strong></td></tr>
+    <tr class="muted"><td>of which WFH</td>{% for n in r.wfh %}<td>{{ n }}</td>{% endfor %}<td></td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

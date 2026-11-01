@@ -25,6 +25,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .nav-icon { width: 18px; height: 18px; flex: none; }
 .is-collapsed .nav-label { display: none; }
 .nav-count { margin-left: auto; background: var(--amber); color: var(--amber-ink); border-radius: 10px; padding: 0 7px; font-size: var(--fs-xs); font-weight: 700; }
+.nav-badge { margin-left: auto; min-width: 1.4em; padding: 0 6px; border-radius: 999px; background: var(--amber); color: var(--amber-ink); font-size: var(--fs-xs); text-align: center; }
 .nav-flyout { display: none; position: absolute; left: 100%; top: 0; min-width: 180px; background: var(--navy-deep); box-shadow: 2px 2px 8px var(--shadow); z-index: 20; padding: var(--sp-1) 0; }
 .nav-item:hover > .nav-flyout, .nav-item:focus-within > .nav-flyout { display: block; }
 .nav-flyout a { display: block; padding: 8px var(--sp-4); color: var(--pale); text-decoration: none; white-space: nowrap; }
@@ -158,3 +159,21 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .check { display: flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-md); color: var(--ink); }
 fieldset.field { border: 0; padding: 0; } fieldset.field legend { font-size: var(--fs-xs); color: var(--muted); padding: 0; margin-bottom: 2px; }
 .field .check input { width: auto; }
+
+/* Open shifts */
+.open-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-4); }
+.open-card { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: var(--sp-4); }
+.open-card header { font-size: var(--fs-lg); margin-bottom: var(--sp-2); }
+.open-claim { border-top: 1px solid var(--hairline); padding-top: var(--sp-2); margin-top: var(--sp-2); }
+.open-past { margin-top: var(--sp-5); }
+.notice-cards { display: grid; gap: var(--sp-4); max-width: 46rem; }
+.notice-card { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: var(--sp-4); }
+.notice-card.is-pinned { border-color: var(--navy); }
+.dash { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--sp-4); }
+.dash-card { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: var(--sp-4); }
+.dash-card h3 { font-size: var(--fs-md); margin: var(--sp-3) 0 var(--sp-1); }
+.dash-card ul { margin: 0; padding-left: 1.1rem; }
+
+.table-scroll { overflow-x: auto; }
+.staff-by-hour td, .staff-by-hour th { text-align: center; }
+.staff-by-hour td:first-child { text-align: left; white-space: nowrap; }

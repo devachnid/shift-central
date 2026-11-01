@@ -1,0 +1,14 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}Claim this shift{% endblock %}
+{% block dialog_body %}
+<p>{{ post.day|date:"l j F" }}, {{ post.start|time:"H:i" }}–{{ post.finish|time:"H:i" }}{% if post.department %} · {{ post.department.name }}{% endif %}</p>
+<form method="post" action="{% url 'open-shift-claim' post.pk %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <fieldset class="field"><legend>How will you work it?</legend>
+    {% for value, label in form.fields.overtime.choices %}<label><input type="radio" name="overtime" value="{{ value }}"{% if form.overtime.value|default:"" == value %} checked{% endif %}> {{ label }}</label> {% endfor %}
+  </fieldset>
+  {% include "ui/_field.html" with field=form.note %}
+  <button class="btn btn-dark">Claim it</button>
+</form>
+{% endblock %}

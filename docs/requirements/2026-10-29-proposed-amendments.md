@@ -137,3 +137,29 @@ two ahead of the dates in point 3. Two choices to note: no sickness reason
 is recorded (Q-11; the manager note stays the place for anything a manager
 wants to keep), and GPs appear on the payroll report with their sessions
 counted as hours worked at 4 h 10 min.
+
+## Postscript, 1 November 2026 (developers), engagement
+
+Built as the pack asks (spec 5), with these choices for you to know about:
+
+- **Messages are one-way.** Managers send to people, teams or everyone;
+  staff read them in the app, by email and (if they turn it on) by
+  notification. Staff cannot send or reply. The notice board is managers-only too.
+- **Phone notifications are the phone's own choice.** A person turns them on,
+  per phone, on the Notifications page; email always still arrives. A
+  notification shows the subject line, except sickness-trigger and return-from-absence
+  notices, which show only a general line; the message text is never shown.
+- **Open shifts:** the person claiming chooses normal hours, overtime paid or
+  overtime TOIL (ROTA-06), and the approving manager can change it. A clash
+  with the person's own rota warns the manager but does not stop approval,
+  except leave that would hide the new shift (a whole day, or part of a day
+  that covers it), which does. No manager approves or declines their own claim.
+- **Documents:** the shared area is for the whole practice to read; what is
+  kept on a person is seen by their managers only, not by the person.
+- **The Outbox keeps its copy of each email's text for a year**, then removes
+  that text and keeps who, when and the subject. The messages and notices
+  themselves are kept. Say if you want a different period.
+- **The three reports** are defined in the spec (dashboard, shifts, staff by
+  hour). Staff by hour counts people working at any point in each hour, takes
+  no breaks off and leaves out GPs; if the FindMyShift screenshots show
+  something different, tell us.

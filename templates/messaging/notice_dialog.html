@@ -1,0 +1,16 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}{% if notice %}Edit notice{% else %}Post a notice{% endif %}{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% if notice %}{% url 'notice-edit' notice.pk %}{% else %}{% url 'notice-new' %}{% endif %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  {% include "ui/_field.html" with field=form.title %}
+  {% include "ui/_field.html" with field=form.body %}
+  <div class="field"><label>{{ form.everyone }} {{ form.everyone.label }}</label></div>
+  {% include "ui/_field.html" with field=form.teams %}
+  <div class="field"><label>{{ form.pinned }} {{ form.pinned.label }}</label></div>
+  {% include "ui/_field.html" with field=form.show_until %}
+  {% if not notice %}<div class="field"><label>{{ form.notify }} {{ form.notify.label }}</label></div>{% endif %}
+  <button class="btn btn-dark">{% if notice %}Save{% else %}Post{% endif %}</button>
+</form>
+{% endblock %}

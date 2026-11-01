@@ -19,6 +19,7 @@ def figures(user):
     neither this leave year nor the next still needs a manager. Whatever day
     a person's leave year starts, those two years begin within a year of today."""
     from payroll.services import runs
+    from messaging.services import push
     from shifts.services import gp_sync, notify
     today = timezone.localdate()
     people = access.managed_people(user).current(on=today) | access.managed_people(user).filter(
@@ -30,6 +31,7 @@ def figures(user):
         Q(weekly_hours__isnull=True) | Q(days_per_week__isnull=True) | ~Q(pk__in=with_allowance))
     gp_unmatched = gp_sync.unmatched()
     leave = _leave(user, people, today)
+    push_status = push.status() if access.is_all_teams(user) else None
     return {
         "last_run": hr_sync.last_run(),
         "gp_configured": gp_sync.configured(),
@@ -41,6 +43,7 @@ def figures(user):
         "not_seen": hr_sync.not_seen_recently().filter(pk__in=people).order_by("name"),
         "leaving_soon": _leaving(people, today),
         "payroll_unsent": runs.unsent_due(user, today),
+        "push": push_status,
         **leave,
     }
 

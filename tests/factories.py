@@ -93,3 +93,34 @@ def make_bank_holiday(day, name="Bank holiday"):
 def make_allowance(person, year, annual, bank_holiday, **kw):
     kw.setdefault("from_day", year)
     return Allowance.objects.create(person=person, leave_year=year, annual_hours=annual, bank_holiday_hours=bank_holiday, **kw)
+
+
+def client_for(person, **user_kw):
+    """A test client signed in as the person: their existing login, else a
+    new one made with `user_kw` (is_all_teams_manager=True and the like)."""
+    from django.test import Client
+    client = Client()
+    client.force_login(person.user if person.user_id else make_user_for(person, **user_kw))
+    return client
+
+
+def make_open_shift(team=None, day=None, **kw):
+    from datetime import timedelta
+
+    from shifts.models import OpenShift
+    kw.setdefault("start", time(9, 0))
+    kw.setdefault("finish", time(13, 0))
+    return OpenShift.objects.create(team=team or make_team(), day=day or (timezone.localdate() + timedelta(days=7)), **kw)
+
+
+def make_claim(open_shift, person, **kw):
+    from shifts.models import OpenShiftClaim
+    return OpenShiftClaim.objects.create(open_shift=open_shift, person=person, **kw)
+
+
+def make_push_device(person, endpoint=None, **kw):
+    from messaging.models import PushDevice
+    endpoint = endpoint or f"https://push.example.net/send/{next(_next_id)}"
+    kw.setdefault("p256dh", "BNcPublic")
+    kw.setdefault("auth", "authsecret")
+    return PushDevice.objects.create(person=person, endpoint=endpoint, **kw)

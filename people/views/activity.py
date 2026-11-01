@@ -10,14 +10,17 @@ from people.services import access
 
 
 # Models whose audit rows are filed against the person's pk.
-PERSON_MODELS = ("people.person", "shifts.entry", "leave.booking", "leave.adjustment", "leave.yearend")
+PERSON_MODELS = ("people.person", "shifts.entry", "leave.booking", "leave.adjustment", "leave.yearend",
+                 "uploads.personfile")
 
 
 # Practice-wide leave settings, shown like departments and templates: not
 # keyed to a person.
 LEAVE_SETTING_MODELS = {"leave.bankholiday": "Bank holiday", "leave.blackout": "Blackout",
                         "leave.leavetype": "Leave type", "leave.leavesetting": "Leave settings",
-                        "payroll.payrollrun": "Payroll"}
+                        "payroll.payrollrun": "Payroll", "shifts.openshift": "Open shift",
+                        "messaging.message": "Message", "messaging.notice": "Notice",
+                        "uploads.sharedfile": "Shared file"}
 
 
 def _pk(value):

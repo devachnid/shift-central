@@ -10,7 +10,7 @@ typed in twice.
 Built so far: the foundation (sign-in, people fed from Practice HR every
 fifteen minutes, teams, departments, who may manage whom, staff profiles with
 hours and leave allowances, the activity and log-in logs, and the Staff list's
-Health card), the rota grid release, leave, and absence and payroll:
+Health card), the rota grid release, leave, absence and payroll, and engagement:
 
 - **The rota grid**: a spreadsheet-style grid of days and people that managers
   type shifts into, drag, copy, template, mark as overtime and print, with
@@ -39,11 +39,15 @@ Health card), the rota grid release, leave, and absence and payroll:
   flags, emailed by `shift-central-daily-flags.timer`; the monthly payroll report with its
   Excel, Mark as sent and the corrections to months already sent; and the sickness and
   leave one-pagers as a page, a PDF or an Excel file.
+- **Engagement**: open shifts that staff claim and a manager approves onto the rota;
+  messages from managers and a notice board; uploaded documents (a shared area, and
+  papers kept on a person); the Outbox of everything the app has sent; the manager's
+  dashboard and the Shifts and Staff by hour reports; and the installable phone app with
+  optional notifications (`shift-central-push.timer`, see "Phone notifications").
 
-Push notifications to the phone app and the dashboard, shifts and staff-by-hour reports
-follow in spec 5. Managers' guides:
-[docs/admin/absence.md](docs/admin/absence.md), [docs/admin/leave.md](docs/admin/leave.md)
-and [docs/admin/rota.md](docs/admin/rota.md).
+Managers' guides:
+[docs/admin/absence.md](docs/admin/absence.md), [docs/admin/engagement.md](docs/admin/engagement.md),
+[docs/admin/leave.md](docs/admin/leave.md) and [docs/admin/rota.md](docs/admin/rota.md).
 
 The practice manager's requirements, approved on 29 October 2026, are in
 [docs/requirements/](docs/requirements/README.md): thirteen documents from
@@ -55,6 +59,8 @@ and the leave release's, with the deviations recorded while it was built, in
 [docs/superpowers/specs/2026-10-31-leave-design.md](docs/superpowers/specs/2026-10-31-leave-design.md);
 the absence and payroll release's, with its deviations, in
 [docs/superpowers/specs/2026-10-31-absence-payroll-design.md](docs/superpowers/specs/2026-10-31-absence-payroll-design.md);
+the engagement release's, with its deviations, in
+[docs/superpowers/specs/2026-11-01-engagement-design.md](docs/superpowers/specs/2026-11-01-engagement-design.md);
 later specs and the plans go in `docs/superpowers/specs/` and
 `docs/superpowers/plans/`, as in the rota and HR repositories.
 
@@ -239,6 +245,10 @@ comment syntax after one):
 | `LEAVE_API_TOKENS` | Comma-separated bearer tokens the GP rota app may send to read `/api/v1/leave` (see "The leave feed"). Make each with `openssl rand -hex 32`. Unset, the feed answers 401 to everyone. |
 | `API_RATE_LIMIT_PER_MINUTE` | Requests per minute one address may make to the leave feed, counted whether or not the token is right. Defaults to 600; `0` switches the limit off. The count is per gunicorn worker. |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL` | The outgoing mail relay, used by Notify staff to tell people their rota changed. `EMAIL_HOST` set is what "mail is configured" means; `DEFAULT_FROM_EMAIL` is the sender staff see. With none of them, the app works and Notify staff keeps every change unsent. `EMAIL_USE_TLS` defaults on. |
+| `VAPID_PRIVATE_KEY_FILE`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` | Phone notifications. All three, with the key file present, or push is off and the Notifications page says so; email is unaffected. A key file the app cannot read still counts as present, so every push then ends as "push failed": check its group and mode (640, group `shift-central`). The `vapid_keys` command writes the key file and prints the three lines (see "Phone notifications"). The private key is a file, never a line in the environment file. |
+| `PUSH_ENDPOINT_HOSTS` | Optional. Extra push-service host names, comma-separated, that a phone may register with. The built-in list is Google (`fcm.googleapis.com`), Mozilla (`push.services.mozilla.com`), Apple (`push.apple.com`) and Windows (`notify.windows.com`), each with its subdomains. Only an `https` address on one of those hosts, with no credentials and the default port, is accepted. |
+| `MEDIA_ROOT`, `UPLOAD_MAX_BYTES` | Optional. Where uploaded documents are kept, and the largest file accepted. `MEDIA_ROOT` defaults to a `media` folder beside the database (with `DB_PATH` as above, `/var/lib/shift-central/media`), which is what production wants, so leave it unset there; `deploy/backup.sh` archives `/var/lib/shift-central/media` each night. If `MEDIA_ROOT` is overridden to anywhere else, that folder is not in the nightly backup. `UPLOAD_MAX_BYTES` defaults to 10485760 (10 MB). |
+| `OUTBOX_BODY_MONTHS` | Optional. How many months the Outbox keeps its copy of each email's text before the daily job (`shift-central-daily-flags.timer`) removes it, keeping who, when and the subject; the messages and notices themselves are kept. Defaults to 12; `0` keeps the text for ever. |
 | `TRUSTED_PROXY_IPS` | Comma-separated addresses whose `CF-Connecting-IP` header is believed, for the log-in log's address. Defaults to loopback, which is right behind a Cloudflare tunnel; never set it to a wildcard. The leave feed's rate limit is per client address, so if the proxy's address is not trusted here every caller shares one bucket. |
 | `CSP_REPORT_ONLY` | `1` sends the Content-Security-Policy as report-only, blocking nothing: the way back if it blocks something after a deploy. Unset, it is enforced. |
 
@@ -248,7 +258,7 @@ Then:
     deploy/manage migrate
     deploy/manage createsuperuser
     cp deploy/gunicorn.service /etc/systemd/system/shift-central.service
-    cp deploy/shift-central-backup.* deploy/shift-central-clearsessions.* deploy/shift-central-hr-sync.* deploy/shift-central-gp-sync.* deploy/shift-central-leave-reminders.* deploy/shift-central-daily-flags.* /etc/systemd/system/
+    cp deploy/shift-central-backup.* deploy/shift-central-clearsessions.* deploy/shift-central-hr-sync.* deploy/shift-central-gp-sync.* deploy/shift-central-leave-reminders.* deploy/shift-central-daily-flags.* deploy/shift-central-push.* /etc/systemd/system/
     systemctl daemon-reload
     systemctl enable --now shift-central shift-central-backup.timer shift-central-clearsessions.timer
     deploy/manage hr_sync
@@ -275,6 +285,11 @@ Enabled before that, each reminder is recorded as "mail not configured" and not
 sent, and the request counts as reminded, so it is not reminded again; the daily
 flags (leavers, returns, the year end) are claimed the same way.
 
+`shift-central-push.timer` (every minute) sends the queued phone notifications.
+It is only worth enabling once the three `VAPID_*` settings are set (until then it
+does nothing); "Phone notifications" below has the steps. Copy the unit now and leave it
+not enabled.
+
 **Run every management command through `deploy/manage`**, as root:
 `deploy/manage createsuperuser`, `deploy/manage check --deploy`, `deploy/manage
 hr_sync` and so on. It runs the command as the `shift-central` user with the
@@ -284,6 +299,31 @@ is in WAL mode, so a root process that opens it can leave `db.sqlite3-wal` and
 `-shm` files owned by root, and the app then cannot open them. Sourcing the
 settings into a shell (`. /etc/shift-central.env`) also fails on a secret key
 holding `(` or `$`, which Django's generated keys do.
+
+### Phone notifications (optional)
+
+Staff can have a notification on their phone for every message the app emails
+them. It is off until a key is made and three settings are in place. As root:
+
+    install -d -o root -g shift-central -m 750 /etc/shift-central
+    deploy/manage vapid_keys --out /etc/shift-central/vapid.pem --group shift-central --subject mailto:you@example.org
+    # add the three lines it prints to /etc/shift-central.env
+    systemctl restart shift-central
+    systemctl enable --now shift-central-push.timer
+
+Use a real address for `--subject`, one that push services could write to; Apple
+may refuse the default. `deploy/manage` runs this one command as root, not as the
+`shift-central` user, because the key file belongs in `/etc`, where that user cannot
+write and whose group has to be set (the same exception it makes for `collectstatic`);
+it never opens the database. It refuses to overwrite a key that exists.
+
+Replacing the key cuts off every registered phone until each person turns
+notifications on again, so keep a copy of `/etc/shift-central/vapid.pem` somewhere
+safe. A notification shows the subject line, except sickness-trigger and return-from-absence notices, which show only a general line; the message text is never shown.
+Each person turns notifications on for their own phone on the Notifications page
+(sidebar); the [engagement guide](docs/admin/engagement.md#putting-the-app-on-a-phone)
+has the steps for Android and iPhone. A notification that cannot be sent within 24
+hours is dropped as expired, and the Outbox shows it.
 
 ### The leave feed
 
@@ -379,6 +419,29 @@ The `git pull` runs as root, so the tree stays root's. A pull that changes a
 file in `deploy/` needs that unit copied into `/etc/systemd/system/` again,
 then `systemctl daemon-reload`. The `.service` files are the ones that change.
 
+### Upgrading to the engagement release
+
+Open shifts, messages, the notice board, uploads, the Outbox, the dashboard and
+the new reports, and phone notifications. In `/srv/shift-central`, as root:
+
+1. `git pull`
+2. `.venv/bin/pip install -r requirements.txt` (the release adds `pywebpush`, which
+   brings its own dependencies).
+3. `deploy/manage migrate`, then straight away `systemctl restart shift-central` (or stop
+   `shift-central` before migrating and start it after). The old code is still running and
+   cannot write the Outbox's new columns, so every email it sends in between fails to record.
+4. `deploy/manage collectstatic --noinput`, then `deploy/manage check --deploy`
+5. Copy the new units: `cp deploy/shift-central-push.* /etc/systemd/system/ && systemctl daemon-reload`.
+   The backup script changed too, but it is read from the code tree, so the pull is enough.
+6. `systemctl restart shift-central` again, so the new static files are served.
+7. Optionally, set up phone notifications (the section above), which is when the push timer is enabled.
+
+`MEDIA_ROOT` needs no setting: uploaded documents go to `/var/lib/shift-central/media`,
+beside the database, and the next nightly backup archives them. Phones that already have
+the app open pick up the new service worker the next time they visit; nobody has to
+reinstall anything. Nothing else changes for staff until a manager posts an open shift,
+sends a message or a notice, or someone turns notifications on.
+
 ### Check the deployment is not in debug mode
 
 `DEBUG` defaults to off, but a stray `DEBUG=1` turns on tracebacks, publishes
@@ -400,6 +463,12 @@ only by that user. Each copy is complete: names, emails, hours, allowances,
 managers' notes, and session keys that work as login cookies. That is why it
 lives in the closed state directory, and why a root `sqlite3` is never used on
 the live file.
+
+The same run also writes `media-YYYY-MM-DD.tar.gz` beside it: the uploaded
+documents (the managers' papers on people, and the shared area), kept 30 days under the same
+rules. It is made only once something has been uploaded. The off-site push sends the whole
+backups directory, so the document archives go to the Proxmox Backup Server too, encrypted,
+and they hold personal papers, so treat them as you do the database copies.
 
 ### Off-site backup to a Proxmox Backup Server
 
@@ -474,7 +543,7 @@ plaintext. It is optional: a host without it still backs up locally.
 
 From the box's own copy (the usual case: a bad deploy or a mistaken change):
 
-    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer shift-central-daily-flags.timer
+    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer shift-central-daily-flags.timer shift-central-push.timer
     ls -l /var/lib/shift-central/backups
     cp -p /var/lib/shift-central/db.sqlite3 /root/db-before-restore.sqlite3
     install -o shift-central -g shift-central -m 600 /var/lib/shift-central/backups/db-<date>.sqlite3 /var/lib/shift-central/db.sqlite3
@@ -482,12 +551,22 @@ From the box's own copy (the usual case: a bad deploy or a mistaken change):
     deploy/manage migrate
     systemctl start shift-central shift-central-hr-sync.timer
 
-Then start `shift-central-gp-sync.timer`, `shift-central-leave-reminders.timer` and
-`shift-central-daily-flags.timer` as well, but only the ones that were enabled (`systemctl
-is-enabled shift-central-gp-sync.timer shift-central-leave-reminders.timer
-shift-central-daily-flags.timer` says): a timer started before its settings are in place
-fails every fifteen minutes (the GP sync) or marks requests and flags as sent when no mail can go
-(the reminders and the daily flags).
+Then start `shift-central-gp-sync.timer`, `shift-central-leave-reminders.timer`,
+`shift-central-daily-flags.timer` and `shift-central-push.timer` as well, but only the ones
+that were enabled (`systemctl is-enabled shift-central-gp-sync.timer
+shift-central-leave-reminders.timer shift-central-daily-flags.timer
+shift-central-push.timer` says): a timer started before its settings are in place
+fails every fifteen minutes (the GP sync) or marks requests and flags as sent when no mail
+can go (the reminders and the daily flags). The push timer without the `VAPID_*` settings only
+says "push is not configured" and exits.
+
+The uploaded documents are not in the database copy. If the `media` folder is lost too, put it back
+from the same night's archive, as root, so that the owner stored in it is kept:
+
+    tar -C /var/lib/shift-central -xzpf /var/lib/shift-central/backups/media-<date>.tar.gz
+
+A database restored without its documents still lists them, and a download of one that is missing
+answers "not found" (the journal names the row, never the file); upload it again.
 
 Stopping first matters: a copy dropped under a running app leaves the old
 `-wal` file beside it, and SQLite would replay it into the restored database.

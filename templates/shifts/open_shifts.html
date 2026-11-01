@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Open shifts · AMG Shift Central{% endblock %}
+{% block topbar_actions %}{% if is_manager %}<a class="topbar-action is-primary" href="{% url 'open-shift-post' %}" data-dialog>Post an open shift +</a>{% endif %}{% endblock %}
+{% block content %}
+<div class="open-cards">
+{% for post in live %}
+  <article class="open-card">
+    <header><strong>{{ post.day|date:"D j M" }}</strong> {{ post.start|time:"H:i" }}–{{ post.finish|time:"H:i" }}{% if post.break_minutes %} · {{ post.break_minutes }} min break{% endif %}</header>
+    <p>{% if post.department %}{{ post.department.name }}{% endif %}{% if post.comment %} {{ post.comment }}{% endif %}</p>
+    <p class="muted">For {{ post.audience_text }} · owned by {{ post.team.name }}</p>
+    {% if post.my_claim %}
+      <p>You've claimed this.</p>
+      <form method="post" action="{% url 'open-claim-withdraw' post.my_claim.pk %}">{% csrf_token %}<button class="btn btn-quiet">Withdraw my claim</button></form>
+    {% elif post.can_claim %}
+      <a class="btn btn-dark" href="{% url 'open-shift-claim' post.pk %}" data-dialog>Claim</a>
+    {% endif %}
+    {% if post.is_owner %}
+      {% for c in post.waiting %}
+      <div class="open-claim"><strong>{{ c.person.name }}</strong> — {% if c.overtime %}{{ c.get_overtime_display }}{% else %}Normal hours{% endif %}{% if c.note %}: {{ c.note }}{% endif %}
+        {% for w in c.clashes %}<span class="flash flash-warning">{{ w }}</span>{% endfor %}
+        <a href="{% url 'open-claim-decide' c.pk %}" data-dialog>Decide</a></div>
+      {% endfor %}
+      <p><a href="{% url 'open-shift-detail' post.pk %}">Details</a></p>
+    {% endif %}
+  </article>
+{% empty %}<p>Nothing is open.</p>{% endfor %}
+</div>
+{% if past %}
+<details class="open-past"><summary>Filled and past</summary>
+  <table class="table"><tbody>
+  {% for post in past %}
+    <tr><td>{{ post.day|date:"D j M" }} {{ post.start|time:"H:i" }}–{{ post.finish|time:"H:i" }}</td>
+        <td>{% if post.state == "filled" %}filled by {{ post.filled_by.name }}{% elif post.state == "withdrawn" %}withdrawn{% else %}expired{% endif %}</td>
+        <td>{% if post.is_owner %}<a href="{% url 'open-shift-detail' post.pk %}">Details</a>{% endif %}</td></tr>
+  {% endfor %}
+  </tbody></table>
+</details>
+{% endif %}
+{% endblock %}

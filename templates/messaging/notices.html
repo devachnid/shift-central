@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Notice board · AMG Shift Central{% endblock %}
+{% block topbar_actions %}{% if is_manager %}<a class="topbar-action is-primary" href="{% url 'notice-new' %}" data-dialog>Post a notice +</a>{% endif %}{% endblock %}
+{% block content %}
+<div class="notice-cards">
+{% for n in notices %}
+  <article class="notice-card{% if n.pinned %} is-pinned{% endif %}">
+    <h2>{% if n.pinned %}📌 {% endif %}{{ n.title }}</h2>
+    <p class="muted">{{ n.created_at|date:"j M Y" }}{% if n.show_until %} · until {{ n.show_until|date:"j M Y" }}{% endif %}</p>
+    <div>{{ n.body|linebreaks }}</div>
+  </article>
+{% empty %}<p>Nothing on the board.</p>{% endfor %}
+</div>
+{% if editable %}
+<h3>Notices you can edit</h3>
+<table class="table"><tbody>
+{% for n in editable %}
+  <tr><td>{{ n.title }}</td><td>{{ n.created_at|date:"j M Y" }}</td>
+      <td><a href="{% url 'notice-edit' n.pk %}" data-dialog>Edit</a></td>
+      <td><form method="post" action="{% url 'notice-remove' n.pk %}">{% csrf_token %}<button class="btn btn-quiet">Remove</button></form></td></tr>
+{% endfor %}
+</tbody></table>
+{% endif %}
+{% endblock %}

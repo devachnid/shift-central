@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "people",
     "shifts",
     "messaging",
+    "uploads",
     "leave",
     "absence",
     "payroll",
@@ -143,6 +144,14 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Uploaded documents (spec 5). Outside anything the web server serves; the
+# app writes here and the download view reads it. By default a "media" folder
+# beside the database: /var/lib/shift-central/media in production, where
+# deploy/backup.sh archives it each night with the database.
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT") or Path(DATABASES["default"]["NAME"]).parent / "media")
+UPLOAD_MAX_BYTES = int(os.environ.get("UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))
+OUTBOX_BODY_MONTHS = int(os.environ.get("OUTBOX_BODY_MONTHS", "12"))
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
@@ -174,6 +183,18 @@ EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
 EMAIL_TIMEOUT = 10
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "webmaster@localhost")
 
+# Web push (spec 5). Push is off unless all three are set and the key file
+# exists. The private key is a file, never an environment line (a PEM folded
+# onto one line arrives broken), readable by the app's group only.
+VAPID_PRIVATE_KEY_FILE = os.environ.get("VAPID_PRIVATE_KEY_FILE", "").strip()
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "").strip()
+VAPID_SUBJECT = os.environ.get("VAPID_SUBJECT", "").strip()
+# The only hosts a phone may register as its push address (the server calls
+# whatever address is stored, so it must not be a person's choice of host).
+# Each entry matches the host itself and its subdomains; add more here.
+PUSH_ENDPOINT_HOSTS = ("fcm.googleapis.com", "push.services.mozilla.com", "push.apple.com", "notify.windows.com") + tuple(
+    h.strip() for h in os.environ.get("PUSH_ENDPOINT_HOSTS", "").split(",") if h.strip())
+
 if not DEBUG:
     SECURE_SSL_REDIRECT = not _TESTING
     SESSION_COOKIE_SECURE = True
@@ -201,6 +222,7 @@ LOGGING = {
         "people": {"level": "INFO"},
         "shifts": {"level": "INFO"},
         "messaging": {"level": "INFO"},
+        "uploads": {"level": "INFO"},
     },
 }
 

@@ -193,6 +193,10 @@ the flag is there so that it cannot be run by accident.
 
 ## Upgrading a box that runs an earlier release
 
+The engagement release (open shifts, messages, uploads, phone notifications) has its own short
+checklist in the README, "Upgrading to the engagement release". The list below carries a box
+from earlier releases up to absence and payroll.
+
 A server already running Shift Central takes the release like any other pull, plus the
 new settings and units. This is the checklist for the absence and payroll release, and it also
 carries a box from the Foundation, the rota grid or the leave release through their steps (6 and 8 are the
@@ -261,7 +265,7 @@ current or the next leave year.
 
 A copy of the database is made every night at 02:30 into
 `/var/lib/shift-central/backups/`, kept 30 days and readable only by the app's own
-user; if the off-site push is set up (README, "Off-site backup"), it is sent encrypted
+user, with a `media-DATE.tar.gz` of the uploaded documents beside each; if the off-site push is set up (README, "Off-site backup"), it is sent encrypted
 to the Proxmox Backup Server straight afterwards. Both are timer-driven and silent
 when they work.
 
@@ -289,7 +293,7 @@ migration that went wrong.
 
 From the box's own copy:
 
-    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer shift-central-daily-flags.timer
+    systemctl stop shift-central shift-central-hr-sync.timer shift-central-gp-sync.timer shift-central-leave-reminders.timer shift-central-daily-flags.timer shift-central-push.timer
     ls -l /var/lib/shift-central/backups
     cp -p /var/lib/shift-central/db.sqlite3 /root/db-before-restore.sqlite3
     install -o shift-central -g shift-central -m 600 /var/lib/shift-central/backups/db-<date>.sqlite3 /var/lib/shift-central/db.sqlite3
@@ -297,10 +301,11 @@ From the box's own copy:
     deploy/manage migrate
     systemctl start shift-central shift-central-hr-sync.timer
 
-Then start `shift-central-gp-sync.timer`, `shift-central-leave-reminders.timer` and
-`shift-central-daily-flags.timer` as well, but only the ones that were enabled (`systemctl
-is-enabled shift-central-gp-sync.timer shift-central-leave-reminders.timer
-shift-central-daily-flags.timer` says): a timer started before its settings are in place
+Then start `shift-central-gp-sync.timer`, `shift-central-leave-reminders.timer`,
+`shift-central-daily-flags.timer` and `shift-central-push.timer` as well, but only the ones
+that were enabled (`systemctl is-enabled shift-central-gp-sync.timer
+shift-central-leave-reminders.timer shift-central-daily-flags.timer
+shift-central-push.timer` says): a timer started before its settings are in place
 fails every fifteen minutes (the GP sync) or marks requests and flags as sent when no mail can go
 (the reminders and the daily flags).
 

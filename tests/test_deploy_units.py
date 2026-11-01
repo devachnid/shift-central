@@ -61,13 +61,19 @@ def _directives(path):
     return out
 
 
-def test_there_are_eight_services():
+def test_there_are_nine_services():
     assert [p.name for p in SERVICES] == [
         "gunicorn.service", "shift-central-backup.service",
         "shift-central-clearsessions.service", "shift-central-daily-flags.service",
         "shift-central-gp-sync.service",
         "shift-central-hr-sync.service", "shift-central-leave-reminders.service",
-        "shift-central-pbs.service"]
+        "shift-central-pbs.service", "shift-central-push.service"]
+
+
+def test_the_push_service_runs_send_push_every_minute():
+    (cmd,) = _directives(DEPLOY / "shift-central-push.service")["ExecStart"]
+    assert cmd == "/srv/shift-central/.venv/bin/python manage.py send_push"
+    assert "OnCalendar=minutely" in (DEPLOY / "shift-central-push.timer").read_text()
 
 
 @pytest.mark.parametrize("unit", SERVICES, ids=lambda p: p.name)
@@ -191,6 +197,40 @@ def test_the_backup_script_runs_and_keeps_its_copies_private(tmp_path):
     assert (tmp_path / "backups").stat().st_mode & 0o077 == 0
 
 
+def test_the_backup_script_archives_the_media_privately(tmp_path):
+    """With uploaded documents present, a private media archive is written."""
+    import sqlite3
+    with sqlite3.connect(tmp_path / "db.sqlite3") as conn:
+        conn.execute("create table t (x)")
+    (tmp_path / "media" / "uploads").mkdir(parents=True)
+    (tmp_path / "media" / "uploads" / "paper.pdf").write_bytes(b"%PDF")
+    (tmp_path / "media" / "uploads" / "half.part").write_bytes(b"partial")
+    env = {**os.environ, "STATE_DIRECTORY": str(tmp_path)}
+    try:
+        subprocess.run(["sh", str(DEPLOY / "backup.sh")], env=env, check=True, capture_output=True)
+    except FileNotFoundError:
+        pytest.skip("no sh")
+    except subprocess.CalledProcessError as exc:
+        if b"sqlite3: not found" in exc.stderr or b"sqlite3: command not found" in exc.stderr:
+            pytest.skip("sqlite3 CLI not installed")
+        raise
+    (archive,) = (tmp_path / "backups").glob("media-*.tar.gz")
+    assert archive.stat().st_mode & 0o077 == 0, oct(archive.stat().st_mode)
+    import tarfile
+    with tarfile.open(archive) as tar:
+        names = tar.getnames()
+    assert "media/uploads/paper.pdf" in names and not any(n.endswith(".part") for n in names)
+
+
+def test_the_media_archive_tolerates_files_changing_while_it_is_read():
+    """tar exits 1 when a file changed as it was read: the nightly copy still
+    stands. Exit 2 and above (a real failure) still fails the script."""
+    script = (DEPLOY / "backup.sh").read_text()
+    assert "--exclude='*.part'" in script
+    assert re.search(r"tar --exclude='\*\.part' .*media( .*)? \|\| \[ \$\? -eq 1 \]$", script, re.M), "exit 1 tolerated, 2 and above fails"
+    assert "-le 1" not in script and "-ge" not in script
+
+
 # --- off-site backup to the Proxmox Backup Server --------------------------------
 
 def test_the_pbs_secrets_stay_out_of_the_app_users_reach():
@@ -251,6 +291,16 @@ def test_collectstatic_stays_root_and_world_readable():
     start = script.index("= collectstatic ]")
     branch = script[start:script.index("\nelse\n", start)]
     assert "UMask=0022" in branch and "--uid" not in branch
+
+
+def test_vapid_keys_runs_as_root_with_the_settings():
+    """The key file goes in /etc, which the app's user cannot write, and Django
+    needs the settings (a SECRET_KEY) even though the command never opens the database."""
+    script = (DEPLOY / "manage").read_text()
+    start = script.index("= collectstatic ]")
+    head = script[start - 12:script.index("\nelse\n", start)]
+    assert "= vapid_keys ]" in head and "--uid" not in head
+    assert "-p EnvironmentFile=/etc/shift-central.env" in script
 
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="the refusal is for non-root callers")

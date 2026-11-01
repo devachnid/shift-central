@@ -7,6 +7,7 @@
       <a class="nav-link" href="{{ item.url }}" aria-label="{{ item.label }}">
         <svg class="nav-icon" aria-hidden="true"><use href="{% static 'img/icons.svg' %}#{{ item.icon }}"></use></svg>
         <span class="nav-label">{{ item.label }}</span>
+        {% if item.badge %}<span class="nav-badge" aria-label="{{ item.badge }} {% if item.key == "outbox" %}failed{% else %}unread{% endif %}">{{ item.badge }}</span>{% endif %}
       </a>
       {% if item.children %}
       <div class="nav-flyout">{% for child in item.children %}<a href="{{ child.url }}"{% if child.dialog %} data-dialog{% endif %}>{{ child.label }}</a>{% endfor %}</div>

@@ -394,7 +394,6 @@ Switch the timer on once mail works; see [Setting up](setup.md).
 
 Left for later releases, so do not look for them:
 
-- Push notifications to the phone app, and the dashboard, shifts and staff-by-hour reports.
 - Pay rates, salary and a budget report. The payroll report is hours; the bureau does the pay, and the
   statutory sick pay is theirs.
 - A payroll period other than the calendar month.
