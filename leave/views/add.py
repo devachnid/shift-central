@@ -8,7 +8,6 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, render
-from django.utils import timezone
 
 from leave.forms import BookingForm
 from leave.models import Booking
@@ -46,12 +45,17 @@ def _preview(form, booking=None, person=None):
         return {}
     kw = form.booking_kwargs()
     person = person or form.cleaned_data.get("person") or booking.person
+    dates_only = booking is not None and booking.dates_only
     try:
-        # An edit is held to "this leave year and the next" only for the days it adds (bookings._check_dates).
-        bookings._check_dates(person, kw["first"], kw["last"], kw["part"], kw["start"], kw["finish"], was=booking)
+        if dates_only:      # a past schedule entry: the service's own rule, not the leave-year one (2026 is edited in 2027)
+            bookings._check_dates_only(kw["leave_type"], kw["first"], kw["last"], kw["part"])
+        else:               # an edit is held to "this leave year and the next" only for the days it adds (bookings._check_dates)
+            bookings._check_dates(person, kw["first"], kw["last"], kw["part"], kw["start"], kw["finish"], was=booking)
         bookings._check_overlap(person, kw["first"], kw["last"], exclude=booking)
     except LeaveError as e:
         return {"error": e.message}
+    if dates_only:          # no costed days: no cost table, no balance
+        return _sickness_preview(person, kw["leave_type"], kw["first"], kw["last"], booking, dates_only=True)
     if booking is None:
         costs = bookings.preview(person, kw["leave_type"], kw["first"], kw["last"], kw["part"], kw["start"], kw["finish"])
     else:      # the booking's own covered shifts still count towards its cost
@@ -73,7 +77,7 @@ def _preview(form, booking=None, person=None):
         elif day in stored and day not in typed:
             row.update(cost=stored[day].cost_seconds, source="override", placeholder=False, account=stored[day].account)
         days.append(row)
-    out_sickness = _sickness_preview(person, kw["leave_type"], kw["first"], kw["last"], booking)
+    out_sickness = _sickness_preview(person, kw["leave_type"], kw["first"], kw["last"], booking, dates_only=False)
     account = kw["leave_type"].draws_from
     pool = POOLS.get(account)
     out = {"days": days, "total": sum(d["cost"] for d in days),
@@ -88,10 +92,11 @@ def _preview(form, booking=None, person=None):
                   "over": any(line["over"] for line in lines), "balances": lines} | out_sickness
 
 
-def _sickness_preview(person, leave_type, first, last, booking=None):
+def _sickness_preview(person, leave_type, first, last, booking=None, dates_only=False):
     """For a sickness type: the entry this one joins on to (LEAVE-41) with
     the dates an Extend would give, whether it is long, and the instances
-    and trigger after it when recorded separately. Empty for other types."""
+    and trigger after it when recorded separately. Empty for other types.
+    `dates_only`: the entry being typed is a past schedule entry (no hours)."""
     if not leave_type.sickness:
         return {}
     joins = sickness.joins_on(person, first, last, exclude=booking)
@@ -104,8 +109,10 @@ def _sickness_preview(person, leave_type, first, last, booking=None):
         out["extended_first"], out["extended_last"] = min(first, joins.first_day), max(last, joins.last_day)
         merged = len([b for b in others if b.pk != joins.pk]) + (1 if sickness.overlaps_window(out["extended_first"], out["extended_last"]) else 0)
         out["instances_extended"], out["level_label_extended"] = merged, sickness.level_label(sickness.level(merged))
-        # A past schedule entry is only for days already gone: today's sickness cannot be extended onto it.
-        out["extend_blocked"] = bool(joins.dates_only and last >= timezone.localdate())
+        # Extend joins entries of the same kind only: a booked entry extended onto a past schedule entry would
+        # take its days off payroll, and a past schedule entry extended onto a booked one would cost history.
+        out["extend_blocked"] = joins.dates_only != dates_only
+        out["joins_dates_only"] = joins.dates_only
     return {"sickness": out}
 
 

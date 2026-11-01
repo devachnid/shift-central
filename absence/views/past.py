@@ -39,7 +39,7 @@ def add(request):
     preview = {}
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
-        preview = _sickness_preview(d["person"], d["type"], d["first_day"], d["last_day"])
+        preview = _sickness_preview(d["person"], d["type"], d["first_day"], d["last_day"], dates_only=True)
         if not request.POST.get("preview"):
             s = preview.get("sickness") or {}
             base = request.build_absolute_uri("/")

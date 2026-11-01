@@ -132,3 +132,36 @@ def test_a_booking_with_a_cancellation_requested_is_not_convertible(boss, sam):
     c.force_login(boss.user)
     body = c.get(f"/time-off/{holiday.pk}/").content.decode()
     assert f"/time-off/{holiday.pk}/convert/" not in body
+
+
+def test_a_refusal_at_the_sickness_step_rolls_the_whole_conversion_back(boss, sam, today):
+    dec = date(2026, 12, 14)
+    for n in range(5):
+        make_entry(sam, dec + timedelta(days=n), start=time(9), finish=time(17), break_minutes=30)
+    make_allowance(sam, date(2026, 1, 1), Decimal("172.5"), 0)
+    holiday = bookings.book(boss.user, sam, make_type("Holiday"), dec, dec + timedelta(days=4), "whole")     # Mon–Fri, booked in 2026
+    today(date(2027, 1, 11))                                        # last leave year now: the sickness booking is refused
+    sent = len(mail.outbox)
+    with pytest.raises(LeaveError):
+        convert.convert(boss.user, holiday, sick(), dec + timedelta(days=3), dec + timedelta(days=4))       # Thu–Fri: no tail, the head is edited first
+    holiday.refresh_from_db()
+    assert (holiday.first_day, holiday.last_day, holiday.status) == (dec, dec + timedelta(days=4), "approved")
+    assert holiday.booking_days.count() == 5 and balances.statement(sam, date(2026, 1, 1)).taken["annual"] == 135000
+    assert not Booking.objects.filter(person=sam, type__sickness=True).exists() and Booking.objects.filter(person=sam).count() == 1
+    assert len(mail.outbox) == sent                                 # the head edit's email went with the rollback
+
+
+def test_another_teams_manager_cannot_convert(boss, sam):
+    from tests.factories import make_team, make_team_manager
+    sam.team = make_team("Reception")
+    sam.save()
+    nursing = make_team("Nursing")
+    nora = make_person(first_name="Nora", team=nursing)
+    make_user_for(nora)
+    make_team_manager(nora, nursing)
+    holiday = bookings.book(boss.user, sam, make_type("Holiday"), MON, MON + timedelta(days=4), "whole")
+    c = Client()
+    c.force_login(nora.user)
+    assert c.get(f"/time-off/{holiday.pk}/convert/").status_code == 403
+    r = c.post(f"/time-off/{holiday.pk}/convert/", {"first_day": "2027-03-03", "last_day": "2027-03-04", "type": sick().pk, "note": ""})
+    assert r.status_code == 403 and not Booking.objects.filter(person=sam, type__sickness=True).exists()

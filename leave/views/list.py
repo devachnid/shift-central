@@ -88,7 +88,7 @@ def time_off(request):
             b = r["booking"]
             w.writerow([b.person.name, b.first_day.isoformat(), b.last_day.isoformat(), r["days"], b.type.name,
                         b.label if r["detail"] else b.type.name, "" if b.paid is None or not r["detail"] else ("Paid" if b.paid else "Unpaid"),
-                        "dates only" if r["dates_only"] else (hours.fmt(r["cost"]) if r["cost"] is not None else ""), r["status"]])
+                        "dates only" if r["dates_only"] and r["detail"] else (hours.fmt(r["cost"]) if r["cost"] is not None else ""), r["status"]])
         return response
     return render(request, "leave/list.html", {
         "page_title": "Time off", "rows": rows, "start": start, "end": end, "filters": filters, "is_manager": manager,

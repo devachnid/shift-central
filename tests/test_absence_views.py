@@ -165,3 +165,61 @@ def test_the_statement_carries_the_persons_sickness_line(sam, lead):
     assert "Sickness: 1 instance in the last six months" in body
     nina = make_person(first_name="Nina", team=sam.team)
     assert _client(nina).get(f"/staff/{sam.pk}/profile/?tab=hours").status_code == 403      # the instances count is for the person and their managers only
+
+
+def test_a_booked_entry_never_extends_a_past_schedule_entry(sam, lead):
+    past = make_sick(sam, date(2026, 10, 5), date(2026, 10, 9), dates_only=True)     # Mon–Fri, typed as history
+    c = _client(lead)
+    body = _post(c, sam, date(2026, 10, 12), date(2026, 10, 13), preview="1").content.decode()     # Mon–Tue, wholly past, joins on
+    assert 'name="join"' not in body and "Extend the existing entry" not in body
+    assert "recorded as a separate instance because the other entry is a past schedule entry" in body
+    assert _post(c, sam, date(2026, 10, 12), date(2026, 10, 13), join="extend").json() == {"refresh": True}
+    past.refresh_from_db()
+    assert (past.first_day, past.last_day) == (date(2026, 10, 5), date(2026, 10, 9))
+    booked = Booking.objects.get(person=sam, type__sickness=True, dates_only=False)
+    assert (booked.first_day, booked.last_day) == (date(2026, 10, 12), date(2026, 10, 13)) and booked.booking_days.count() == 2     # costed: it reaches payroll
+
+
+def test_a_past_schedule_entry_never_extends_a_booked_one(sam, lead):
+    c = _client(lead)
+    assert _post(c, sam, date(2026, 10, 12), date(2026, 10, 13), join="separate").json() == {"refresh": True}
+    booked = Booking.objects.get(person=sam, type__sickness=True)
+    data = {"person": sam.pk, "type": sick().pk, "first_day": "2026-10-05", "last_day": "2026-10-09"}
+    body = c.post("/time-off/past/add/", {**data, "preview": "1"}).content.decode()
+    assert 'name="join"' not in body and "recorded as a separate instance because the other entry has hours" in body
+    assert c.post("/time-off/past/add/", {**data, "join": "extend"}).json() == {"refresh": True}
+    booked.refresh_from_db()
+    assert (booked.first_day, booked.last_day, booked.booking_days.count()) == (date(2026, 10, 12), date(2026, 10, 13), 2)
+    past = Booking.objects.get(person=sam, dates_only=True)
+    assert (past.first_day, past.last_day) == (date(2026, 10, 5), date(2026, 10, 9)) and not past.booking_days.exists()
+
+
+def test_a_2026_dates_only_entry_is_edited_from_the_dialog_in_2027(sam, lead, today):
+    row = make_sick(sam, date(2026, 7, 6), date(2026, 7, 10), dates_only=True)
+    today(date(2027, 1, 15))
+    c = _client(lead)
+    body = c.get(f"/time-off/{row.pk}/edit/").content.decode()
+    assert "Leave can be booked" not in body and "Costs can be set" not in body and "cost_2026-07-06" not in body
+    data = {"person": sam.pk, "type": sick().pk, "description": "", "first_day": "2026-07-06", "last_day": "2026-07-14", "part": "whole",
+            "start": "", "finish": "", "paid": "unknown", "manager_note": ""}
+    assert c.post(f"/time-off/{row.pk}/edit/", data).json() == {"refresh": True}
+    row.refresh_from_db()
+    assert (row.first_day, row.last_day, row.dates_only) == (date(2026, 7, 6), date(2026, 7, 14), True) and not row.booking_days.exists()
+    r = c.post(f"/time-off/{row.pk}/edit/", {**data, "last_day": "2027-01-15"})                  # still only for days already gone
+    assert r.status_code == 200 and "already gone" in r.content.decode()
+
+
+def test_colleagues_see_neither_the_dates_only_nor_the_long_sickness_note(sam, lead, team):
+    row = make_sick(sam, date(2026, 8, 3), date(2026, 9, 11), dates_only=True)                   # 40 days: long
+    nina = make_person(first_name="Nina", team=team)
+    body = _client(nina).get(f"/time-off/{row.pk}/").content.decode()
+    assert "Sick leave" in body and "Dates only" not in body and "Long sickness" not in body
+    body = _client(lead).get(f"/time-off/{row.pk}/").content.decode()
+    assert "Dates only" in body and "Long sickness" in body
+    nursing = make_team("Nursing")
+    nora = make_person(first_name="Nora", team=nursing)
+    make_user_for(nora)
+    make_team_manager(nora, nursing)
+    csv = _client(nora).get("/time-off/?from=2026-08-01&to=2026-09-30&download=1").content.decode()
+    assert "Sam Patel" in csv and "dates only" not in csv
+    assert "dates only" in _client(lead).get("/time-off/?from=2026-08-01&to=2026-09-30&download=1").content.decode()

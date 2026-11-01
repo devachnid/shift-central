@@ -1,6 +1,6 @@
 {% with s=preview.sickness %}
 {% if s.joins %}
-  {% if s.extend_blocked and not editing %}<p class="flash flash-warning">This joins on to {{ s.joins.type.name }} {{ s.joins.first_day|date:"j M" }}–{{ s.joins.last_day|date:"j M Y" }}, a past schedule entry; today's sickness is recorded as a separate instance.</p>
+  {% if s.extend_blocked and not editing %}<p class="flash flash-warning">This joins on to {{ s.joins.type.name }} {{ s.joins.first_day|date:"j M" }}–{{ s.joins.last_day|date:"j M Y" }}; it is recorded as a separate instance because the other entry {% if s.joins_dates_only %}is a past schedule entry{% else %}has hours{% endif %}.</p>
   {% elif editing %}<p class="flash flash-warning">This joins on to {{ s.joins.type.name }} {{ s.joins.first_day|date:"j M" }}–{{ s.joins.last_day|date:"j M Y" }}: the two count as separate instances.</p>
   {% else %}<fieldset class="field" data-submit-on-change><legend>This joins on to {{ s.joins.type.name }} {{ s.joins.first_day|date:"j M" }}–{{ s.joins.last_day|date:"j M Y" }}</legend>
     <label class="check"><input type="radio" name="join" value="extend"{% if join != "separate" %} checked{% endif %}> Extend that entry to {{ s.extended_first|date:"j M" }}–{{ s.extended_last|date:"j M Y" }} (one instance)</label>
