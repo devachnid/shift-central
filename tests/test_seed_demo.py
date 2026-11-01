@@ -17,6 +17,8 @@ from people.management.commands.seed_demo import ACTOR_EMAIL, CAST, REQUESTER_EM
 from people.models import Allowance, AuditEntry, Person, TeamManager
 from people.services import health
 from shifts.models import DayChange, Entry, OpenShift, OpenShiftClaim
+from shifts.services import open_shifts
+from shifts.services.open_shifts import OpenShiftError
 from uploads.models import UploadedFile
 from tests.factories import (make_allowance, make_bank_holiday, make_entry, make_gp_session, make_person, make_team, make_type,
                              make_user_for)
@@ -371,3 +373,16 @@ def test_a_second_run_adds_no_engagement_rows(people, media):
 
 def test_the_report_mentions_the_engagement_rows(people, media):
     assert "open shifts" in seed()
+
+
+def test_a_refused_approval_leaves_the_claim_waiting_and_the_seed_completes(people, media, monkeypatch):
+    def refuse(user, claim, *args, **kwargs):
+        raise OpenShiftError("Liam Doyle is on leave that day.")
+    monkeypatch.setattr(open_shifts, "approve", refuse)
+    report = seed()
+    phones = OpenShift.objects.get(comment="demo data: phones")
+    assert phones.state == "open" and phones.filled_by is None
+    assert phones.claims.get().state == "waiting" and phones.claims.get().person.first_name == "Liam"
+    assert engagement() == {"OpenShift": 3, "OpenShiftClaim": 2, "Notice": 2, "Message": 1, "UploadedFile": 1}
+    assert not OpenShift.objects.filter(state="filled").exists()
+    assert "1 open shift claim left waiting: the approval was refused" in report

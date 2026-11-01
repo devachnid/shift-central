@@ -453,7 +453,7 @@ class Command(BaseCommand):
             try:
                 open_shifts.approve(actor, claim)
             except OpenShiftError:
-                counts["claims_left_waiting"] += 1      # seeded leave hides the shift: the claim stays waiting
+                counts["claims_left_waiting"] += 1      # approval refused (leave on the day, say): the claim stays waiting
         if not Notice.objects.filter(title="Fire drill on Thursday").exists():
             notice_service.post(actor, "Fire drill on Thursday", "Meet at the front car park at 10:30. This is a test notice.", True, [], pinned=True)
             counts["notices"] += 1
@@ -487,7 +487,8 @@ class Command(BaseCommand):
             out(f"  engagement: {counts['open_shifts']} open shifts, {counts['notices']} notices, "
                 f"{counts['messages']} message, {counts['documents']} document")
             if counts["claims_left_waiting"]:
-                out(f"  {counts['claims_left_waiting']} claim left waiting: seeded leave is on its day")
+                n = counts["claims_left_waiting"]
+                out(f"  {n} open shift claim{'s' if n != 1 else ''} left waiting: the approval was refused")
         out("All-teams managers: made by Practice HR's 'Admin of shift-central' box when each signs in; "
             "nothing was done for them here.")
         out("No email was sent and none was queued.")
