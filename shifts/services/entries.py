@@ -195,9 +195,10 @@ def set_cell(user, person, day, items):
 
 def add_item(user, person, day, raw, via_open_shift=False):
     """Add one shift to the person's cell, keeping what is already there
-    (overtime beside a normal shift, a split day). The same writer as
-    set_cell, so the day is recorded for Notify staff, leave covers it as it
-    covers any shift, and the cell change is audited.
+    (overtime beside a normal shift, a split day), covered rows included: a
+    rostered shift that approved leave hides is rewritten, not dropped, and
+    _write re-applies the cover. The same writer as set_cell, so the day is
+    recorded for Notify staff and the cell change is audited.
 
     `via_open_shift` is for open_shifts.approve only: that service has
     already checked the user manages the post's owning team, whatever team
@@ -209,7 +210,9 @@ def add_item(user, person, day, raw, via_open_shift=False):
     if item["kind"] != Entry.Kind.SHIFT:
         raise ValueError("only a shift can be added this way")
     with transaction.atomic():
-        return _write(user, person, day, [*_items_of(person, day), item], keep_appearance=True)
+        existing = [_snapshot(e) for e in Entry.objects.filter(person=person, day=day)
+                    .select_related("department").order_by("position")]
+        return _write(user, person, day, [*existing, item], keep_appearance=True)
 
 
 PATCHABLE = ("department", "break_minutes", "overtime", "wfh", "appearance", "text")
