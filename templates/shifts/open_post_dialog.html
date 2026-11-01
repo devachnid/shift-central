@@ -1,0 +1,20 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}Post an open shift{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% url 'open-shift-post' %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  {% include "ui/_field.html" with field=form.team %}
+  {% include "ui/_field.html" with field=form.day %}
+  <div class="field-row">
+    <div class="field">{% include "ui/_field.html" with field=form.start %}</div>
+    <div class="field">{% include "ui/_field.html" with field=form.finish %}</div>
+    <div class="field">{% include "ui/_field.html" with field=form.break_minutes %}</div>
+  </div>
+  {% include "ui/_field.html" with field=form.department %}
+  {% include "ui/_field.html" with field=form.comment %}
+  <div class="field"><label>{{ form.everyone }} {{ form.everyone.label }}</label></div>
+  {% include "ui/_field.html" with field=form.audience %}
+  <button class="btn btn-dark">Post it</button>
+</form>
+{% endblock %}

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from shifts.views import api, dialogs, grid, reports, today
+from shifts.views import api, dialogs, grid, open_shifts, reports, today
 
 urlpatterns = [
     path("rota/api/window/", api.window_view, name="api-window"),
@@ -14,6 +14,13 @@ urlpatterns = [
     path("rota/api/order/", api.order, name="api-order"),
     path("reports/hours/", reports.hours_report, name="report-hours"),
     path("rota/today/", today.today_view, name="rota-today"),
+    path("rota/open/", open_shifts.open_list, name="open-shifts"),
+    path("rota/open/post/", open_shifts.post_dialog, name="open-shift-post"),
+    path("rota/open/<int:pk>/", open_shifts.detail, name="open-shift-detail"),
+    path("rota/open/<int:pk>/claim/", open_shifts.claim_dialog, name="open-shift-claim"),
+    path("rota/open/<int:pk>/withdraw/", open_shifts.withdraw_post, name="open-shift-withdraw"),
+    path("rota/open/claims/<int:pk>/decide/", open_shifts.decide_dialog, name="open-claim-decide"),
+    path("rota/open/claims/<int:pk>/withdraw/", open_shifts.withdraw_claim, name="open-claim-withdraw"),
     path("rota/", grid.grid, name="rota"),
     path("rota/download/", grid.download, name="rota-download"),
     path("rota/shift/<int:person_pk>/<str:day>/", dialogs.shift, name="rota-shift"),

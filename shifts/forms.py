@@ -4,7 +4,8 @@ share one writer and one set of rules."""
 
 from django import forms
 
-from people.models import Department
+from people.models import Department, Team
+from people.services import access
 from shifts.models import Entry
 from shifts.services import options as options_service
 
@@ -59,3 +60,33 @@ class ReplaceForm(forms.Form):
     find = forms.CharField(max_length=200)
     replace = forms.CharField(max_length=200, required=False, label="Replace with")
     match_case = forms.BooleanField(required=False)
+
+
+OVERTIME_CHOICES = [("", "Normal hours"), ("paid", "Overtime – paid"), ("toil", "Overtime – TOIL")]
+
+
+class OpenShiftForm(forms.Form):
+    team = forms.ModelChoiceField(Team.objects.none(), label="Owning team",
+                                  help_text="Its managers approve the claims.")
+    day = forms.DateField(widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"))
+    start = forms.TimeField(widget=forms.TimeInput(attrs={"type": "time"}, format="%H:%M"))
+    finish = forms.TimeField(widget=forms.TimeInput(attrs={"type": "time"}, format="%H:%M"))
+    break_minutes = forms.TypedChoiceField(choices=BREAK_CHOICES, coerce=int, initial=0, label="Break")
+    department = forms.ModelChoiceField(Department.objects.filter(archived=False), required=False, empty_label="None")
+    comment = forms.CharField(max_length=200, required=False)
+    everyone = forms.BooleanField(required=False, label="Offer it to everyone")
+    audience = forms.ModelMultipleChoiceField(Team.objects.filter(active=True), required=False,
+                                              widget=forms.CheckboxSelectMultiple, label="Or to these teams")
+
+    def __init__(self, *args, user, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["team"].queryset = access.managed_teams(user).filter(active=True)
+
+
+class ClaimForm(forms.Form):
+    overtime = forms.ChoiceField(choices=OVERTIME_CHOICES, required=False, initial="", widget=forms.RadioSelect)
+    note = forms.CharField(max_length=200, required=False, label="Note for the manager")
+
+
+class DecideForm(forms.Form):
+    overtime = forms.ChoiceField(choices=OVERTIME_CHOICES, required=False, widget=forms.RadioSelect)

@@ -158,3 +158,10 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .check { display: flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-md); color: var(--ink); }
 fieldset.field { border: 0; padding: 0; } fieldset.field legend { font-size: var(--fs-xs); color: var(--muted); padding: 0; margin-bottom: 2px; }
 .field .check input { width: auto; }
+
+/* Open shifts */
+.open-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-4); }
+.open-card { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius); padding: var(--sp-4); }
+.open-card header { font-size: var(--fs-lg); margin-bottom: var(--sp-2); }
+.open-claim { border-top: 1px solid var(--hairline); padding-top: var(--sp-2); margin-top: var(--sp-2); }
+.open-past { margin-top: var(--sp-5); }

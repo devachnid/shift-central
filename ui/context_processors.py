@@ -8,10 +8,11 @@ from people.services import access
 
 def _items(request, role):
     path = request.path
+    rota_children = [{"label": "Open shifts", "url": "/rota/open/"}]
+    if role != "staff":
+        rota_children += [{"label": "Who's in today", "url": "/rota/today/"}, {"label": "Time off…", "url": "/time-off/add/", "dialog": True}]
     items = [{"key": "rota", "label": "Rota", "icon": "calendar", "url": "/rota/",
-              "active": path.startswith("/rota/"),
-              "children": ([{"label": "Who's in today", "url": "/rota/today/"}, {"label": "Time off…", "url": "/time-off/add/", "dialog": True}]
-                           if role != "staff" else [])},
+              "active": path.startswith("/rota/"), "children": rota_children},
              {"key": "staff", "label": "Staff", "icon": "people", "url": "/staff/",
               "active": path.startswith("/staff/"), "children": []}]
     if role != "staff":

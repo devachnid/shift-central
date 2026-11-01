@@ -1,0 +1,16 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}{{ claim.person.name }} · {{ post.day|date:"D j M" }}{% endblock %}
+{% block dialog_body %}
+<p>{{ post.start|time:"H:i" }}–{{ post.finish|time:"H:i" }}{% if post.department %} · {{ post.department.name }}{% endif %}</p>
+{% if claim.note %}<p>"{{ claim.note }}"</p>{% endif %}
+{% for w in clashes %}<p class="flash flash-warning">{{ w }}</p>{% endfor %}
+<form method="post" action="{% url 'open-claim-decide' claim.pk %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <fieldset class="field"><legend>Hours worked as</legend>
+    {% for value, label in form.fields.overtime.choices %}<label><input type="radio" name="overtime" value="{{ value }}"{% if form.overtime.value|default:"" == value %} checked{% endif %}> {{ label }}</label> {% endfor %}
+  </fieldset>
+  <button class="btn btn-dark" name="action" value="approve">Approve</button>
+  <button class="btn btn-quiet" name="action" value="decline">Decline</button>
+</form>
+{% endblock %}
