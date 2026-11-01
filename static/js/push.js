@@ -38,9 +38,24 @@
       say("Notifications are blocked for this site in your browser's settings."); return Promise.resolve();
     }
     return registration().then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (sub) {
-      if (sub) { say("Notifications are on for this device."); show(turnOff, true); }
-      else { say("Notifications are off for this device."); show(turnOn, true); }
+      if (!sub) { say("Notifications are off for this device."); show(turnOn, true); return null; }
+      // The phone holding a subscription is not enough: the server must hold it
+      // too, for whoever is signed in now. Send it on every visit; a phone the
+      // server refused, or one last used by someone else, is put right here.
+      return tell(sub).then(function (data) {
+        if (data.created) { window.location.assign(window.location.href); return; }   // list the device
+        say("Notifications are on for this device."); show(turnOff, true);
+      }, function (e) { say(e.message); show(turnOff, true); });
     });
+  }
+  function failure(text) { var e = new Error(text); e.forPeople = true; return e; }
+  function tell(sub) {   // the server's own sentence when it refuses
+    return post(card.dataset.subscribeUrl, sub.toJSON()).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (data) {
+        if (!r.ok) { throw failure(data.error || "This phone couldn't be registered. Try again."); }
+        return data;
+      });
+    }, function () { throw failure("Shift Central couldn't be reached. Try again."); });
   }
 
   turnOn.addEventListener("click", function () {
@@ -49,13 +64,9 @@
       if (permission !== "granted") { return null; }
       return registration().then(function (reg) {
         return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(card.dataset.key) });
-      }).then(function (sub) {
-        return post(card.dataset.subscribeUrl, sub.toJSON());
-      }).then(function (r) {
-        if (!r.ok) { throw new Error("server"); }
-        window.location.assign(window.location.href);
-      });
-    }).catch(function () { say("That didn't work. Try again."); }).then(function () { turnOn.disabled = false; });
+      }).then(tell).then(function () { window.location.assign(window.location.href); });
+    }).catch(function (e) { say(e && e.forPeople ? e.message : "That didn't work. Try again."); })
+      .then(function () { turnOn.disabled = false; });
   });
 
   turnOff.addEventListener("click", function () {

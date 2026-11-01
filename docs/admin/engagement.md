@@ -269,6 +269,10 @@ phone is offline: only a page saying so.
 **Android (Chrome).** Open the site in Chrome. In the Chrome menu (the three dots) choose **Install app** or **Add to Home
 screen**. On Android, notifications work from Chrome even without installing, but the icon is easier to find.
 
+**Finding your way on a phone.** The bar along the bottom has **Rota**, **Time off**, **Messages** and **Menu**. Menu lists
+every section with the pages under it (Open shifts, My leave, Year planner, the reports and the rest) and **Log out**; a
+number on Menu is what a section inside it is waiting on, such as failed Outbox mail.
+
 **iPhone and iPad (Safari).** This needs a reasonably recent iPhone (iOS 16.4 or later). Open the site in Safari, tap **Share**,
 then **Add to Home Screen**. **Open the app from the Home Screen icon**, not from Safari: notifications can only be
 turned on there.
@@ -286,6 +290,14 @@ email the app sends about open shifts, messages, notices (if "also tell staff" w
 **Turning them off.** On the Notifications page choose **Turn off notifications on this phone**. Email carries on
 as before. **Remove** beside a device in *Your devices* stops the server sending to that phone; to switch it off from the phone itself, use
 the Turn off button there.
+
+**Log out turns them off on that phone**, so a phone handed to someone else shows nothing more of the last person's. Being
+signed out after ten idle minutes does not: that is what lets notifications reach the phone while the app is closed. After
+logging out, turn them on again from the Notifications page.
+
+**Notifications follow whoever is signed in.** Each time the Notifications page opens it re-registers the phone for the person signed in
+now, so a phone last used by someone else moves to them. An account with no staff record (the superuser) cannot receive
+notifications, and the page says so. When the server refuses a phone, the page shows the reason.
 
 **If a phone stops getting notifications:**
 

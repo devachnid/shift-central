@@ -8,6 +8,10 @@ from messaging.services import outbox
 from people.services import access
 
 
+# The phone's bottom bar holds these three and Menu; Menu lists everything.
+PHONE_BAR = ("rota", "time-off", "messages")
+
+
 def _items(request, role, badges):
     path = request.path
     rota_children = [{"label": "Open shifts", "url": "/rota/open/"}]
@@ -64,6 +68,7 @@ def _items(request, role, badges):
                   "active": path.startswith("/notifications/"), "children": []})
     for item in items:
         item["badge"] = badges.get(item["key"], 0)
+        item["phone"] = item["key"] in PHONE_BAR
     return items
 
 
@@ -73,10 +78,13 @@ def shell(request):
     badges = {"messages": message_service.unread_count(user) if user is not None else 0, "outbox": 0}
     if role != "staff":
         badges["outbox"] = outbox.failure_count(user)
+    items = _items(request, role, badges) if user is not None and user.is_authenticated else []
     return {
         "settings_practice_hr_url": settings.PRACTICE_HR_URL,
         "role": role,
         "is_manager": role != "staff",
         "is_all_teams": role == "all",
-        "nav_items": _items(request, role, badges) if user is not None and user.is_authenticated else [],
+        "nav_items": items,
+        # What the sections only Menu shows are waiting on (the Outbox's failures).
+        "menu_badge": sum(item["badge"] for item in items if not item["phone"]),
     }

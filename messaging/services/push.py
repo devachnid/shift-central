@@ -48,18 +48,27 @@ def label_for(user_agent):
     return f"{system} {browser}"[:80]
 
 
+def endpoint_host(endpoint):
+    """The host an address names, for a log line: never the path (it is the
+    device's token), and nothing but the characters a host name may hold."""
+    if not isinstance(endpoint, str):
+        return "-"
+    host = endpoint.split("://", 1)[-1].split("/", 1)[0].rsplit("@", 1)[-1].split(":", 1)[0]
+    return re.sub(r"[^a-z0-9.-]", "?", host.lower())[:100] or "-"
+
+
 def register(person, endpoint, p256dh, auth, user_agent=""):
-    """Add (or take over) the device behind this subscription. ValueError
-    with a sentence when the subscription is not one a push service made."""
+    """Add (or take over) the device behind this subscription; returns the
+    device and whether it is new here. ValueError with a sentence when the
+    subscription is not one a push service made."""
     if not (isinstance(endpoint, str) and len(endpoint) <= 1000 and endpoint_allowed(endpoint)):
         raise ValueError("That is not a push address.")
     for value, limit in ((p256dh, 200), (auth, 100)):
         if not (isinstance(value, str) and 0 < len(value) <= limit and _B64URL.match(value)):
             raise ValueError("That is not a valid push key.")
-    device, _ = PushDevice.objects.update_or_create(
+    return PushDevice.objects.update_or_create(
         endpoint=endpoint,
         defaults={"person": person, "p256dh": p256dh, "auth": auth, "label": label_for(user_agent), "failures": 0})
-    return device
 
 
 def unregister(person, endpoint):

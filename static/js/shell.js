@@ -19,3 +19,36 @@ document.addEventListener("change", function (e) {
   var el = e.target.closest && e.target.closest("[data-submit-on-change]");
   if (el && el.form) { el.form.requestSubmit(); }
 });
+
+/* Log out (forms marked data-logout) first stops this phone's notifications:
+ * it tells the server to forget the device, then drops the subscription, so a
+ * phone handed to someone else shows nothing more of the last person's. The
+ * idle sign-out after ten minutes does not, which is what lets notifications
+ * reach a closed app. Log out still happens if any of this fails or stalls. */
+document.addEventListener("submit", function (e) {
+  var form = e.target;
+  if (!form.hasAttribute || !form.hasAttribute("data-logout")) { return; }
+  if (!("serviceWorker" in navigator) || !navigator.serviceWorker.getRegistration) { return; }
+  e.preventDefault();
+  var gone = false;
+  function leave() { if (!gone) { gone = true; form.submit(); } }
+  setTimeout(leave, 2000);
+  var token = form.querySelector("input[name=csrfmiddlewaretoken]");
+  navigator.serviceWorker.getRegistration().then(function (reg) {
+    return reg && reg.pushManager ? reg.pushManager.getSubscription() : null;
+  }).then(function (sub) {
+    if (!sub) { return null; }
+    return fetch(form.dataset.unsubscribeUrl, { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": token ? token.value : "" },
+      body: JSON.stringify({ endpoint: sub.endpoint }) })
+      .catch(function () { return null; })
+      .then(function () { return sub.unsubscribe(); });
+  }).catch(function () { return null; }).then(leave);
+});
+
+/* The phone's Menu closes when one of its entries opens a dialog in place
+ * (Time off…, Send a message…), so the dialog is not left under it. */
+document.addEventListener("click", function (e) {
+  var link = e.target.closest && e.target.closest(".phone-menu [data-dialog]");
+  if (link) { link.closest(".phone-menu").removeAttribute("open"); }
+});

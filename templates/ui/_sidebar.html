@@ -3,7 +3,7 @@
   <div class="sidebar-logo"><a href="/staff/"><img src="{% static 'img/logo-dark.svg' %}" alt="AMG Shift Central"></a></div>
   <nav class="sidebar-nav" aria-label="Sections">
     {% for item in nav_items %}
-    <div class="nav-item{% if item.active %} is-active{% endif %}" data-nav="{{ item.key }}">
+    <div class="nav-item{% if item.active %} is-active{% endif %}{% if item.phone %} is-on-phone-bar{% endif %}" data-nav="{{ item.key }}">
       <a class="nav-link" href="{{ item.url }}" aria-label="{{ item.label }}">
         <svg class="nav-icon" aria-hidden="true"><use href="{% static 'img/icons.svg' %}#{{ item.icon }}"></use></svg>
         <span class="nav-label">{{ item.label }}</span>
@@ -15,8 +15,23 @@
     </div>
     {% endfor %}
   </nav>
+  {# Phones only: the bottom bar has room for three sections and this. #}
+  <details class="phone-menu">
+    <summary class="nav-link" aria-label="Menu"><svg class="nav-icon" aria-hidden="true"><use href="{% static 'img/icons.svg' %}#menu"></use></svg><span class="nav-label">Menu</span>{% if menu_badge %}<span class="nav-badge">{{ menu_badge }}</span>{% endif %}</summary>
+    <div class="phone-menu-panel">
+      {% for item in nav_items %}
+      <div class="phone-menu-section">
+        <a class="phone-menu-head{% if item.active %} is-active{% endif %}" href="{{ item.url }}">{{ item.label }}{% if item.badge %}<span class="nav-badge">{{ item.badge }}</span>{% endif %}</a>
+        {% for child in item.children %}<a class="phone-menu-link" href="{{ child.url }}"{% if child.dialog %} data-dialog{% endif %}>{{ child.label }}</a>{% endfor %}
+      </div>
+      {% endfor %}
+      <form method="post" action="{% url 'logout' %}" data-logout data-unsubscribe-url="{% url 'push-unsubscribe' %}">{% csrf_token %}
+        <button type="submit" class="phone-menu-logout">Log out</button>
+      </form>
+    </div>
+  </details>
   <div class="sidebar-foot">
-    <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+    <form method="post" action="{% url 'logout' %}" data-logout data-unsubscribe-url="{% url 'push-unsubscribe' %}">{% csrf_token %}
       <button type="submit" aria-label="Log out"><svg class="nav-icon" aria-hidden="true"><use href="{% static 'img/icons.svg' %}#logout"></use></svg><span class="nav-label">Log out</span></button>
     </form>
   </div>
