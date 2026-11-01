@@ -152,7 +152,7 @@
     var buttons = form.querySelectorAll('button, input[type="submit"]');
     function setBusy(busy) { [].forEach.call(buttons, function (b) { b.disabled = busy; }); }
     setBusy(true);
-    fetch(form.action, { method: "POST", body: data, credentials: "same-origin",
+    fetch(form.getAttribute("action"), { method: "POST", body: data, credentials: "same-origin",
                          headers: { "X-CSRFToken": csrf, "X-Requested-With": "fetch" } })
       .then(function (r) {
         var p = problem(r);
