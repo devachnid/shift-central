@@ -643,8 +643,10 @@ note. The log is managers-only as the Activity log already is (LEAVE-31).
   rules; both live in one function each.
 - GP sessions are not covered by leave. They are the rota app's, so on Who's in today a GP on leave still
   appears at their session's site as well as under "off"; to settle with the rota app in spec 4.
+  Settled in spec 4: Who's in today and the payroll report hide a GP's sessions under their leave; the grid still shows them.
 - Approved bookings that run past a person's HR finish date still count in their balance and, for a GP,
   stay in the feed. Whether to flag or cancel them belongs with the leaver's window in spec 4.
+  Settled in spec 4: flagged in the leaver email, on the Health card and on the Time off list; never cancelled automatically.
 - Sync run rows are never pruned. The rota app writes one for every fifteen-minute read of the feed (about
   35,000 a year), each holding the addresses it could not match, and this app's own sync runs are kept
   the same way.

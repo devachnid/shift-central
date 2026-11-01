@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Past schedule · AMG Shift Central{% endblock %}
+{% block topbar_actions %}<a class="topbar-action is-primary" href="{% url 'time-off-past-add' %}" data-dialog>Add past sickness +</a>{% endblock %}
+{% block content %}
+<p class="field-help">Sickness before the system started, typed with dates only: it counts towards instances and triggers and touches no allowance or payroll figure. Today's sickness is booked as time off.</p>
+<table class="table">
+  <thead><tr><th>Staff</th><th>First day</th><th>Last day</th><th>Days</th><th>Type</th><th>Long sickness</th><th>Recorded</th><th>Instances now</th><th>Trigger</th><th></th></tr></thead>
+  <tbody>
+  {% for r in rows %}{% with b=r.b %}
+  <tr><td>{{ b.person.name }}</td><td>{{ b.first_day|date:"j M Y" }}</td><td>{{ b.last_day|date:"j M Y" }}</td><td>{{ r.days }}</td><td>{{ b.type.name }}</td>
+      <td>{% if r.long %}Yes{% endif %}</td><td>{{ b.decided_by.person.name|default:b.decided_by.email|default:"—" }} · {{ b.requested_at|date:"j M Y" }}</td>
+      <td>{{ r.instances }}</td><td>{{ r.trigger }}</td>
+      <td><a href="{% url 'time-off-view' b.pk %}" data-dialog>View</a> <a href="{% url 'time-off-edit' b.pk %}" data-dialog>Edit</a> <a href="{% url 'time-off-cancel' b.pk %}" data-dialog>Remove</a></td></tr>
+  {% endwith %}{% empty %}<tr><td colspan="10">No past sickness recorded.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

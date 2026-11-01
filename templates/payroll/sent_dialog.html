@@ -1,0 +1,10 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}Mark as sent to the bureau{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% url 'payroll-sent' %}?month={{ month|date:'Y-m' }}" data-dialog-form>
+  {% csrf_token %}
+  <p>Record that the payroll report for <strong>{{ month|date:"F Y" }}</strong> ({{ count }} people) has been sent. The figures as they stand now are kept, and anything that changes afterwards appears as a correction on later months' reports.</p>
+  {% if run %}<p class="flash flash-warning">This month was already marked sent on {{ run.sent_at|date:"j M Y" }}. Marking it again makes today's figures the ones compared against.</p>{% endif %}
+  <button class="btn btn-dark">Mark {{ month|date:"F Y" }} as sent</button>
+</form>
+{% endblock %}

@@ -3,7 +3,7 @@ from django.core.exceptions import PermissionDenied
 from leave.models import LeaveType
 from people.services import access, audit
 
-EDITABLE = ("name", "colour", "requestable", "paid_choice", "default_paid", "display_order", "draws_from", "on_payroll", "archived")
+EDITABLE = ("name", "colour", "requestable", "paid_choice", "default_paid", "display_order", "draws_from", "on_payroll", "archived", "sickness", "flag_return")
 FIXED_ON_SEEDED = ("draws_from", "on_payroll")
 
 
@@ -12,10 +12,11 @@ def _manager(user):
         raise PermissionDenied("managers only")
 
 
-def add(user, name, colour, draws_from, requestable, paid_choice, on_payroll, default_paid=True):
+def add(user, name, colour, draws_from, requestable, paid_choice, on_payroll, default_paid=True, sickness=False, flag_return=False):
     _manager(user)
     row = LeaveType.objects.create(name=name.strip()[:60], colour=colour, draws_from=draws_from, requestable=requestable,
                                    paid_choice=paid_choice, on_payroll=on_payroll, default_paid=default_paid,
+                                   sickness=sickness, flag_return=flag_return,
                                    display_order=(LeaveType.objects.order_by("-display_order").values_list("display_order", flat=True).first() or 0) + 10)
     audit.record(user, row, {"name": ("", row.name)})
     return row

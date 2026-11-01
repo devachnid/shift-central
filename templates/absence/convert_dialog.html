@@ -1,0 +1,23 @@
+{% extends "ui/_dialog.html" %}
+{% load leave_extras %}
+{% block dialog_title %}Convert days to sickness{% endblock %}
+{% block dialog_body %}
+<p><strong>{{ b.person.name }}</strong> · {{ b.label }} {{ b.first_day|date:"j M" }}–{{ b.last_day|date:"j M Y" }}</p>
+<form method="post" action="{% url 'time-off-convert' b.pk %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  {% if error %}<p class="flash flash-error">{{ error }}</p>{% endif %}
+  <div class="field-row">
+    <div class="field{% if form.first_day.errors %} has-error{% endif %}"><label for="id_first_day">{{ form.first_day.label }}</label>{{ form.first_day }}{% for e in form.first_day.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+    <div class="field{% if form.last_day.errors %} has-error{% endif %}"><label for="id_last_day">{{ form.last_day.label }}</label>{{ form.last_day }}{% for e in form.last_day.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  </div>
+  <div class="field"><label for="id_type">{{ form.type.label }}</label>{{ form.type }}</div>
+  <div class="field"><label for="id_note">{{ form.note.label }}</label>{{ form.note }}</div>
+  <input type="hidden" name="preview" value="1">
+  {% if preview %}
+  <p>{{ preview.hours_back|hm }} goes back to the allowance. Instances in the last six months after this: {{ preview.instances_after }} instance{{ preview.instances_after|pluralize }}{% if preview.level_label %} ({{ preview.level_label }}){% endif %}.</p>
+  {% if preview.long %}<p class="flash flash-warning">This is long sickness (29 days or more): managers are emailed when {{ b.person.first_name }} returns.</p>{% endif %}
+  {% endif %}
+  <button class="btn btn-dark" name="preview" value="">Convert to sickness</button>
+</form>
+{% endblock %}

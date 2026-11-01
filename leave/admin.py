@@ -8,17 +8,17 @@ from django.contrib import admin
 
 from people.admin import ReadOnlyModelAdmin
 
-from .models import Adjustment, BankHoliday, Blackout, Booking, BookingDay, LeaveSetting, LeaveType
+from .models import Adjustment, BankHoliday, Blackout, Booking, BookingDay, LeaveSetting, LeaveType, YearEnd
 
 
 @admin.register(LeaveType)
 class LeaveTypeAdmin(ReadOnlyModelAdmin):
-    list_display = ("name", "draws_from", "requestable", "paid_choice", "on_payroll", "display_order", "archived")
+    list_display = ("name", "draws_from", "requestable", "paid_choice", "on_payroll", "display_order", "archived", "sickness", "flag_return")
 
 
 @admin.register(Booking)
 class BookingAdmin(ReadOnlyModelAdmin):
-    list_display = ("person", "type", "first_day", "last_day", "part", "status", "requested_at")
+    list_display = ("person", "type", "first_day", "last_day", "part", "status", "dates_only", "requested_at")
     list_filter = ("status", "type")
     search_fields = ("person__name",)
     date_hierarchy = "first_day"
@@ -47,3 +47,8 @@ class BankHolidayAdmin(ReadOnlyModelAdmin):
 @admin.register(LeaveSetting)
 class LeaveSettingAdmin(ReadOnlyModelAdmin):
     list_display = ("reminder_working_days",)
+
+
+@admin.register(YearEnd)
+class YearEndAdmin(ReadOnlyModelAdmin):
+    list_display = ("person", "year_ended", "annual_remaining", "toil_remaining", "annual_carried", "toil_lost", "decided_at")

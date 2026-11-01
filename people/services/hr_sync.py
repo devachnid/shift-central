@@ -79,6 +79,7 @@ def _apply(records, seen_at):
     position keeps the person's team; a new person with none starts without
     one, for an all-teams manager to see on the Staff list meanwhile."""
     teams = {}
+    leaving = []
     for position, record in enumerate(records, start=1):
         employee_id, fields = _parse(record, position)
         team_name = fields.pop("team_name")
@@ -104,6 +105,9 @@ def _apply(records, seen_at):
         if changes:
             audit.record(None, person, changes,
                          note=audit.SYNC_NOTE)
+            if "end_date" in changes:
+                leaving.append(person)
+    return leaving
 
 
 def sync(client=None):
@@ -111,10 +115,11 @@ def sync(client=None):
     run's message, and the previous data stands."""
     client = client or HRClient.from_settings()
     run = SyncRun.objects.create()
+    leaving = []
     try:
         records = client.people()
         with transaction.atomic():
-            _apply(records, timezone.now())
+            leaving = _apply(records, timezone.now())
         run.ok, run.people_seen = True, len(records)
     except (HRError, BadRecord) as e:
         run.message = str(e)[:300]
@@ -126,6 +131,18 @@ def sync(client=None):
         run.finished_at = timezone.now()
         run.save()
     if run.ok:
+        from leave.services import leavers       # people → leave only here, at call time
+        flag_failed = False
+        for person in leaving:
+            try:
+                leavers.flag(person)
+            except Exception:
+                log.exception("leaver flag failed for person %s", person.pk)
+                flag_failed = True
+        if flag_failed:
+            # Shown on the Health card's sync line: the date is not "changed" on the next sync, so nothing retries it.
+            run.message = (run.message + "; " if run.message else "") + "leaver flag failed; see the journal"
+            run.save(update_fields=["message"])
         try:
             with transaction.atomic():
                 profiles.apply_due_hours_changes()

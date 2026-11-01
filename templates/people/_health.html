@@ -3,7 +3,7 @@
   <div class="health-item{% if not health.last_run or not health.last_run.ok %} is-bad{% endif %}">
     Practice HR
     <strong>{% if health.last_run %}{% if health.last_run.ok %}{{ health.last_run.people_seen }} people, {{ health.last_run.finished_at|date:"j M H:i" }}{% else %}failed {{ health.last_run.finished_at|date:"j M H:i" }}{% endif %}{% else %}never read{% endif %}</strong>
-    {% if health.last_run and not health.last_run.ok %}<span>{{ health.last_run.message }}</span>{% endif %}
+    {% if health.last_run and health.last_run.message %}<span>{{ health.last_run.message }}</span>{% endif %}
     <form method="post" action="{% url 'staff-sync' %}">{% csrf_token %}<button class="btn btn-quiet">Sync now</button></form>
   </div>
   <div class="health-item{% if health.gp_configured and not health.gp_last_run.ok %} is-bad{% endif %}">
@@ -26,8 +26,12 @@
     {% for p in health.negative|slice:":5" %}<a href="{% url 'profile' p.pk %}?tab=hours" data-dialog>{{ p.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>
   <div class="health-item{% if health.not_seen %} is-bad{% endif %}">Not in Practice HR's feed for a day<strong>{{ health.not_seen.count }}</strong>
     {% for p in health.not_seen|slice:":5" %}{{ p.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
-  <div class="health-item{% if health.leaving_soon %} is-warning{% endif %}">Leaving in the next 30 days<strong>{{ health.leaving_soon.count }}</strong>
-    {% for p in health.leaving_soon %}{{ p.name }} ({{ p.end_date|date:"j M" }}){% if not forloop.last %}, {% endif %}{% endfor %}</div>
+  <div class="health-item{% if health.leaving_soon %} is-warning{% endif %}">Leaving in the next 30 days<strong>{{ health.leaving_soon|length }}</strong>
+    {% for r in health.leaving_soon %}<a href="{% url 'profile' r.person.pk %}?tab=hours" data-dialog>{{ r.person.name }}</a> ({{ r.person.end_date|date:"j M" }}, {{ r.text }}{% if r.after %}, {{ r.after }} booking{{ r.after|pluralize }} after{% endif %}){% if not forloop.last %}, {% endif %}{% endfor %}</div>
+  <div class="health-item{% if health.year_end_waiting %} is-warning{% endif %}">Year-end decisions waiting<strong>{{ health.year_end_waiting }}</strong>
+    {% if health.year_end_waiting %}<a href="{% url 'time-off-year-end' %}">Decide</a>{% endif %}</div>
   <div class="health-item{% if health.unnotified_old %} is-warning{% endif %}">Unnotified rota changes over a week old<strong>{{ health.unnotified_old }}</strong>
     {% if health.unnotified_old %}<a href="{% url 'rota-notify' %}" data-dialog>Notify staff</a>{% endif %}</div>
+  {% if health.payroll_unsent %}<div class="health-item is-warning">Payroll for {{ health.payroll_unsent|date:"F Y" }} not yet sent<strong>due</strong>
+    <a href="{% url 'report-payroll' %}?month={{ health.payroll_unsent|date:'Y-m' }}">Open</a></div>{% endif %}
 </section>

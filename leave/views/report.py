@@ -1,7 +1,8 @@
 """The leave report (REP-02): per person for a range, allowance combined,
 adjustments, days booked, deducted, remaining, TOIL; team subtotals; CSV.
-Managers see their people (and themselves), staff their own row. The
-Instances column comes with spec 4."""
+Managers see their people (and themselves), staff their own row.
+Instances and Trigger are the six months to the range's end, or to today when
+the range runs on past it (LEAVE-42)."""
 
 from datetime import date
 
@@ -12,7 +13,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from leave.models import Booking, BookingDay
-from leave.services import balances, hours, years
+from leave.services import balances, hours, sickness, years
 from people.models import Person
 from people.services import access
 from shifts.services import csv_safe
@@ -55,14 +56,17 @@ def _people(user, start, end):
 
 def rows(user, start, end):
     out = []
+    today = timezone.localdate()
     for p in _people(user, start, end):
         s = balances.statement(p, years.year_of(p, start))
         days = BookingDay.objects.filter(booking__person=p, booking__status__in=Booking.ACTIVE, day__range=(start, end))
         deducted = days.filter(account__in=DEDUCTS).aggregate(total=Sum("cost_seconds"))["total"] or 0
+        instances = len(sickness.instances(p, min(end, today)))
         out.append({"person": p, "team": p.team.name if p.team else "—", "missing": s.missing,
                     "allowance": s.annual_allowance + s.bank_holiday_allowance,
                     "adjustments": s.adjustments["annual"] + s.adjustments["bank_holiday"], "days": days.count(),
-                    "deducted": deducted, "remaining": s.annual_remaining, "toil": s.toil_remaining})
+                    "deducted": deducted, "remaining": s.annual_remaining, "toil": s.toil_remaining,
+                    "instances": instances, "trigger": sickness.level_label(sickness.level(instances))})
     return out
 
 
@@ -74,18 +78,18 @@ def leave_report(request):
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="leave-{start.isoformat()}-{end.isoformat()}.csv"'
         w = csv_safe.Writer(response)
-        w.writerow(["Name", "Team", "Allowance", "Adjustments", "Days", "Deducted", "Remaining", "TOIL"])
+        w.writerow(["Name", "Team", "Allowance", "Adjustments", "Days", "Deducted", "Remaining", "TOIL", "Instances", "Trigger"])
         for r in data:
             w.writerow([r["person"].name, r["team"], "" if r["missing"] else hours.fmt(r["allowance"]), hours.fmt(r["adjustments"]), r["days"],
-                        hours.fmt(r["deducted"]), "" if r["missing"] else hours.fmt(r["remaining"]), hours.fmt(r["toil"])])
+                        hours.fmt(r["deducted"]), "" if r["missing"] else hours.fmt(r["remaining"]), hours.fmt(r["toil"]), r["instances"], r["trigger"]])
         return response
     teams = []
     for r in data:
         if not teams or teams[-1]["team"] != r["team"]:
-            teams.append({"team": r["team"], "rows": [], "allowance": 0, "adjustments": 0, "days": 0, "deducted": 0, "remaining": 0, "toil": 0})
+            teams.append({"team": r["team"], "rows": [], "allowance": 0, "adjustments": 0, "days": 0, "deducted": 0, "remaining": 0, "toil": 0, "instances": 0})
         group = teams[-1]
         group["rows"].append(r)
-        for key in ("adjustments", "days", "deducted", "toil"):
+        for key in ("adjustments", "days", "deducted", "toil", "instances"):
             group[key] += r[key]
         if not r["missing"]:
             group["allowance"] += r["allowance"]

@@ -3,7 +3,7 @@
 {% block topbar_actions %}<a class="topbar-action is-primary" href="{% url 'leave-type-add' %}" data-dialog>Add leave type +</a>{% endblock %}
 {% block content %}
 <table class="table">
-  <thead><tr><th>Type</th><th>Takes its days from</th><th>Staff can request</th><th>Paid or unpaid</th><th>On the payroll report</th><th>Status</th><th></th></tr></thead>
+  <thead><tr><th>Type</th><th>Takes its days from</th><th>Staff can request</th><th>Paid or unpaid</th><th>On the payroll report</th><th>Flags</th><th>Status</th><th></th></tr></thead>
   <tbody>
   {% for t in rows %}
   <tr>
@@ -12,6 +12,7 @@
     <td>{% if t.requestable %}Yes{% else %}No{% endif %}</td>
     <td>{% if t.paid_choice %}Manager chooses{% elif t.default_paid %}Paid{% else %}Unpaid{% endif %}</td>
     <td>{{ t.get_on_payroll_display }}</td>
+    <td>{% if t.sickness %}Sickness{% endif %}{% if t.sickness and t.flag_return %} · {% endif %}{% if t.flag_return %}Return flagged{% endif %}</td>
     <td>{% if t.archived %}Archived{% else %}In use{% endif %}</td>
     <td><a href="{% url 'leave-type-edit' t.pk %}" data-dialog>Edit</a></td>
   </tr>

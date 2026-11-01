@@ -77,8 +77,8 @@ itself on the next run; the card goes back to green and shows the new count.
 Managers see it at the top of the Staff page. It is built from the people the
 viewer manages, so a team manager's card is about their team. Its boxes are described
 below: Practice HR, Needs hours and allowances, Not in Practice HR's feed, Leaving in the next
-30 days and the three leave boxes (Requests waiting, Leave costs to check, Negative leave
-balances). The GP rota's two are
+30 days and the leave boxes (Requests waiting, Leave costs to check, Negative leave
+balances, Year-end decisions waiting and, when due, Payroll not yet sent). The GP rota's two are
 [under the GP sessions](#the-health-lines).
 
 **Practice HR** is the last run: "*N* people, 29 Oct 14:30" in the normal colour
@@ -118,11 +118,13 @@ has dropped is not news).
   check the count in the Practice HR box and the employees in Practice HR.
 
 **Leaving in the next 30 days** lists current people whose finish date falls
-between today and thirty days away, with the date.
+between today and thirty days away, with the date, their annual leave remaining or over as at
+that date, and the number of bookings that run past it.
 
-- *What to do:* nothing except to know they are going: their leave allowance is cut at
-  that date automatically. A later release raises the leaver flags (final pay, leave
-  owed). A date that looks wrong is wrong in Practice HR; fix it there.
+- *What to do:* the managers were emailed when the date arrived and again a week before. Look at the
+  figure and shorten or cancel any bookings after the date; nothing is cancelled for you. Their leave
+  allowance is cut at that date automatically. A date that looks wrong is wrong in Practice HR; fix it
+  there. See [Leavers](absence.md#leavers).
 
 **Requests waiting** is the number of leave requests and cancellation requests waiting for a
 decision from the people the viewer manages, the viewer's own not counted (another manager
@@ -152,6 +154,18 @@ their balance.
 - *What to do:* it is allowed (a manager can book past the balance, and an hours change can
   leave one negative), so decide whether to correct it with an adjustment, in which case the line
   goes, or to leave it. See [the statement](leave.md#the-statement-and-how-to-read-it).
+
+**Year-end decisions waiting** is the number of people whose leave year has ended with annual leave
+or TOIL left (or over) that nobody has decided yet, with a **Decide** link to
+[Year end](absence.md#year-end).
+
+- *What to do:* decide them. It is normally 0 until January 2028, when the first year end the system handles falls.
+
+**Payroll for October not yet sent** appears for all-teams managers only, from ten days before a month
+ends until that month has been marked sent, with an **Open** link to [the payroll report](absence.md#the-payroll-report).
+
+- *What to do:* check the month's report, download the Excel, send it to the bureau, then
+  **Mark as sent to the bureau**.
 
 ## Sync now
 

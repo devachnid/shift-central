@@ -9,7 +9,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from leave.models import Booking, BookingDay
-from leave.services import balances, blackouts, costing, hours, notify, years
+from leave.services import balances, blackouts, costing, hours, notify, sickness, years
 from leave.services.common import LeaveError, describe
 from people.services import access, audit
 from shifts.models import Entry
@@ -62,6 +62,19 @@ def _check_dates(person, first, last, part, start, finish, was=None):
             ends += [max(first, was.last_day + timedelta(days=1)), last]
     if any(years.year_of(person, day) not in allowed for day in ends):
         raise LeaveError("dates", "Leave can be booked in this leave year and the next")
+
+
+def _check_dates_only(leave_type, first, last, part):
+    """A past schedule entry: whole days of a sickness type, already gone
+    (MIG-05). The leave-year rule does not apply: 2026 is typed in 2027."""
+    if not leave_type.sickness:
+        raise LeaveError("type", f"{leave_type.name} does not count as sickness; the past schedule is for sickness only")
+    if part != Booking.Part.WHOLE:
+        raise LeaveError("part", "A past schedule entry is whole days")
+    if first > last:
+        raise LeaveError("dates", "The last day is before the first")
+    if last >= timezone.localdate():
+        raise LeaveError("dates", "The past schedule is for days already gone; book today's sickness as time off")
 
 
 def _check_overlap(person, first, last, exclude=None):
@@ -153,6 +166,33 @@ def _mail(send, *args):
     transaction.on_commit(lambda: send(*args))
 
 
+def _trigger_before(person, leave_type, was=None):
+    """The person's trigger level before a write that touches sickness, or
+    None when the write does not."""
+    if leave_type.sickness or (was is not None and was.type.sickness):
+        return sickness.level_for(person)
+    return None
+
+
+def _trigger_after(person, before, dates_only=False):
+    """Compare with the level after the write, inside the transaction.
+    Returns (the level to email the managers about, or 0; the audit note's
+    suffix, or ""). The level rose to be told of; a dates-only entry is
+    never told of (the manager is typing history)."""
+    if before is None:
+        return 0, ""
+    after = sickness.level_for(person)
+    if after <= before:
+        return 0, ""
+    return (0 if dates_only else after), f"; {sickness.level_label(after)} reached"
+
+
+def _trigger_mail(person, reached, base_url):
+    """After the write's own transaction, like the other mail."""
+    if reached:
+        _mail(notify.trigger_reached, person, reached, sickness.instances(person), base_url)
+
+
 def request(user, person, leave_type, first, last, part, start=None, finish=None, description="", paid=None, note="", base_url=""):
     if not may_request(user, person):
         raise PermissionDenied("you can only request your own leave")
@@ -195,7 +235,7 @@ def _type_costs(user, rows, costs, note):
     return changes
 
 
-def book(user, person, leave_type, first, last, part, start=None, finish=None, description="", paid=None, note="", costs=None, base_url=""):
+def book(user, person, leave_type, first, last, part, start=None, finish=None, description="", paid=None, note="", costs=None, base_url="", dates_only=False):
     """A manager's booking, approved as it is made. `costs` is {day: seconds}
     typed on the Advanced tab; each becomes an override. Only a manager's
     typed figures count: a person booking their own leave is costed from
@@ -204,15 +244,24 @@ def book(user, person, leave_type, first, last, part, start=None, finish=None, d
         raise PermissionDenied("you don't manage this person")
     if not access.can_manage(user, person):
         costs = None
-    _check_dates(person, first, last, part, start, finish)
+    if dates_only:
+        if costs:
+            raise LeaveError("part", "A past schedule entry is whole days with no hours")
+        _check_dates_only(leave_type, first, last, part)
+    else:
+        _check_dates(person, first, last, part, start, finish)
     booking = _new(user, person, leave_type, first, last, part, start, finish, description, paid, note, Booking.Status.APPROVED)
-    booking.decided_by, booking.decided_at = user, timezone.now()
+    booking.decided_by, booking.decided_at, booking.dates_only = user, timezone.now(), dates_only
     with transaction.atomic():
+        before_level = _trigger_before(person, leave_type)
         _check_overlap(person, first, last)
         booking.save()
         days = _apply(booking)
         _type_costs(user, days, costs, note or "set when booked")
-        audit.record_as(user, "leave.booking", person.pk, {"booking": ("", describe(booking))}, note="booked by a manager")
+        reached, suffix = _trigger_after(person, before_level, dates_only)
+        audit.record_as(user, "leave.booking", person.pk, {"booking": ("", describe(booking))},
+                        note=("dates only (past schedule)" if dates_only else "booked by a manager") + suffix)
+    _trigger_mail(person, reached, base_url)
     _after_apply(booking, days, base_url)
     return booking
 
@@ -298,6 +347,8 @@ def _apply(booking):
     """Cost each day, write its BookingDay, cover or shorten the entries,
     record a DayChange where the day's text changes. Inside the caller's
     transaction."""
+    if booking.dates_only:
+        return []
     days = []
     for day in booking.days():
         before = render.day_text(booking.person, day)
@@ -387,7 +438,8 @@ def cancel(user, booking, note="", base_url=""):
         fresh.save()
         audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh))}, note="cancelled by a manager")
     booking.refresh_from_db()
-    _mail(notify.cancel_decided, fresh, True, base_url)
+    if not fresh.dates_only:        # a manager removing typed history: nothing to tell the person
+        _mail(notify.cancel_decided, fresh, True, base_url)
 
 
 # --- edit, override, recost -----------------------------------------------
@@ -402,7 +454,7 @@ def moves(booking, first, last, part, start, finish):
 EDITABLE = ("type", "first", "last", "part", "start", "finish", "description", "paid")
 
 
-def edit(user, booking, base_url="", costs=None, **fields):
+def edit(user, booking, base_url="", costs=None, note="edited by a manager", **fields):
     if not may_decide(user, booking):
         raise PermissionDenied("you don't manage this person")
     unknown = set(fields) - set(EDITABLE)
@@ -412,6 +464,7 @@ def edit(user, booking, base_url="", costs=None, **fields):
         fresh = _reread(booking)
         if fresh.status not in (Booking.Status.APPROVED, Booking.Status.PENDING):
             raise LeaveError("status", "Only approved or pending leave can be edited")
+        before_level = _trigger_before(fresh.person, fields.get("type", fresh.type), was=fresh)
         new_type = fields.get("type", fresh.type)
         first = fields.get("first", fresh.first_day)
         last = fields.get("last", fresh.last_day)
@@ -419,7 +472,12 @@ def edit(user, booking, base_url="", costs=None, **fields):
         start = fields.get("start", fresh.start) if part == "times" else None
         finish = fields.get("finish", fresh.finish) if part == "times" else None
         relabel = (new_type.pk, first, last, part, start, finish) == (fresh.type_id, fresh.first_day, fresh.last_day, fresh.part, fresh.start, fresh.finish)
-        if moves(fresh, first, last, part, start, finish):     # a type change on the same days is a correction, in any year
+        if fresh.dates_only:
+            if part != Booking.Part.WHOLE or costs:
+                raise LeaveError("part", "A past schedule entry is whole days with no hours")
+            _check_dates_only(new_type, first, last, part)
+            _check_overlap(fresh.person, first, last, exclude=fresh)
+        elif moves(fresh, first, last, part, start, finish):     # a type change on the same days is a correction, in any year
             _check_dates(fresh.person, first, last, part, start, finish, was=fresh)
             _check_overlap(fresh.person, first, last, exclude=fresh)
         before = describe(fresh)
@@ -445,8 +503,10 @@ def edit(user, booking, base_url="", costs=None, **fields):
                     bd.source, bd.placeholder = BookingDay.Source.OVERRIDE, False
                     bd.save()
         typed = _type_costs(user, days or list(BookingDay.objects.filter(booking=fresh)), costs, "set when edited")
-        audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh)), **typed}, note="edited by a manager")
+        reached, suffix = _trigger_after(fresh.person, before_level, fresh.dates_only)
+        audit.record_as(user, "leave.booking", fresh.person_id, {"booking": (before, describe(fresh)), **typed}, note=note + suffix)
     booking.refresh_from_db()
+    _trigger_mail(fresh.person, reached, base_url)
     _after_apply(fresh, days, base_url)
 
 

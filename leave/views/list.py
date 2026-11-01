@@ -67,7 +67,9 @@ def visible_rows(user, start, end, filters):
         if detail and approved_only and b.status != Booking.Status.APPROVED:
             continue          # the person and their managers see the real status
         out.append({"booking": b, "detail": detail, "manage": manage, "days": (b.last_day - b.first_day).days + 1, "status": status_for(b, detail),
-                    "cost": sum(bd.cost_seconds for bd in b.booking_days.all()) if detail and b.is_active else None})
+                    "dates_only": b.dates_only,
+                    "after_leaving": detail and b.person.end_date is not None and b.last_day > b.person.end_date,
+                    "cost": None if b.dates_only else (sum(bd.cost_seconds for bd in b.booking_days.all()) if detail and b.is_active else None)})
     return out
 
 
@@ -86,7 +88,7 @@ def time_off(request):
             b = r["booking"]
             w.writerow([b.person.name, b.first_day.isoformat(), b.last_day.isoformat(), r["days"], b.type.name,
                         b.label if r["detail"] else b.type.name, "" if b.paid is None or not r["detail"] else ("Paid" if b.paid else "Unpaid"),
-                        hours.fmt(r["cost"]) if r["cost"] is not None else "", r["status"]])
+                        "dates only" if r["dates_only"] and r["detail"] else (hours.fmt(r["cost"]) if r["cost"] is not None else ""), r["status"]])
         return response
     return render(request, "leave/list.html", {
         "page_title": "Time off", "rows": rows, "start": start, "end": end, "filters": filters, "is_manager": manager,

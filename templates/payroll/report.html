@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% load leave_extras payroll_extras %}
+{% block title %}Payroll · AMG Shift Central{% endblock %}
+{% block topbar_actions %}
+  <a class="topbar-action" href="?month={{ month|date:'Y-m' }}&amp;download=1">Download Excel</a>
+  {% if all_teams %}<a class="topbar-action is-primary" href="{% url 'payroll-sent' %}?month={{ month|date:'Y-m' }}" data-dialog>Mark as sent to the bureau</a>{% endif %}
+{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  {% if has_previous %}<a class="btn btn-quiet" href="?month={{ previous|date:'Y-m' }}" aria-label="Previous month">‹</a>{% endif %}
+  <label>Month <input type="month" name="month" value="{{ month|date:'Y-m' }}"></label>
+  {% if has_next %}<a class="btn btn-quiet" href="?month={{ following|date:'Y-m' }}" aria-label="Next month">›</a>{% endif %}
+  <button class="btn btn-quiet" type="submit">Show</button>
+  <span class="muted">{% if run %}Sent to the bureau on {{ run.sent_at|date:"j M Y" }} by {{ run.sent_by.person.name|default:run.sent_by.email|default:"—" }}{% else %}Not yet sent — a draft until it is marked sent{% endif %}</span>
+</form>
+<p class="field-help">{{ month|date:"F Y" }}: hours worked from the rota (the days still to come as it stands), paid leave and the rest from the bookings. Hours worked plus paid leave is the total to pay. The bureau does the pay.</p>
+{% for t in teams %}
+<section class="report-block">
+  <h2>{{ t.team }}</h2>
+  <table class="table">
+    <thead><tr><th>Name</th><th>Worked</th><th>Paid leave</th><th>Total to pay</th><th>Paid overtime</th><th>Unpaid leave</th><th>Sickness</th><th>Instances</th><th>TOIL taken</th><th>Leave days</th>{% for n in type_names %}<th>{{ n }}</th>{% endfor %}<th>Started / leaves</th></tr></thead>
+    <tbody>
+    {% for r in t.rows %}
+    <tr><td>{{ r.person.name }}</td><td>{{ r.worked|hm }}</td><td>{{ r.paid_leave|hm }}</td><td><strong>{{ r.total|hm }}</strong></td><td>{{ r.paid_overtime|hm }}</td><td>{{ r.unpaid|hm }}</td>
+        <td>{{ r.sickness|hm }}</td><td>{{ r.sickness_instances }}</td><td>{{ r.toil_taken|hm }}</td><td>{{ r.leave_days_text }}</td>
+        {% for n in type_names %}<td>{% with slot=r.types|get_item:n %}{% if slot %}{{ slot.days }} day{{ slot.days|pluralize }}, {{ slot.seconds|hm }}{% endif %}{% endwith %}</td>{% endfor %}
+        <td>{% if r.started %}Started {{ r.started|date:"j M" }}{% endif %}{% if r.leaves %}Leaves {{ r.leaves|date:"j M" }}{% if r.leaver_balance is not None %} · {{ r.leaver_balance|hm }}{% if r.leaver_balance < 0 %} over{% else %} remaining{% endif %}{% endif %}{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><td>{{ t.team }} total</td><td>{{ t.worked|hm }}</td><td>{{ t.paid_leave|hm }}</td><td>{{ t.total|hm }}</td><td>{{ t.paid_overtime|hm }}</td><td>{{ t.unpaid|hm }}</td><td>{{ t.sickness|hm }}</td><td>{{ t.sickness_instances }}</td><td>{{ t.toil_taken|hm }}</td><td colspan="{{ type_names|length|add:2 }}"></td></tr></tfoot>
+  </table>
+</section>
+{% empty %}<p>Nobody to report on.</p>{% endfor %}
+{% if teams and all_teams %}<p><strong>Practice total</strong>: worked {{ totals.worked|hm }}, paid leave {{ totals.paid_leave|hm }}, to pay {{ totals.total|hm }}, paid overtime {{ totals.paid_overtime|hm }}, unpaid {{ totals.unpaid|hm }}, sickness {{ totals.sickness|hm }}.</p>{% endif %}
+{% if corrections %}
+<section class="report-block"><h2>Corrections to months already sent</h2>
+<table class="table"><thead><tr><th>Month</th><th>Name</th><th>Figure</th><th>Sent</th><th>Now</th><th>Difference</th></tr></thead>
+<tbody>{% for c in corrections %}<tr><td>{{ c.month|date:"F Y" }}</td><td>{{ c.person.name }}</td><td>{{ c.label }}</td><td>{{ c.sent|figure:c.field }}</td><td>{{ c.now|figure:c.field }}</td><td>{{ c.delta|figure:c.field }}</td></tr>{% endfor %}</tbody></table>
+</section>
+{% endif %}
+{% if movers %}
+<section class="report-block"><h2>Starters and leavers</h2>
+<table class="table"><thead><tr><th>Name</th><th>Team</th><th>Started</th><th>Leaves</th><th>Leave remaining (negative = over)</th></tr></thead>
+<tbody>{% for r in movers %}<tr><td>{{ r.person.name }}</td><td>{{ r.team }}</td><td>{{ r.started|date:"j M Y"|default:"" }}</td><td>{{ r.leaves|date:"j M Y"|default:"" }}</td><td>{% if r.leaver_balance is not None %}{{ r.leaver_balance|hm }}{% elif r.leaves %}allowance not set{% endif %}</td></tr>{% endfor %}</tbody></table>
+</section>
+{% endif %}
+{% endblock %}

@@ -50,6 +50,10 @@ class Person(models.Model):
     # is the practice manager's flag (PEOPLE-07), set on the Permissions page.
     leave_year_start = models.CharField(max_length=5, default="01-01")
     own_leave_without_approval = models.BooleanField(default=False)
+    # Spec 4. The end date each leaver email was sent for (LEAVE-14,
+    # NOTIF-06): a changed date is announced again, an unchanged one is not.
+    leaver_flagged_for = models.DateField(null=True, blank=True)
+    leaver_week_flagged_for = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True, default="")
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True,

@@ -9,6 +9,7 @@
     <noscript><button class="btn btn-quiet" type="submit">Show</button></noscript>
   </form>
   {% if s.missing %}<p class="flash flash-warning">No allowance is set for this leave year yet.</p>{% endif %}
+  {% if leaver_text %}<p class="flash flash-warning">{% if leaver_past %}Left{% else %}Leaves{% endif %} on {{ person.end_date|date:"j M Y" }}: {{ leaver_text }}.</p>{% endif %}
   <dl class="defs">
     <dt>Annual leave allowance (pro-rated)</dt><dd>{{ s.annual_allowance|hm }}</dd>
     <dt>Bank holiday allowance (pro-rated)</dt><dd>{{ s.bank_holiday_allowance|hm }}</dd>
@@ -21,6 +22,7 @@
     <dt>TOIL taken</dt><dd>{{ s.toil_taken|hm }}</dd>
     <dt>TOIL remaining</dt><dd>{{ s.toil_remaining|hm }}{% if s.toil_pending %} · {{ s.toil_pending|hm }} waiting for approval{% endif %}</dd>
   </dl>
+  <p>Sickness: {% if sickness_count %}{{ sickness_count }} instance{{ sickness_count|pluralize }}{% else %}none{% endif %} in the last six months{% if sickness_label %} ({{ sickness_label }}){% endif %}</p>
   <table class="table">
     <thead><tr><th>How it is worked out</th><th>Hours</th></tr></thead>
     <tbody>

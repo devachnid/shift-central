@@ -375,7 +375,8 @@ extra shift, and the hours report adds both.
 **A GP's leave is booked in Shift Central like anyone's**, and the leave tile sits above their
 session, which stays: the session belongs to the GP rota app, which reads the leave back
 (see [the GP leave feed](sync.md#the-gp-rota-app-reads-gp-leave-from-here)) and flags a session that clashes with it. A GP's day of leave
-costs their sessions that day.
+costs their sessions that day. On **Who's in today** a GP on a whole-day booking is listed under "off" only; on a morning or afternoon booking the other session still shows under its site.
+The grid still shows the sessions.
 
 **A GP's sessions are matched to the GP by work email.** If the address the GP rota
 app holds differs from the one in Practice HR, even by a typo, the sessions do not

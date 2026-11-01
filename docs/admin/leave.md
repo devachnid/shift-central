@@ -472,7 +472,7 @@ Managers see the people they manage and themselves; staff see only their own row
 
 **Download** gives the same as CSV. A range that crosses a New Year shows the first year's
 remaining figure, so keep the range inside one leave year for the figures to mean anything.
-The report's *Instances* column (sickness) arrives with sickness.
+The *Instances* and *Trigger* columns are sickness, described in [Absence and payroll](absence.md#recording-sickness).
 
 ## Emails and the reminder
 
@@ -518,14 +518,11 @@ GPs are booked, requested and approved exactly like anyone else, with these diff
 
 ## What is not here yet
 
-Left for later releases, so do not look for them:
+Left for later releases, so do not look for them. Sickness (instances, triggers, long
+sickness, the past schedule and converting holiday to sickness), the leaver, return and
+year-end flags, the payroll report and the one-page summaries are built: see
+[Absence and payroll](absence.md).
 
-- Sickness records (instances, triggers, the return-to-work flag, long sickness, the
-  join-on warning) and the past-schedule section. Sick leave can be booked as time off, and
-  nothing more happens.
-- Converting annual leave into sickness, and the long-absence rules.
-- The year-end carry-over flag, leaver flags and the payroll report, and the one-page
-  summaries.
 - Push notifications to the phone app, messages and the notice board.
 - Repeating time off, a limit on how many can be off at once, notice periods, a second level of
   approval, delegating approval and automatic approval.

@@ -12,17 +12,17 @@
 <section class="report-block">
   <h2>{{ t.team }}</h2>
   <table class="table">
-    <thead><tr><th>Name</th><th>Allowance</th><th>Adjustments</th><th>Days</th><th>Deducted</th><th>Remaining</th><th>TOIL</th></tr></thead>
+    <thead><tr><th>Name</th><th>Allowance</th><th>Adjustments</th><th>Days</th><th>Deducted</th><th>Remaining</th><th>TOIL</th><th>Instances</th><th>Trigger</th></tr></thead>
     <tbody>
     {% for r in t.rows %}
     <tr><td>{{ r.person.name }}</td>
         <td>{% if r.missing %}<span class="muted">not set</span>{% else %}{{ r.allowance|hm }}{% endif %}</td>
         <td>{{ r.adjustments|hm }}</td><td>{{ r.days }}</td><td>{{ r.deducted|hm }}</td>
         <td>{% if r.missing %}<span class="muted">—</span>{% else %}{{ r.remaining|hm }}{% endif %}</td>
-        <td>{{ r.toil|hm }}</td></tr>
+        <td>{{ r.toil|hm }}</td><td>{{ r.instances }}</td><td>{{ r.trigger }}</td></tr>
     {% endfor %}
     </tbody>
-    <tfoot><tr><td>{{ t.team }} total</td><td>{{ t.allowance|hm }}</td><td>{{ t.adjustments|hm }}</td><td>{{ t.days }}</td><td>{{ t.deducted|hm }}</td><td>{{ t.remaining|hm }}</td><td>{{ t.toil|hm }}</td></tr></tfoot>
+    <tfoot><tr><td>{{ t.team }} total</td><td>{{ t.allowance|hm }}</td><td>{{ t.adjustments|hm }}</td><td>{{ t.days }}</td><td>{{ t.deducted|hm }}</td><td>{{ t.remaining|hm }}</td><td>{{ t.toil|hm }}</td><td>{{ t.instances }}</td><td></td></tr></tfoot>
   </table>
 </section>
 {% empty %}<p>Nobody to report on.</p>{% endfor %}

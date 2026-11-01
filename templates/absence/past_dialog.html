@@ -1,0 +1,17 @@
+{% extends "ui/_dialog.html" %}
+{% block dialog_title %}Past sickness{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% url 'time-off-past-add' %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <div class="field{% if form.person.errors %} has-error{% endif %}"><label for="id_person">{{ form.person.label }}</label>{{ form.person }}{% for e in form.person.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  <div class="field"><label for="id_type">{{ form.type.label }}</label>{{ form.type }}</div>
+  <div class="field-row">
+    <div class="field{% if form.first_day.errors %} has-error{% endif %}"><label for="id_first_day">{{ form.first_day.label }}</label>{{ form.first_day }}{% for e in form.first_day.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+    <div class="field{% if form.last_day.errors %} has-error{% endif %}"><label for="id_last_day">{{ form.last_day.label }}</label>{{ form.last_day }}{% for e in form.last_day.errors %}<p class="field-error">{{ e }}</p>{% endfor %}</div>
+  </div>
+  <input type="hidden" name="preview" value="1">
+  {% if preview.sickness %}{% include "absence/_sickness_preview.html" %}{% endif %}
+  <button class="btn btn-dark" name="preview" value="">{% if preview.sickness.joins and not preview.sickness.extend_blocked and join != "separate" %}Extend the existing entry{% else %}Add past sickness{% endif %}</button>
+</form>
+{% endblock %}

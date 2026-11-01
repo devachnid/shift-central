@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% load leave_extras %}
+{% block title %}Sickness summary · AMG Shift Central{% endblock %}
+{% block topbar_actions %}
+  <a class="topbar-action" href="?from={{ start|date:'Y-m-d' }}&amp;to={{ end|date:'Y-m-d' }}&amp;format=pdf">Download PDF</a>
+  <a class="topbar-action" href="?from={{ start|date:'Y-m-d' }}&amp;to={{ end|date:'Y-m-d' }}&amp;format=xlsx">Download Excel</a>
+{% endblock %}
+{% block content %}
+<form class="filters" method="get">
+  <label>From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
+  <label>To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  <button class="btn btn-quiet" type="submit">Refresh</button>
+</form>
+<p class="field-help">Instances and days off sick inside the range; each person's instances and trigger are the rolling six months as at {{ end|date:"j M Y" }}. Dates-only entries from the past schedule count their days and have no hours.</p>
+<section class="report-block"><h2>Practice</h2>
+<table class="table"><thead><tr><th>People</th><th>Instances</th><th>Days off sick</th><th>Hours off sick</th><th>Trigger 1</th><th>Trigger 2</th><th>Trigger 3+</th></tr></thead>
+<tbody><tr><td>{{ practice.people }}</td><td>{{ practice.instances }}</td><td>{{ practice.days }}</td><td>{{ practice.seconds|hm }}</td><td>{{ practice.trigger_1 }}</td><td>{{ practice.trigger_2 }}</td><td>{{ practice.trigger_3 }}</td></tr></tbody></table></section>
+<section class="report-block"><h2>Teams</h2>
+<table class="table"><thead><tr><th>Team</th><th>People</th><th>Instances</th><th>Days off sick</th><th>Hours off sick</th><th>Trigger 1</th><th>Trigger 2</th><th>Trigger 3+</th></tr></thead>
+<tbody>{% for t in teams %}<tr><td>{{ t.name }}</td><td>{{ t.people }}</td><td>{{ t.instances }}</td><td>{{ t.days }}</td><td>{{ t.seconds|hm }}</td><td>{{ t.trigger_1 }}</td><td>{{ t.trigger_2 }}</td><td>{{ t.trigger_3 }}</td></tr>{% endfor %}</tbody></table></section>
+<section class="report-block"><h2>People</h2>
+<table class="table"><thead><tr><th>Name</th><th>Team</th><th>Instances (rolling six months)</th><th>Days off sick</th><th>Hours off sick</th><th>Longest instance</th><th>Trigger</th></tr></thead>
+<tbody>{% for r in people %}<tr><td>{{ r.person.name }}</td><td>{{ r.team }}</td><td>{{ r.instances }}</td><td>{{ r.days }}</td><td>{{ r.seconds|hm }}</td><td>{% if r.longest %}{{ r.longest }} day{{ r.longest|pluralize }}{% if r.long %} (long){% endif %}{% endif %}</td><td>{{ r.trigger }}</td></tr>
+{% empty %}<tr><td colspan="7">Nobody to report on.</td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}

@@ -55,3 +55,20 @@ def test_the_page_is_for_managers_and_takes_a_day():
     staff = Client()
     staff.force_login(make_user_for(make_person(first_name="Staff")))
     assert staff.get("/rota/today/").status_code == 403
+
+
+def test_a_gp_on_leave_is_off_and_their_sessions_are_not_listed():
+    doc = make_person(first_name="Doc", team=make_team("GPs"), is_gp=True)
+    make_gp_session(doc, DAY, "AM", site="PMC")
+    make_gp_session(doc, DAY, "PM", site="PMC")
+    from leave.models import BookingDay
+    b = make_booking(doc, DAY, type_name="Holiday", status="approved", part="am")
+    BookingDay.objects.create(booking=b, day=DAY, cost_seconds=15000, source="rota", account="annual")
+    board = today.board(DAY)
+    sites = {s["name"]: s for s in board["sites"]}
+    assert sites["PMC"]["teams"][0]["people"][0]["lines"] == ["PM Surgery PMC"]       # the morning is hidden
+    assert [x["person"] for x in board["off"]] == [doc]
+    b.part = "whole"
+    b.save()
+    board = today.board(DAY)
+    assert "PMC" not in {s["name"] for s in board["sites"]} and [x["person"] for x in board["off"]] == [doc]

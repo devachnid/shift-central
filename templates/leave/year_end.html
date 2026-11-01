@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load leave_extras %}
+{% block title %}Year end · AMG Shift Central{% endblock %}
+{% block content %}
+<p class="field-help">At the start of each leave year, everyone with annual leave or TOIL left (or over). Carry it all, lose it, or carry part; the carry is written as an adjustment in the new year and shows on the statement.</p>
+<h2>Waiting for a decision</h2>
+<table class="table">
+  <thead><tr><th>Staff</th><th>Team</th><th>Year ended</th><th>Annual leave left</th><th>TOIL left</th><th></th><th></th></tr></thead>
+  <tbody>
+  {% for r in open %}{% with y=r.row %}
+  <tr><td>{{ y.person.name }}</td><td>{{ y.person.team.name|default:"—" }}</td><td>{{ r.label }}</td>
+      <td>{% if r.over %}<span class="field-error">{{ y.annual_remaining|hm }} (over)</span>{% else %}{{ y.annual_remaining|hm }}{% endif %}</td>
+      <td>{% if y.toil_remaining > 0 %}{{ y.toil_remaining|hm }}{% endif %}</td>
+      <td>{% if r.long %}<span class="chip">long absence this year</span>{% endif %}</td>
+      <td><a href="{% url 'time-off-year-end-decide' y.pk %}" data-dialog>Decide…</a></td></tr>
+  {% endwith %}{% empty %}<tr><td colspan="7">Nothing waiting.</td></tr>{% endfor %}
+  </tbody>
+</table>
+<h2>Decided</h2>
+<table class="table">
+  <thead><tr><th>Staff</th><th>Year ended</th><th>Was left</th><th>Carried</th><th>Lost</th><th>TOIL lost</th><th>Decided</th><th>Note</th></tr></thead>
+  <tbody>
+  {% for r in decided %}{% with y=r.row %}
+  <tr><td>{{ y.person.name }}</td><td>{{ r.label }}</td><td>{{ y.annual_remaining|hm }}</td><td>{{ y.annual_carried|hm }}</td><td>{{ y.annual_lost|hm }}</td><td>{{ y.toil_lost|hm }}</td>
+      <td>{{ y.decided_by.person.name|default:y.decided_by.email|default:"—" }} · {{ y.decided_at|date:"j M Y" }}</td><td>{{ y.note }}</td></tr>
+  {% endwith %}{% empty %}<tr><td colspan="8">No decisions yet.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

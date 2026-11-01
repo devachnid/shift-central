@@ -65,7 +65,7 @@ def test_the_leave_report_is_per_person_with_team_subtotals_and_a_csv(sam, lead)
     body = c.get("/reports/leave/?from=2027-01-01&to=2027-12-31").content.decode()
     assert "Sam Patel" in body and "232 h 30 min" in body and "1 h" in body and "7 h 30 min" in body and "226 h" in body and "Reception" in body
     csv = c.get("/reports/leave/?from=2027-01-01&to=2027-12-31&download=1").content.decode()
-    assert csv.splitlines()[0] == "Name,Team,Allowance,Adjustments,Days,Deducted,Remaining,TOIL"
+    assert csv.splitlines()[0] == "Name,Team,Allowance,Adjustments,Days,Deducted,Remaining,TOIL,Instances,Trigger"
     body = _client(sam).get("/reports/leave/").content.decode()
     assert "Sam Patel" in body and "Lead Patel" not in body
 

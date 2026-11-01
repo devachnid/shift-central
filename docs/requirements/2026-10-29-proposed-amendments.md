@@ -127,3 +127,13 @@ fifteen minutes and its FindMyShift reader is removed. That reader never
 went live, so it was replaced rather than migrated. The LEAVE-12 total is
 capped at the larger full-year allowance, and a half-minute shows as "½"
 (Q-08).
+
+## Postscript, 31 October 2026 (developers), absence and payroll
+
+Built as the pack asks (spec 4): sickness instances and triggers over Sick
+leave bookings, the past schedule section for 2026 sickness, the leaver
+and year-end flags, the payroll report and the two one-pagers, the last
+two ahead of the dates in point 3. Two choices to note: no sickness reason
+is recorded (Q-11; the manager note stays the place for anything a manager
+wants to keep), and GPs appear on the payroll report with their sessions
+counted as hours worked at 4 h 10 min.

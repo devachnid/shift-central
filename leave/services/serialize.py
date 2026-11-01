@@ -39,4 +39,10 @@ def leave_for(people, first, last, user):
         for day in b.days():
             if first <= day <= last:
                 out.setdefault(p.pk, {}).setdefault(day.isoformat(), _json(b, None, detail_for(p)))
+    history = Booking.objects.filter(person__in=people, status__in=Booking.ACTIVE, dates_only=True, first_day__lte=last, last_day__gte=first).select_related("type")
+    for b in history:          # a past schedule entry has no costed days; it still shows where it was
+        p = by_pk[b.person_id]
+        for day in b.days():
+            if first <= day <= last:
+                out.setdefault(p.pk, {}).setdefault(day.isoformat(), _json(b, None, detail_for(p)))
     return out

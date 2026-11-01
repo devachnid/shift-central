@@ -12,6 +12,9 @@
   {% if detail and b.decided_by %}<dt>Decided by</dt><dd>{{ b.decided_by.person.name|default:b.decided_by.email }}{% if b.decided_at %} · {{ b.decided_at|date:"j M Y" }}{% endif %}</dd>{% endif %}
   {% if detail and b.paid is not None %}<dt>Pay</dt><dd>{% if b.paid %}Paid{% else %}Unpaid{% endif %}</dd>{% endif %}
 </dl>
+{% if detail and b.dates_only %}<p class="field-help">Dates only: a past schedule entry, with no hours.</p>{% endif %}
+{% if detail and long_sickness %}<p class="flash flash-warning">Long sickness: 29 days or more.</p>{% endif %}
+{% if detail and after_leaving %}<p class="flash flash-warning">After the leaving date ({{ b.person.end_date|date:"j M Y" }}).</p>{% endif %}
 {% if detail and days %}
 <table class="table preview-table">
   <thead><tr><th>Day</th><th>Allowance used</th><th></th></tr></thead>
@@ -27,8 +30,9 @@
 {% if detail and b.manager_note %}<p><strong>Manager notes:</strong> {{ b.manager_note }}</p>{% endif %}
 {% endblock %}
 {% block dialog_links %}
-{% if can_edit or can_cancel %}<div class="dialog-links">
+{% if can_edit or can_cancel or can_convert %}<div class="dialog-links">
   {% if can_edit %}<a href="{% url 'time-off-edit' b.pk %}" data-dialog>Edit</a>{% endif %}
+  {% if can_convert %}<a href="{% url 'time-off-convert' b.pk %}" data-dialog>Convert days to sickness…</a>{% endif %}
   {% if can_cancel %}<a href="{% url 'time-off-cancel' b.pk %}" data-dialog>Cancel this time off</a>{% endif %}
 </div>{% endif %}
 {% endblock %}
