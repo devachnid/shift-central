@@ -12,7 +12,7 @@ WorkingDirectory=/srv/shift-central
 StateDirectory=shift-central
 StateDirectoryMode=0700
 UMask=0077
-# The EMAIL_* variables come from the same environment file as SECRET_KEY,
+# The VAPID_* settings come from the same environment file as SECRET_KEY,
 # readable only by root. See gunicorn.service for why. A run with nothing queued
 # sends nothing and says so in the journal.
 EnvironmentFile=/etc/shift-central.env

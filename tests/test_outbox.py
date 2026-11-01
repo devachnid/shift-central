@@ -127,3 +127,25 @@ def test_the_daily_job_applies_the_retention(cast):
     call_command("daily_flags", stdout=out)
     old.refresh_from_db()
     assert old.body == "" and "outbox" in out.getvalue()
+
+
+def test_a_team_manager_does_not_see_rows_to_other_managers_except_their_own(cast):
+    """Privacy: a sickness-trigger email to the all-teams manager names a person
+    in the manager's own team; the team lead must not read it. A row to the
+    lead themself, and to staff, stays visible."""
+    to_staff, to_lead, to_boss = row(cast.sam), row(cast.lead), row(cast.boss, subject="Nina has reached Trigger 1")
+    other_lead = make_person(first_name="Other", team=cast.sam.team)
+    make_team_manager(other_lead, cast.sam.team)
+    to_other_lead = row(other_lead)
+    assert set(outbox.scope(cast.lead.user)) == {to_staff, to_lead}
+    assert to_boss not in outbox.scope(cast.lead.user) and to_other_lead not in outbox.scope(cast.lead.user)
+    assert set(outbox.scope(cast.boss.user)) == {to_staff, to_lead, to_boss, to_other_lead}
+    assert outbox.scope(cast.sam.user).count() == 0
+    assert set(outbox.rows(cast.lead.user, person=cast.boss)) == set()
+
+
+def test_the_failure_count_does_not_count_rows_to_other_managers(cast):
+    row(cast.boss, "failed", error="OSError")
+    row(cast.sam, "failed", error="OSError")
+    assert outbox.failure_count(cast.lead.user) == 1
+    assert outbox.failure_count(cast.boss.user) == 2

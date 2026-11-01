@@ -57,8 +57,8 @@ UMask=0077
 #   VAPID_PUBLIC_KEY=<printed by manage vapid_keys>
 #   VAPID_SUBJECT=mailto:webmaster@example.org
 #
-# and, once the app sends email (nothing in this release does), the mail
-# relay: EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD,
+# and the mail relay the app's emails go through (with no EMAIL_HOST nothing is
+# sent and the Outbox says "mail not configured"): EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD,
 # EMAIL_USE_TLS (on by default) and DEFAULT_FROM_EMAIL.
 #
 # A value takes the whole line: an env file has no comment syntax after one,

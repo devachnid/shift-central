@@ -11,8 +11,8 @@ its own), so the relay sees one login, not one per person.
 
 Every message also queues a push (`push.queue`) when push is switched on and
 the person has a phone registered; the one-minute timer sends it (`manage
-send_push`). The push carries the subject and `url`, the page a tap opens
-(default: the rota), never the body. Queueing a push never breaks the send."""
+send_push`). The push carries the subject (or a general `push_subject`) and
+`url`, the page a tap opens (default: the rota), never the body. Queueing a push never breaks the send."""
 
 import logging
 from contextlib import contextmanager
@@ -86,14 +86,16 @@ def _send_email(person, subject, body, connection=None):
     return row
 
 
-def send(person, subject, body, connection=None, url=None):
+def send(person, subject, body, connection=None, url=None, push_subject=None):
     """Send one message by email and, when push is on and the person has a
     phone registered, queue a push for the timer to send. Returns the email's
     Outbox row; its `sent_at` is None when nothing was sent. `url` is the page
-    a tap on the push opens (default: the rota)."""
+    a tap on the push opens (default: the rota). The push shows on a lock
+    screen, so a caller whose subject names someone private gives a general
+    `push_subject`; the email keeps its own."""
     row = _send_email(person, subject, body, connection)
     try:
-        push.queue(person, subject, url)
+        push.queue(person, push_subject or subject, url)
     except Exception:  # a push must never break the message that caused it
         log.warning("queueing a push failed for person %s", person.pk)
     return row

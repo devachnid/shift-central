@@ -178,3 +178,10 @@ def test_remove_device_service_only_removes_the_owners(push_on):
     assert push.remove_device(b, d.pk) is False and PushDevice.objects.count() == 1
     assert push.remove_device(a, d.pk) is True and PushDevice.objects.count() == 0
     assert push.remove_device(a, d.pk) is False
+
+
+def test_endpoint_allowed_refuses_the_kelvin_sign():
+    """re.I alone folds U+212A to k; the host must be plain ASCII."""
+    assert not push.endpoint_allowed("https://\u212aexample.fcm.googleapis.com/x")
+    assert not push.endpoint_allowed("https://example.fcm.googleapis.com/\u212a")
+    assert push.endpoint_allowed("https://Kexample.fcm.googleapis.com/x")      # ASCII capitals are still fine

@@ -197,6 +197,40 @@ def test_the_backup_script_runs_and_keeps_its_copies_private(tmp_path):
     assert (tmp_path / "backups").stat().st_mode & 0o077 == 0
 
 
+def test_the_backup_script_archives_the_media_privately(tmp_path):
+    """With uploaded documents present, a private media archive is written."""
+    import sqlite3
+    with sqlite3.connect(tmp_path / "db.sqlite3") as conn:
+        conn.execute("create table t (x)")
+    (tmp_path / "media" / "uploads").mkdir(parents=True)
+    (tmp_path / "media" / "uploads" / "paper.pdf").write_bytes(b"%PDF")
+    (tmp_path / "media" / "uploads" / "half.part").write_bytes(b"partial")
+    env = {**os.environ, "STATE_DIRECTORY": str(tmp_path)}
+    try:
+        subprocess.run(["sh", str(DEPLOY / "backup.sh")], env=env, check=True, capture_output=True)
+    except FileNotFoundError:
+        pytest.skip("no sh")
+    except subprocess.CalledProcessError as exc:
+        if b"sqlite3: not found" in exc.stderr or b"sqlite3: command not found" in exc.stderr:
+            pytest.skip("sqlite3 CLI not installed")
+        raise
+    (archive,) = (tmp_path / "backups").glob("media-*.tar.gz")
+    assert archive.stat().st_mode & 0o077 == 0, oct(archive.stat().st_mode)
+    import tarfile
+    with tarfile.open(archive) as tar:
+        names = tar.getnames()
+    assert "media/uploads/paper.pdf" in names and not any(n.endswith(".part") for n in names)
+
+
+def test_the_media_archive_tolerates_files_changing_while_it_is_read():
+    """tar exits 1 when a file changed as it was read: the nightly copy still
+    stands. Exit 2 and above (a real failure) still fails the script."""
+    script = (DEPLOY / "backup.sh").read_text()
+    assert "--exclude='*.part'" in script
+    assert re.search(r"tar --exclude='\*\.part' .*media( .*)? \|\| \[ \$\? -eq 1 \]$", script, re.M), "exit 1 tolerated, 2 and above fails"
+    assert "-le 1" not in script and "-ge" not in script
+
+
 # --- off-site backup to the Proxmox Backup Server --------------------------------
 
 def test_the_pbs_secrets_stay_out_of_the_app_users_reach():

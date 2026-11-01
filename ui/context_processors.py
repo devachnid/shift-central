@@ -34,7 +34,7 @@ def _items(request, role, badges):
                         {"label": "Staff by hour", "url": "/reports/staff-by-hour/"}] if role != "staff" else []) + [{"label": "Hours", "url": "/reports/hours/"}, {"label": "Leave", "url": "/reports/leave/"}]
     if role != "staff":
         report_children += [{"label": "Payroll", "url": "/reports/payroll/"}, {"label": "Sickness summary", "url": "/reports/sickness/"},
-                            {"label": "Leave summary", "url": "/reports/leave-summary/"}, {"label": "Sent messages", "url": "/outbox/"}]
+                            {"label": "Leave summary", "url": "/reports/leave-summary/"}, {"label": "Outbox", "url": "/outbox/"}]
     message_children = [{"label": "Inbox", "url": "/messages/"}]
     if role != "staff":
         message_children += [{"label": "Send a message…", "url": "/messages/new/", "dialog": True},

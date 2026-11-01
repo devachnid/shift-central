@@ -177,3 +177,18 @@ def test_changing_a_booking_to_sick_leave_through_edit_reaches_the_trigger(boss)
     assert sickness.level_for(sam) == 1
     assert [m.subject for m in sent()] == ["Sam Patel has reached Trigger 1"]
     assert AuditEntry.objects.filter(model="leave.booking", object_id=sam.pk, note__contains="Trigger 1 reached").exists()
+
+
+@pytest.mark.today(date(2026, 7, 1))
+def test_the_trigger_push_has_a_general_subject_and_no_name(boss, push_on):
+    """A lock screen shows the push subject: no name on it. The email keeps its subject."""
+    from messaging.models import Outbox
+    from tests.factories import make_push_device
+    make_push_device(boss)
+    sam = make_person(first_name="Sam")
+    for d in (date(2026, 2, 1), date(2026, 3, 1), date(2026, 4, 1)):
+        bookings.book(boss.user, sam, sick_type(), d, d, "whole")
+    subjects = list(Outbox.objects.filter(channel="push", to_person=boss).values_list("subject", flat=True))
+    assert subjects.count("A sickness trigger needs your attention") == 1
+    assert not any("reached" in s for s in subjects)      # the named subject never reaches a push
+    assert Outbox.objects.filter(channel="email", to_person=boss, subject="Sam Patel has reached Trigger 1").count() == 1

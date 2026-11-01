@@ -3,10 +3,12 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.db.models import Q
 from django.utils import timezone
 
 from messaging.models import Outbox
 from messaging.services import NOT_CONFIGURED
+from people.models import Person, TeamManager
 from people.services import access
 
 RECENT = timedelta(days=7)      # how far back the nav badge looks
@@ -25,12 +27,20 @@ def status(row):
 
 
 def scope(user):
-    """All rows for an all-teams manager; rows to people in their teams for a
-    team manager; nothing for anyone else."""
+    """All rows for an all-teams manager; for a team manager, rows to people in
+    their teams, less rows to other managers (a trigger email to the practice
+    manager names a colleague the team manager may not read about) except rows
+    to the viewer; nothing for anyone else."""
     if access.is_all_teams(user):
         return Outbox.objects.all()
     if access.is_manager(user):
-        return Outbox.objects.filter(to_person__in=access.managed_people(user))
+        managers = Person.objects.filter(Q(pk__in=TeamManager.objects.values("person")) | Q(user__is_all_teams_manager=True))
+        mine = access.managed_people(user)
+        me = getattr(user, "person", None)
+        rows = Outbox.objects.filter(to_person__in=mine).exclude(to_person__in=managers)
+        if me is not None:
+            rows = rows | Outbox.objects.filter(to_person=me)
+        return rows
     return Outbox.objects.none()
 
 

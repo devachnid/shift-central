@@ -19,11 +19,11 @@ def _link(base_url, path):
     return (base_url.rstrip("/") + path) if base_url else path
 
 
-def _send_all(people, subject, body, url=None):
+def _send_all(people, subject, body, url=None, push_subject=None):
     rows = []
     for p in people:
         try:
-            rows.append(messaging.send(p, subject, body, url=url))
+            rows.append(messaging.send(p, subject, body, url=url, push_subject=push_subject))
         except Exception:   # messaging.send never raises; belt and braces for the booking's sake
             log.exception("leave mail failed")
     return rows
@@ -84,7 +84,8 @@ def trigger_reached(person, lvl, rows, base_url=""):
     label = sickness.level_label(lvl)
     body = (f"{person.name} has reached {label}: {len(rows)} instances of absence in the last six months.\n\n{lines}\n\n"
             f"Profile: {_link(base_url, f'/staff/{person.pk}/profile/?tab=hours')}\n")
-    return _send_all(recipients(person), f"{person.name} has reached {label}", body, url="/staff/")
+    return _send_all(recipients(person), f"{person.name} has reached {label}", body, url="/staff/",
+                     push_subject="A sickness trigger needs your attention")
 
 
 def converted(label, dates, sick, base_url=""):
@@ -121,7 +122,8 @@ def returned(booking, statement, base_url=""):
             f"TOIL remaining {hours.fmt(statement.toil_remaining)}. The allowance is a full-year figure and was not reduced by the absence; "
             f"leave that could not be taken may need planning or carrying over.\n\n"
             f"Profile: {_link(base_url, f'/staff/{p.pk}/profile/?tab=hours')}\n")
-    return _send_all(recipients(p), f"{p.name} is back after {weeks} week{'' if weeks == 1 else 's'} of {booking.type.name}", body, url="/staff/")
+    return _send_all(recipients(p), f"{p.name} is back after {weeks} week{'' if weeks == 1 else 's'} of {booking.type.name}", body, url="/staff/",
+                     push_subject="Someone is back from a long absence")
 
 
 def year_end(manager, rows, base_url=""):

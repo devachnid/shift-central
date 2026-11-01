@@ -258,3 +258,16 @@ def test_a_failed_leaver_flag_shows_on_the_sync_line(boss, monkeypatch):
     c = Client()
     c.force_login(boss.user)
     assert "leaver flag failed; see the journal" in c.get("/staff/").content.decode()
+
+
+def test_the_return_push_has_a_general_subject_and_no_name(boss, push_on):
+    from messaging.models import Outbox
+    from tests.factories import make_push_device
+    make_push_device(boss)
+    sam = make_person(first_name="Sam", start_date=date(2020, 1, 6), weekly_hours=Decimal("37.5"), days_per_week=5)
+    make_allowance(sam, Y26, Decimal("172.5"), 0)
+    make_sick(sam, date(2026, 9, 1), date(2026, 10, 2))
+    assert returns.send(today=date(2026, 10, 3)) == 1
+    (queued,) = Outbox.objects.filter(channel="push", to_person=boss)
+    assert queued.subject == "Someone is back from a long absence" and "Sam" not in queued.subject
+    assert Outbox.objects.get(channel="email", to_person=boss).subject == "Sam Patel is back after 5 weeks of Sick leave"

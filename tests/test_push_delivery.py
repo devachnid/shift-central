@@ -222,3 +222,47 @@ def test_a_leave_decision_opens_my_leave(push_on):
     make_push_device(p)
     leave_notify.decided(make_booking(p, date(2026, 11, 9)))
     assert pushes().get().url == "/time-off/mine/"
+
+
+# --- the general subject, the failure log, the strict address -------------------------
+
+def test_send_queues_the_push_with_its_own_subject_when_given(push_on):
+    p = make_person()
+    make_push_device(p)
+    services.send(p, "Sam Patel has reached Trigger 2", "The body", push_subject="A sickness trigger needs your attention")
+    assert Outbox.objects.get(channel="email").subject == "Sam Patel has reached Trigger 2"
+    assert pushes().get().subject == "A sickness trigger needs your attention"
+
+
+def test_deliver_logs_one_warning_with_the_device_and_status_only(push_on, monkeypatch, caplog):
+    import logging
+
+    import pywebpush
+    device = make_push_device(make_person(), endpoint="https://push.example.net/send/SECRETPATH")
+
+    def refuse(**kw):
+        raise pywebpush.WebPushException("boom SECRETPATH", response=SimpleNamespace(status_code=403))
+    monkeypatch.setattr(pywebpush, "webpush", refuse)
+    with caplog.at_level(logging.WARNING, logger="messaging.push"):
+        assert push.deliver(device, {"body": "SECRETBODY"}) == "failed"
+    (rec,) = [r for r in caplog.records if r.name == "messaging.push"]
+    text = rec.getMessage()
+    assert str(device.pk) in text and "403" in text
+    assert "SECRET" not in text and "push.example.net" not in text and device.p256dh not in text and device.auth not in text
+    caplog.clear()
+    monkeypatch.setattr(pywebpush, "webpush", lambda **kw: (_ for _ in ()).throw(OSError("net SECRETPATH")))
+    with caplog.at_level(logging.WARNING, logger="messaging.push"):
+        assert push.deliver(device, {}) == "failed"
+    (rec,) = [r for r in caplog.records if r.name == "messaging.push"]
+    assert "OSError" in rec.getMessage() and str(device.pk) in rec.getMessage() and "SECRET" not in rec.getMessage()
+
+
+def test_a_gone_device_and_a_success_log_nothing(push_on, monkeypatch, caplog):
+    import logging
+
+    import pywebpush
+    device = make_push_device(make_person())
+    with caplog.at_level(logging.WARNING, logger="messaging.push"):
+        monkeypatch.setattr(pywebpush, "webpush", lambda **kw: None)
+        assert push.deliver(device, {}) == "ok"
+    assert not caplog.records

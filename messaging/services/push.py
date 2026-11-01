@@ -1,6 +1,7 @@
 """Web push (spec 5, section 4): which phones are registered and whether
 push is switched on, then delivery (queue, deliver, send_pending, status)."""
 
+import logging
 import os
 import re
 from collections import Counter
@@ -11,11 +12,12 @@ from django.utils import timezone
 
 from messaging.models import Outbox, PushDevice
 
+log = logging.getLogger("messaging.push")
 _B64URL = re.compile(r"^[A-Za-z0-9_\-=]+$")
 # The one shape of address accepted: https, a plain host name, the default port
 # at most, then a path of visible characters. Nothing that two URL parsers could
 # read differently (a backslash, userinfo, a space) gets through.
-_ENDPOINT = re.compile(r"https://([a-z0-9.-]+)(?::443)?(/[!-~]*)?", re.I)
+_ENDPOINT = re.compile(r"https://([a-z0-9.-]+)(?::443)?(/[!-~]*)?", re.I | re.ASCII)
 
 
 def endpoint_allowed(endpoint):
@@ -102,8 +104,13 @@ def deliver(device, payload):
                 ttl=int(EXPIRY.total_seconds()))   # without a ttl the push service drops it if the phone is offline
     except WebPushException as e:
         status = getattr(getattr(e, "response", None), "status_code", None)
-        return "gone" if status in (404, 410) else "failed"
-    except Exception:  # a network error is a failed push, not a crash
+        if status in (404, 410):
+            return "gone"
+        # the device and the status only: never the endpoint, the keys or the payload
+        log.warning("push to device %s failed: %s", device.pk, status or e.__class__.__name__)
+        return "failed"
+    except Exception as e:  # a network error is a failed push, not a crash
+        log.warning("push to device %s failed: %s", device.pk, e.__class__.__name__)
         return "failed"
     return "ok"
 
