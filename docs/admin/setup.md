@@ -126,6 +126,71 @@ When the Health card shows the feed green, no one needing hours, and nobody in "
 in the feed", the foundation is ready for the rota grid. Then lay the rotas out
 (see [the rota](rota.md)), and press **Notify staff** when each team's is ready.
 
+## Demo data for a staging box
+
+**Only on a staging box, never on the practice's own.** `seed_demo` fills a staging Shift
+Central with fictional working data, so the rota, the leave pages and the Health card have
+something in them to look at. It makes no people: they come from Practice HR, as everywhere
+else. The three apps share one fictional cast of nineteen, and the Practice HR and rota
+seeds give each person an address built from one base: for the base `tom@example.org`,
+Morgan Ellis is `tom+morgan.ellis@example.org` (lower-case `first.last`, tagged on with a
+`+`). `seed_demo` finds the cast by those addresses, so give it the base the Practice HR
+seed was given. The base must have exactly one `@` and no `+`.
+
+**The order**, each step needing the one before:
+
+1. The tunnel, and the environment file (go-live steps 1 and 2).
+2. The superusers (step 4).
+3. The Practice HR seed, then the rota app's seed, in their own repositories.
+4. `deploy/manage hr_sync`: reads the nineteen in (step 5).
+5. `deploy/manage gp_sync`, once the rota app is up: reads the GPs' sessions.
+6. This command:
+
+       deploy/manage seed_demo --email-base tom@example.org --yes-this-is-staging
+
+**What it refuses.** Without `--yes-this-is-staging`; with fewer than the nineteen in the
+database (it says how many are missing and "run hr_sync first"); and with any person in the
+database who is not one of the nineteen. Each refusal changes nothing, and none names anyone.
+
+**What it creates**, all through the same services the screens use, so every change is in the
+[Activity log](access.md#the-two-logs), made by an inactive login called
+`seed-demo@shift-central.invalid` that nobody can sign in as:
+
+- **Hours, days per week and two leave years of allowances** for everyone but the GPs, so the
+  Health card's *Needs hours and allowances* box is empty afterwards. Allowances are five
+  weeks' hours of annual leave and 1.6 weeks' of bank holiday leave, in hours, for the
+  current and the next leave year.
+- **Job titles and name colours**, where a person has none. Nothing a manager has typed is
+  overwritten.
+- **Team grants**: the lead nurse manages Nursing and the head pharmacist Pharmacy, as in
+  go-live step 8.
+- **The four all-teams managers are not made here.** That is Practice HR's *Admin of
+  shift-central* box (go-live step 6), applied when each of them signs in (step 7); the command
+  does nothing for them and says so when it finishes.
+- **A rota** for Reception, Admin/Secretarial, Nursing, Pharmacy and Cleaning staff: this week
+  and the next four, each person on their own days only, weekends empty and nobody on a bank
+  holiday (Reception 08:00 to 16:15 and 10:15 to 18:30, early and late; Nursing 08:30 to 17:00). The
+  weeks the leave below falls in are written too, so every booked day is costed from a rota and none is
+  left as an "average day" to check. GPs' sessions and the managers' rows are left alone.
+- **Nine leave records**: a Holiday week for each of two receptionists next month, a Holiday day for
+  a nurse, a half day for a secretary, a request by a receptionist that is approved, one by a pharmacy
+  technician left **waiting for a manager's decision**, a Sick leave booking last month, a dates-only
+  past sickness record, and one Holiday booking that was cancelled. Nobody goes over their allowance.
+
+**It sends nothing.** Leave bookings normally email the managers or the person after they are
+saved. Here no message is composed at all, whatever the `EMAIL_*` settings are, and the Outbox is
+left empty (not filled with "mail not configured" rows that read as failures). The seeded rota is
+also taken as the starting point, so the grid's **Notify staff** has nothing waiting. The cast's plus-addresses
+all land in the base address's one real inbox, which is why this matters on a box that has a relay.
+
+**Running it again** is safe: it fills what is missing and changes nothing else, so a second run on the same
+day does nothing. On a later day it adds the rota weeks that have come into range, and
+not a second set of leave records.
+
+**Clearing it.** There is no undo: delete the staging database (and run `migrate`, `hr_sync` and
+the rest again). **Never run it on production**: it writes people's hours, allowances and leave, and
+the flag is there so that it cannot be run by accident.
+
 ## Upgrading a box that runs an earlier release
 
 A server already running Shift Central takes the release like any other pull, plus the
