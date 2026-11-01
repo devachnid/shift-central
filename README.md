@@ -248,7 +248,7 @@ comment syntax after one):
 | `VAPID_PRIVATE_KEY_FILE`, `VAPID_PUBLIC_KEY`, `VAPID_SUBJECT` | Phone notifications. All three, with the key file present, or push is off and the Notifications page says so; email is unaffected. A key file the app cannot read still counts as present, so every push then ends as "push failed": check its group and mode (640, group `shift-central`). The `vapid_keys` command writes the key file and prints the three lines (see "Phone notifications"). The private key is a file, never a line in the environment file. |
 | `PUSH_ENDPOINT_HOSTS` | Optional. Extra push-service host names, comma-separated, that a phone may register with. The built-in list is Google (`fcm.googleapis.com`), Mozilla (`push.services.mozilla.com`), Apple (`push.apple.com`) and Windows (`notify.windows.com`), each with its subdomains. Only an `https` address on one of those hosts, with no credentials and the default port, is accepted. |
 | `MEDIA_ROOT`, `UPLOAD_MAX_BYTES` | Optional. Where uploaded documents are kept, and the largest file accepted. `MEDIA_ROOT` defaults to a `media` folder beside the database (with `DB_PATH` as above, `/var/lib/shift-central/media`), which is what production wants, so leave it unset there; `deploy/backup.sh` archives `/var/lib/shift-central/media` each night. If `MEDIA_ROOT` is overridden to anywhere else, that folder is not in the nightly backup. `UPLOAD_MAX_BYTES` defaults to 10485760 (10 MB). |
-| `OUTBOX_BODY_MONTHS` | Optional. How many months the Outbox keeps the text of a message before the daily job (`shift-central-daily-flags.timer`) removes it, keeping who, when and the subject. Defaults to 12; `0` keeps the text for ever. |
+| `OUTBOX_BODY_MONTHS` | Optional. How many months the Outbox keeps its copy of each email's text before the daily job (`shift-central-daily-flags.timer`) removes it, keeping who, when and the subject; the messages and notices themselves are kept. Defaults to 12; `0` keeps the text for ever. |
 | `TRUSTED_PROXY_IPS` | Comma-separated addresses whose `CF-Connecting-IP` header is believed, for the log-in log's address. Defaults to loopback, which is right behind a Cloudflare tunnel; never set it to a wildcard. The leave feed's rate limit is per client address, so if the proxy's address is not trusted here every caller shares one bucket. |
 | `CSP_REPORT_ONLY` | `1` sends the Content-Security-Policy as report-only, blocking nothing: the way back if it blocks something after a deploy. Unset, it is enforced. |
 
@@ -319,7 +319,7 @@ it never opens the database. It refuses to overwrite a key that exists.
 
 Replacing the key cuts off every registered phone until each person turns
 notifications on again, so keep a copy of `/etc/shift-central/vapid.pem` somewhere
-safe. A phone's lock screen shows only the message's subject, never its text.
+safe. A notification shows the subject line, except sickness-trigger and return-from-absence notices, which show only a general line; the message text is never shown.
 Each person turns notifications on for their own phone on the Notifications page
 (sidebar); the [engagement guide](docs/admin/engagement.md#putting-the-app-on-a-phone)
 has the steps for Android and iPhone. A notification that cannot be sent within 24
@@ -427,11 +427,13 @@ the new reports, and phone notifications. In `/srv/shift-central`, as root:
 1. `git pull`
 2. `.venv/bin/pip install -r requirements.txt` (the release adds `pywebpush`, which
    brings its own dependencies).
-3. `deploy/manage migrate`
+3. `deploy/manage migrate`, then straight away `systemctl restart shift-central` (or stop
+   `shift-central` before migrating and start it after). The old code is still running and
+   cannot write the Outbox's new columns, so every email it sends in between fails to record.
 4. `deploy/manage collectstatic --noinput`, then `deploy/manage check --deploy`
 5. Copy the new units: `cp deploy/shift-central-push.* /etc/systemd/system/ && systemctl daemon-reload`.
    The backup script changed too, but it is read from the code tree, so the pull is enough.
-6. `systemctl restart shift-central`
+6. `systemctl restart shift-central` again, so the new static files are served.
 7. Optionally, set up phone notifications (the section above), which is when the push timer is enabled.
 
 `MEDIA_ROOT` needs no setting: uploaded documents go to `/var/lib/shift-central/media`,

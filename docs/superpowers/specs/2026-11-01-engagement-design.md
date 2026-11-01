@@ -411,7 +411,7 @@ when queued, to (name), channel, subject, status. Status is one of **Sent**,
 or **Not configured**. A row opens to show its body. Filters: status, person,
 date range. Scope: an all-teams manager sees every row; a team manager sees
 rows to people in their teams (`access.managed_people`); rows with no
-person are all-teams only. Reports ▸ Sent messages links here.
+person are all-teams only. Reports ▸ Outbox links here.
 
 The nav badge counts rows in the last 7 days that are failed, or push rows
 still queued after 5 minutes, within the viewer's scope. "Not configured"
@@ -683,3 +683,22 @@ Pytest under the existing clock fixtures, with factories extended
   read from the environment file: the brief's bare `manage.py` stops without `SECRET_KEY`,
   and the docs test forbids a hand-run `manage.py` on the server. The key file goes in
   `/etc`, which the app's own user cannot write.
+
+### From the final review
+
+- Audit labels for uploads are `uploads.sharedfile` and `uploads.personfile` (not `uploads.uploadedfile`).
+- The push unit runs `python manage.py send_push` directly, like every other unit, not through `deploy/manage`.
+- The offline page has no logo.
+- The Outbox page for a team manager excludes rows whose recipient is another manager (a
+  Person with a TeamManager row, or whose user is an all-teams manager), except rows to the
+  viewer; an all-teams manager still sees everything, and the nav badge uses the same scope.
+  Otherwise a sickness-trigger email to the practice manager would be readable by a team lead.
+- The push for a sickness trigger and for a return from absence carries a general subject
+  ("A sickness trigger needs your attention", "Someone is back from a long absence"), because
+  a lock screen shows it and the email subject names the person; `messaging.services.send`
+  takes an optional `push_subject` for this, and the email keeps its own subject.
+- The nightly media archive tolerates `tar` exit status 1 (a file changed as it was read);
+  exit 2 and above still fails the backup. Half-uploaded `*.part` files are left out.
+- Push failures are logged on `messaging.push` with the device id and the HTTP status or
+  exception class only. Push addresses are matched as ASCII (the Kelvin sign no longer
+  passes as a "k"). Reports ▸ Sent messages is renamed Outbox, so it differs from Messages ▸ Sent messages.

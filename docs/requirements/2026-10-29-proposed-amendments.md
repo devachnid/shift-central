@@ -147,7 +147,8 @@ Built as the pack asks (spec 5), with these choices for you to know about:
   notification. Staff cannot send or reply. The notice board is managers-only too.
 - **Phone notifications are the phone's own choice.** A person turns them on,
   per phone, on the Notifications page; email always still arrives. A
-  notification shows the subject line only, never the message.
+  notification shows the subject line, except sickness-trigger and return-from-absence
+  notices, which show only a general line; the message text is never shown.
 - **Open shifts:** the person claiming chooses normal hours, overtime paid or
   overtime TOIL (ROTA-06), and the approving manager can change it. A clash
   with the person's own rota warns the manager but does not stop approval,
@@ -155,8 +156,9 @@ Built as the pack asks (spec 5), with these choices for you to know about:
   that covers it), which does. No manager approves or declines their own claim.
 - **Documents:** the shared area is for the whole practice to read; what is
   kept on a person is seen by their managers only, not by the person.
-- **The Outbox keeps the text of messages for a year**, then removes the text
-  and keeps who, when and the subject. Say if you want a different period.
+- **The Outbox keeps its copy of each email's text for a year**, then removes
+  that text and keeps who, when and the subject. The messages and notices
+  themselves are kept. Say if you want a different period.
 - **The three reports** are defined in the spec (dashboard, shifts, staff by
   hour). Staff by hour counts people working at any point in each hour, takes
   no breaks off and leaves out GPs; if the FindMyShift screenshots show

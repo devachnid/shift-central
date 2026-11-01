@@ -190,8 +190,9 @@ records which row it was.
 
 ## The Outbox
 
-**Where:** sidebar › Outbox (also Reports › Sent messages). Managers only: an all-teams manager sees everything, and
-a team manager what went to people in their teams.
+**Where:** sidebar › Outbox (also Reports › Outbox). Managers only: an all-teams manager sees everything, and
+a team manager what went to people in their teams, except what went to other managers (a notice to the practice manager can
+name a colleague), though always what went to themself.
 
 Every email the app sends, and every notification it queues, is a row: when it was queued, who to, the channel (Email or
 Push), the subject, the status and the text. Filter by **Status**, **Person** and the **From** and **To**
@@ -208,8 +209,8 @@ dates, then **Refresh**. Fifty rows a page, newest first.
 not running or is failing). It is never counted for Not configured. The Dashboard's System card shows the same figure.
 A message to a person with no email address fails each time until their address is in Practice HR.
 
-**The text is removed after 12 months.** Messages contain personal details, so the daily job blanks the text of rows older than
-that and keeps who, when, the channel, the subject and the status. The server's `OUTBOX_BODY_MONTHS` changes the
+**The text is removed after 12 months.** Emails contain personal details, so the daily job blanks the Outbox's copy of the text of rows older than
+that and keeps who, when, the channel, the subject and the status. The messages and notices themselves, in Messages and on the notice board, are kept. The server's `OUTBOX_BODY_MONTHS` changes the
 period; 0 keeps the text for ever. Ask whoever runs the server.
 
 ## Dashboard, Shifts and Staff by hour
@@ -278,7 +279,7 @@ turned on there.
 for the practice, the server has not been set up for them yet (below).
 
 **What a notification shows.** The title "AMG Shift Central" and the subject of the message, such as
-"Open shift: Mon 9 Nov, 09:00–13:00". Never the text of the message, so nothing private shows on a lock screen.
+"Open shift: Mon 9 Nov, 09:00–13:00". Sickness-trigger and return-from-absence notices show only a general line ("A sickness trigger needs your attention", "Someone is back from a long absence"), so no name shows on a lock screen. The message text is never shown.
 Tapping it opens the right page: the open shift, the message, the notice board or the rota. A notification goes with each
 email the app sends about open shifts, messages, notices (if "also tell staff" was ticked), Notify staff and leave.
 
@@ -293,9 +294,12 @@ the Turn off button there.
 - The device was removed, either by the person (Remove) or because the phone's push service said it no longer exists
   (app uninstalled, data cleared, or a long time offline). The person turns notifications on again.
 - A new key was made on the server (below). Every phone has to turn them on again.
-- The push timer is not running, or every try to hand the notification to the push service failed: a notification
-  the server has not handed over within 24 hours is dropped, and the Outbox shows it as Failed with "expired".
-  Check the System card on the Dashboard and the timer.
+- The push timer is not running: a notification the server has not handed over within 24 hours is dropped, and the
+  Outbox shows it as Failed with "expired". "Expired" means only that the timer did not run for 24 hours. Check the
+  System card on the Dashboard and the timer.
+- The Outbox shows "push failed": the push service refused the notification on all five tries, for instance because the
+  key is wrong or the phone's subscription has been removed. Check the key settings (below); if only one person's
+  phone is affected, they turn notifications off and on again on the Notifications page.
 - The phone was switched off or out of signal. The push service accepted the notification, so the Outbox says Sent;
   it keeps it for 24 hours and, if the phone is still off after that, drops it and the phone never shows it.
   The email is the record.
