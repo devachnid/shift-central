@@ -11,6 +11,13 @@
     <strong>{% if not health.gp_configured %}not configured{% elif not health.gp_last_run %}never read{% elif health.gp_last_run.ok %}{{ health.gp_last_run.people_seen }} GPs, {{ health.gp_last_run.finished_at|date:"j M H:i" }}{% else %}failed {{ health.gp_last_run.finished_at|date:"j M H:i" }}{% endif %}</strong>
     {% if health.gp_last_run and health.gp_last_run.message %}<span>{{ health.gp_last_run.message }}</span>{% endif %}
   </div>
+  {% if health.push %}
+  <div class="health-item{% if health.push.configured and health.push.queued > 5 %} is-warning{% endif %}">
+    Phone notifications
+    <strong>{% if not health.push.configured %}not configured{% else %}{{ health.push.devices }} device{{ health.push.devices|pluralize }}, {{ health.push.queued }} queued{% endif %}</strong>
+    {% if health.push.last_ok %}<span>last sent {{ health.push.last_ok|date:"j M H:i" }}</span>{% endif %}
+  </div>
+  {% endif %}
   {% if health.gp_unmatched_count %}
   <div class="health-item is-warning">GPs in the rota app not matched here<strong>{{ health.gp_unmatched_count }}</strong>
     {% for e in health.gp_unmatched %}{{ e }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>

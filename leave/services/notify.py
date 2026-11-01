@@ -19,11 +19,11 @@ def _link(base_url, path):
     return (base_url.rstrip("/") + path) if base_url else path
 
 
-def _send_all(people, subject, body):
+def _send_all(people, subject, body, url=None):
     rows = []
     for p in people:
         try:
-            rows.append(messaging.send(p, subject, body))
+            rows.append(messaging.send(p, subject, body, url=url))
         except Exception:   # messaging.send never raises; belt and braces for the booking's sake
             log.exception("leave mail failed")
     return rows
@@ -33,7 +33,7 @@ def request_made(booking, base_url=""):
     p = booking.person
     body = (f"{p.name} has requested {booking.type.name} for {span(booking)}.\n\n"
             f"Decide here: {_link(base_url, '/time-off/approve/')}\n")
-    return _send_all(recipients(p), f"{p.name} has requested time off", body)
+    return _send_all(recipients(p), f"{p.name} has requested time off", body, url="/time-off/approve/")
 
 
 def decided(booking, base_url=""):
@@ -41,19 +41,19 @@ def decided(booking, base_url=""):
     body = (f"Your {booking.type.name} for {span(booking)} has been {word}.\n"
             + (f"\nNote from your manager: {booking.manager_note}\n" if booking.manager_note else "")
             + f"\nYour leave: {_link(base_url, '/time-off/mine/')}\n")
-    return _send_all([booking.person], f"Your time off has been {word}", body)
+    return _send_all([booking.person], f"Your time off has been {word}", body, url="/time-off/mine/")
 
 
 def cancel_requested(booking, base_url=""):
     p = booking.person
     body = f"{p.name} has asked to cancel {booking.type.name} for {span(booking)}.\n\nDecide here: {_link(base_url, '/time-off/approve/')}\n"
-    return _send_all(recipients(p), f"{p.name} has asked to cancel time off", body)
+    return _send_all(recipients(p), f"{p.name} has asked to cancel time off", body, url="/time-off/approve/")
 
 
 def cancel_decided(booking, approved, base_url=""):
     word = "cancelled" if approved else "kept"
     body = f"Your {booking.type.name} for {span(booking)} has been {word}.\n\nYour leave: {_link(base_url, '/time-off/mine/')}\n"
-    return _send_all([booking.person], f"Your time off has been {word}", body)
+    return _send_all([booking.person], f"Your time off has been {word}", body, url="/time-off/mine/")
 
 
 def cost_to_check(person, days, base_url=""):
@@ -61,20 +61,20 @@ def cost_to_check(person, days, base_url=""):
                       + (" (average day, no rota yet)" if bd.placeholder else " (recalculated from the rota)") for bd in days)
     body = (f"Leave for {person.name} was costed on a day whose rota was not set, or has been recalculated now the rota is set:\n\n{lines}\n\n"
             f"Check it here: {_link(base_url, f'/staff/{person.pk}/profile/?tab=hours')}\n")
-    return _send_all(recipients(person), f"Leave cost to check for {person.name}", body)
+    return _send_all(recipients(person), f"Leave cost to check for {person.name}", body, url="/staff/")
 
 
 def negative_balance(person, statement, base_url=""):
     body = (f"After the hours change, {person.name}'s annual leave remaining is {hours.fmt(statement.annual_remaining)}.\n\n"
             f"Statement: {_link(base_url, f'/staff/{person.pk}/profile/?tab=hours')}\n")
-    return _send_all(recipients(person), f"{person.name}'s leave balance is negative", body)
+    return _send_all(recipients(person), f"{person.name}'s leave balance is negative", body, url="/staff/")
 
 
 def reminder(booking, base_url=""):
     p = booking.person
     what = "cancel" if booking.status == "cancel_requested" else "take"
     body = f"{p.name}'s request to {what} {booking.type.name} for {span(booking)} is still waiting.\n\nDecide here: {_link(base_url, '/time-off/approve/')}\n"
-    return _send_all(recipients(p), "Time off request still waiting", body)
+    return _send_all(recipients(p), "Time off request still waiting", body, url="/time-off/approve/")
 
 
 def trigger_reached(person, lvl, rows, base_url=""):
@@ -84,7 +84,7 @@ def trigger_reached(person, lvl, rows, base_url=""):
     label = sickness.level_label(lvl)
     body = (f"{person.name} has reached {label}: {len(rows)} instances of absence in the last six months.\n\n{lines}\n\n"
             f"Profile: {_link(base_url, f'/staff/{person.pk}/profile/?tab=hours')}\n")
-    return _send_all(recipients(person), f"{person.name} has reached {label}", body)
+    return _send_all(recipients(person), f"{person.name} has reached {label}", body, url="/staff/")
 
 
 def converted(label, dates, sick, base_url=""):
@@ -93,7 +93,7 @@ def converted(label, dates, sick, base_url=""):
     p = sick.person
     body = (f"Your {label} for {dates} has been changed: {span(sick)} is now recorded as {sick.type.name}, "
             f"and those hours have gone back to your allowance.\n\nYour leave: {_link(base_url, '/time-off/mine/')}\n")
-    return _send_all([p], "Your time off has been changed", body)
+    return _send_all([p], "Your time off has been changed", body, url="/time-off/mine/")
 
 
 def leaving(person, statement, bookings_after, week=False, past=False, base_url=""):
@@ -108,7 +108,7 @@ def leaving(person, statement, bookings_after, week=False, past=False, base_url=
             + (f"\nTime off booked after the leaving date, to shorten or cancel:{lines}\n" if bookings_after else "")
             + f"\nProfile: {_link(base_url, f'/staff/{person.pk}/profile/?tab=hours')}\n")
     subject = first if past else (f"{person.name} leaves in a week, on {when}" if week else f"{person.name} is leaving on {when}")
-    return _send_all(recipients(person), subject, body)
+    return _send_all(recipients(person), subject, body, url="/staff/")
 
 
 def returned(booking, statement, base_url=""):
@@ -121,7 +121,7 @@ def returned(booking, statement, base_url=""):
             f"TOIL remaining {hours.fmt(statement.toil_remaining)}. The allowance is a full-year figure and was not reduced by the absence; "
             f"leave that could not be taken may need planning or carrying over.\n\n"
             f"Profile: {_link(base_url, f'/staff/{p.pk}/profile/?tab=hours')}\n")
-    return _send_all(recipients(p), f"{p.name} is back after {weeks} week{'' if weeks == 1 else 's'} of {booking.type.name}", body)
+    return _send_all(recipients(p), f"{p.name} is back after {weeks} week{'' if weeks == 1 else 's'} of {booking.type.name}", body, url="/staff/")
 
 
 def year_end(manager, rows, base_url=""):
@@ -134,4 +134,4 @@ def year_end(manager, rows, base_url=""):
     n = len(rows)
     body = (f"The leave year has ended for {n} of your people with annual leave or TOIL left, or annual leave over.\n\n{lines}\n\n"
             f"For each, choose carry all, lose all or carry part: {_link(base_url, '/time-off/year-end/')}\n")
-    return _send_all([manager], f"Year end: {n} {'person has' if n == 1 else 'people have'} leave or TOIL left", body)
+    return _send_all([manager], f"Year end: {n} {'person has' if n == 1 else 'people have'} leave or TOIL left", body, url="/time-off/year-end/")

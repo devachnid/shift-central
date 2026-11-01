@@ -9,8 +9,10 @@ for Notify staff rather than printing mail nobody reads. A caller sending a
 batch passes one open connection (`batch()` gives one, `notify.send` makes
 its own), so the relay sees one login, not one per person.
 
-`url` is the page a push notification opens (spec 5); until push exists it
-is accepted and ignored."""
+Every message also queues a push (`push.queue`) when push is switched on and
+the person has a phone registered; the one-minute timer sends it (`manage
+send_push`). The push carries the subject and `url`, the page a tap opens
+(default: the rota), never the body. Queueing a push never breaks the send."""
 
 import logging
 from contextlib import contextmanager
@@ -20,6 +22,8 @@ from django.core.mail import get_connection, send_mail
 from django.utils import timezone
 
 from messaging.models import Outbox
+
+from . import push
 
 log = logging.getLogger("messaging")
 NOT_CONFIGURED = "mail not configured"
@@ -58,8 +62,8 @@ def batch():
                 pass
 
 
-def send(person, subject, body, connection=None, url=None):
-    """Send one message, on `connection` when given. Returns the Outbox row;
+def _send_email(person, subject, body, connection=None):
+    """Send one email, on `connection` when given. Returns the Outbox row;
     its `sent_at` is None when nothing was sent."""
     row = Outbox.objects.create(to_person=person, to_email=person.email or "", subject=subject, body=body)
     if not person.email:
@@ -79,4 +83,17 @@ def send(person, subject, body, connection=None, url=None):
     else:
         row.sent_at = timezone.now()
     row.save(update_fields=["sent_at", "error"])
+    return row
+
+
+def send(person, subject, body, connection=None, url=None):
+    """Send one message by email and, when push is on and the person has a
+    phone registered, queue a push for the timer to send. Returns the email's
+    Outbox row; its `sent_at` is None when nothing was sent. `url` is the page
+    a tap on the push opens (default: the rota)."""
+    row = _send_email(person, subject, body, connection)
+    try:
+        push.queue(person, subject, url)
+    except Exception:  # a push must never break the message that caused it
+        log.warning("queueing a push failed for person %s", person.pk)
     return row

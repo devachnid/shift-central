@@ -61,13 +61,19 @@ def _directives(path):
     return out
 
 
-def test_there_are_eight_services():
+def test_there_are_nine_services():
     assert [p.name for p in SERVICES] == [
         "gunicorn.service", "shift-central-backup.service",
         "shift-central-clearsessions.service", "shift-central-daily-flags.service",
         "shift-central-gp-sync.service",
         "shift-central-hr-sync.service", "shift-central-leave-reminders.service",
-        "shift-central-pbs.service"]
+        "shift-central-pbs.service", "shift-central-push.service"]
+
+
+def test_the_push_service_runs_send_push_every_minute():
+    (cmd,) = _directives(DEPLOY / "shift-central-push.service")["ExecStart"]
+    assert cmd == "/srv/shift-central/.venv/bin/python manage.py send_push"
+    assert "OnCalendar=minutely" in (DEPLOY / "shift-central-push.timer").read_text()
 
 
 @pytest.mark.parametrize("unit", SERVICES, ids=lambda p: p.name)
