@@ -110,7 +110,29 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
   .nav-link { flex-direction: column; gap: 2px; font-size: var(--fs-xs); padding: 6px; }
   .page { padding-bottom: 72px; }
   .topbar { flex-wrap: wrap; height: auto; padding: var(--sp-2) var(--sp-3); }
+  /* The controls wrap: a row of them wider than the phone (the rota's) made the
+     whole page wider than the screen, which then panned under a finger. */
+  .topbar-actions, .topbar-form { flex-wrap: wrap; row-gap: var(--sp-2); }
+  /* Three sections and Menu; Menu lists everything, the pages under each
+     section and Log out (the panel's pop-out menus need a mouse). */
+  .nav-item:not(.is-on-phone-bar), .sidebar-foot { display: none; }
+  .sidebar-nav { flex: 3; }
+  .phone-menu { display: flex; flex: 1; justify-content: center; }
+  .phone-menu > summary { list-style: none; cursor: pointer; }
+  .phone-menu > summary::-webkit-details-marker { display: none; }
+  .phone-menu[open] > summary { background: var(--navy-deep); color: var(--white); }
+  .phone-menu-panel { position: fixed; left: 0; right: 0; top: 0; bottom: 56px; overflow-y: auto; background: var(--navy);
+                      padding: var(--sp-3) 0 var(--sp-5); }
+  .phone-menu-section { padding: var(--sp-2) 0; border-bottom: 1px solid var(--navy-soft); }
+  .phone-menu-head { display: flex; align-items: center; gap: var(--sp-2); padding: 10px var(--sp-4); color: var(--white);
+                     font-weight: 700; text-decoration: none; }
+  .phone-menu-head.is-active { background: var(--navy-deep); }
+  .phone-menu-link { display: block; padding: 10px var(--sp-4) 10px var(--sp-6); color: var(--pale); text-decoration: none; }
+  .phone-menu-panel form { margin: 0; }
+  .phone-menu-logout { all: unset; cursor: pointer; display: block; width: 100%; padding: 14px var(--sp-4); color: var(--pale); }
+  .phone-menu-logout:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
 }
+@media (min-width: 768px) { .phone-menu { display: none; } }
 
 /* --- rota page ------------------------------------------------------------- */
 .topbar-form { display: inline-flex; gap: var(--sp-2); align-items: center; font-size: var(--fs-sm); }

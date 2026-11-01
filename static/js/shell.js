@@ -45,3 +45,10 @@ document.addEventListener("submit", function (e) {
       .then(function () { return sub.unsubscribe(); });
   }).catch(function () { return null; }).then(leave);
 });
+
+/* The phone's Menu closes when one of its entries opens a dialog in place
+ * (Time off…, Send a message…), so the dialog is not left under it. */
+document.addEventListener("click", function (e) {
+  var link = e.target.closest && e.target.closest(".phone-menu [data-dialog]");
+  if (link) { link.closest(".phone-menu").removeAttribute("open"); }
+});

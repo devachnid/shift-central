@@ -269,6 +269,10 @@ phone is offline: only a page saying so.
 **Android (Chrome).** Open the site in Chrome. In the Chrome menu (the three dots) choose **Install app** or **Add to Home
 screen**. On Android, notifications work from Chrome even without installing, but the icon is easier to find.
 
+**Finding your way on a phone.** The bar along the bottom has **Rota**, **Time off**, **Messages** and **Menu**. Menu lists
+every section with the pages under it (Open shifts, My leave, Year planner, the reports and the rest) and **Log out**; a
+number on Menu is what a section inside it is waiting on, such as failed Outbox mail.
+
 **iPhone and iPad (Safari).** This needs a reasonably recent iPhone (iOS 16.4 or later). Open the site in Safari, tap **Share**,
 then **Add to Home Screen**. **Open the app from the Home Screen icon**, not from Safari: notifications can only be
 turned on there.
