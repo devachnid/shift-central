@@ -102,3 +102,17 @@ def client_for(person, **user_kw):
     client = Client()
     client.force_login(person.user if person.user_id else make_user_for(person, **user_kw))
     return client
+
+
+def make_open_shift(team=None, day=None, **kw):
+    from datetime import timedelta
+
+    from shifts.models import OpenShift
+    kw.setdefault("start", time(9, 0))
+    kw.setdefault("finish", time(13, 0))
+    return OpenShift.objects.create(team=team or make_team(), day=day or (timezone.localdate() + timedelta(days=7)), **kw)
+
+
+def make_claim(open_shift, person, **kw):
+    from shifts.models import OpenShiftClaim
+    return OpenShiftClaim.objects.create(open_shift=open_shift, person=person, **kw)
