@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load leave_extras %}
+{% load leave_extras payroll_extras %}
 {% block title %}Payroll · AMG Shift Central{% endblock %}
 {% block topbar_actions %}
   <a class="topbar-action" href="?month={{ month|date:'Y-m' }}&amp;download=1">Download Excel</a>
@@ -7,7 +7,7 @@
 {% endblock %}
 {% block content %}
 <form class="filters" method="get">
-  <a class="btn btn-quiet" href="?month={{ previous|date:'Y-m' }}" aria-label="Previous month">‹</a>
+  {% if has_previous %}<a class="btn btn-quiet" href="?month={{ previous|date:'Y-m' }}" aria-label="Previous month">‹</a>{% endif %}
   <label>Month <input type="month" name="month" value="{{ month|date:'Y-m' }}"></label>
   {% if has_next %}<a class="btn btn-quiet" href="?month={{ following|date:'Y-m' }}" aria-label="Next month">›</a>{% endif %}
   <button class="btn btn-quiet" type="submit">Show</button>

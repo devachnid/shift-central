@@ -45,8 +45,7 @@ class Row:
 
     @property
     def leave_days_text(self):
-        whole, half = divmod(self.leave_half_days, 2)
-        return f"{whole or ''}{'½' if half else ''}" or "0"
+        return half_days_text(self.leave_half_days)
 
     def figures(self):
         out = {f: getattr(self, f) for f in FIELDS}
@@ -105,31 +104,64 @@ def _resolved_paid(bd):
     return bd.booking.paid if bd.booking.paid is not None else t.default_paid
 
 
+def half_days_text(n):
+    """Half-days as the screen writes them: 5 is "2½", −1 is "−½", 0 is "0"."""
+    sign = "−" if n < 0 else ""
+    whole, half = divmod(abs(int(n)), 2)
+    return sign + (f"{whole or ''}{'½' if half else ''}" or "0")
+
+
+def _by_person(objects):
+    out = {}
+    for x in objects:
+        out.setdefault(x.person_id, []).append(x)
+    return out
+
+
 def rows(people, month):
+    """Every table is read once for the whole people set and grouped here, so
+    a month costs a handful of queries however many people it covers."""
     first, last = month, month_end(month)
     people = list(people)
-    hidden = sessions.hidden(people, first, last)
+    pks = [p.pk for p in people]
+    hidden = sessions.hidden(pks, first, last)
+    entries = _by_person(Entry.objects.filter(person_id__in=pks, day__range=(first, last), kind=Entry.Kind.SHIFT, covered_by__isnull=True)
+                         .only("person_id", "kind", "start", "finish", "break_minutes", "overtime"))
+    gp_pks = [p.pk for p in people if p.is_gp]
+    gp_sessions = _by_person(GpSession.objects.filter(person_id__in=gp_pks, day__range=(first, last))) if gp_pks else {}
+    booking_days = list(BookingDay.objects.filter(booking__person_id__in=pks, booking__status__in=Booking.ACTIVE, booking__dates_only=False,
+                                                  day__range=(first, last)).select_related("booking__type"))
+    halves = [bd.pk for bd in booking_days if bd.booking.part in (Booking.Part.AM, Booking.Part.PM)]
+    covered = {}
+    if halves:
+        for e in Entry.objects.filter(covered_by_id__in=halves, overtime="").only("covered_by_id", "kind", "start", "finish", "break_minutes"):
+            covered[e.covered_by_id] = covered.get(e.covered_by_id, timedelta(0)) + e.hours
+    days_of = {}
+    for bd in booking_days:
+        days_of.setdefault(bd.booking.person_id, []).append(bd)
+    instances = {}
+    for pid in (Booking.objects.filter(person_id__in=pks, status__in=Booking.ACTIVE, dates_only=False, type__sickness=True,
+                                       first_day__lte=last, last_day__gte=first).values_list("person_id", flat=True)):
+        instances[pid] = instances.get(pid, 0) + 1
     out = []
     for p in people:
         r = Row(person=p, team=p.team.name if p.team else "—")
-        for e in Entry.objects.filter(person=p, day__range=(first, last), kind=Entry.Kind.SHIFT, covered_by__isnull=True):
+        for e in entries.get(p.pk, ()):
             secs = int(e.hours.total_seconds())
             if e.overtime == Entry.Overtime.PAID:
                 r.paid_overtime += secs
             elif e.overtime == "":
                 r.worked += secs
         if p.is_gp:
-            visible = sessions.visible(GpSession.objects.filter(person=p, day__range=(first, last)), hidden)
+            visible = sessions.visible(gp_sessions.get(p.pk, ()), hidden)
             r.worked += len(visible) * hours.GP_SESSION
-        days = (BookingDay.objects.filter(booking__person=p, booking__status__in=Booking.ACTIVE, booking__dates_only=False, day__range=(first, last))
-                .select_related("booking__type"))
-        for bd in days:
+        for bd in days_of.get(p.pk, ()):
             t, cost = bd.booking.type, bd.cost_seconds
             if bd.booking.part in (Booking.Part.AM, Booking.Part.PM):
                 # A half day covers the whole shift on the grid (leave spec, section 4); the other half was worked.
-                covered = sum((e.hours for e in Entry.objects.filter(covered_by=bd, overtime="")), timedelta(0))
-                r.worked += max(int(covered.total_seconds()) - cost, 0)
-            if bd.account in ("annual", "bank_holiday"):
+                r.worked += max(int(covered.get(bd.pk, timedelta(0)).total_seconds()) - cost, 0)
+            costed = cost > 0         # a day off inside a booking (a weekend, a part-timer's day) costs nothing and is no leave day
+            if bd.account in ("annual", "bank_holiday") and costed:
                 r.leave_half_days += 2 if bd.booking.part == Booking.Part.WHOLE else 1
             if bd.account == "toil":
                 r.toil_taken += cost
@@ -138,13 +170,13 @@ def rows(people, month):
             elif t.sickness:
                 r.sickness += cost
             elif t.on_payroll == t.Payroll.ALWAYS:
-                slot = r.types.setdefault(t.name, {"days": 0, "seconds": 0})
-                slot["days"] += 1
-                slot["seconds"] += cost
+                if costed:
+                    slot = r.types.setdefault(t.name, {"days": 0, "seconds": 0})
+                    slot["days"] += 1
+                    slot["seconds"] += cost
             else:
                 r.paid_leave += cost
-        r.sickness_instances = Booking.objects.filter(person=p, status__in=Booking.ACTIVE, dates_only=False, type__sickness=True,
-                                                      first_day__lte=last, last_day__gte=first).count()
+        r.sickness_instances = instances.get(p.pk, 0)
         r.total = r.worked + r.paid_leave
         if first <= p.start_date <= last:
             r.started = p.start_date
@@ -185,32 +217,61 @@ def _label(field_name):
     return LABELS.get(field_name, field_name)
 
 
+def lookback(month):
+    """[(earlier month, its latest run)] for each of the twelve months before
+    `month` that has been marked sent, oldest first: one query."""
+    from payroll.models import PayrollRun
+    months = []
+    y, m = month.year, month.month
+    for _ in range(12):
+        y, m = (y, m - 1) if m > 1 else (y - 1, 12)
+        months.append(date(y, m, 1))
+    latest = {}
+    for run in PayrollRun.objects.filter(month__in=months).order_by("month", "sent_at", "pk"):
+        latest[run.month] = run          # ordered oldest first, so the last one seen is the latest
+    return [(past, latest[past]) for past in sorted(latest)]
+
+
+def recompute(past, run, among=None):
+    """The figures as they stand today for an earlier month: everyone in its
+    run plus anyone now current in it, limited to `among` (a person
+    queryset) when given. ({pk: sent figures}, {pk: Row})."""
+    sent = run.figures.get("rows", {})
+    current = Person.objects.filter(start_date__lte=month_end(past)).exclude(end_date__lt=past) | Person.objects.filter(pk__in=[int(k) for k in sent])
+    if among is not None:
+        mine = set(among.values_list("pk", flat=True))
+        current = current.filter(pk__in=mine)
+        sent = {pk: v for pk, v in sent.items() if int(pk) in mine}
+    return sent, {str(r.person.pk): r for r in rows(current.distinct().select_related("team"), past)}
+
+
+def differences(past, sent, now):
+    """Field-by-field differences between what was sent and what is true
+    now, as Corrections."""
+    out = []
+    gone = {pk for pk in sent if pk not in now}
+    vanished = {p.pk: p for p in Person.objects.filter(pk__in=[int(pk) for pk in gone])} if gone else {}
+    for pk in sorted(set(sent) | set(now), key=int):
+        person = now[pk].person if pk in now else vanished.get(int(pk))
+        if person is None:
+            continue
+        was, is_now = _flat(sent.get(pk, {})), _flat(now[pk].figures()) if pk in now else _flat({})
+        for key in sorted(set(was) | set(is_now)):
+            a, b = was.get(key), is_now.get(key)
+            if a == b or (not a and not b):
+                continue
+            numeric = isinstance(a, int) and isinstance(b, int) and not isinstance(a, bool)
+            out.append(Correction(past, person, key, _label(key), a, b, (b - a) if numeric else None))
+    return out
+
+
 def corrections(user, month):
     """PAY-02: for each sent month of the previous twelve, what has changed
-    since it was sent, for the viewer's people."""
-    from payroll.services import runs
-    mine = set(access.managed_people(user).values_list("pk", flat=True)) if not access.is_all_teams(user) else None
+    since it was last sent, for the viewer's people only (the people set is
+    limited before anything is computed)."""
+    among = None if access.is_all_teams(user) else access.managed_people(user)
     out = []
-    for back in range(12, 0, -1):
-        y, m = month.year, month.month - back
-        while m <= 0:
-            y, m = y - 1, m + 12
-        past = date(y, m, 1)
-        run = runs.latest(past)
-        if run is None:
-            continue
-        sent = run.figures.get("rows", {})
-        current = Person.objects.filter(start_date__lte=month_end(past)).exclude(end_date__lt=past) | Person.objects.filter(pk__in=[int(k) for k in sent])
-        now = {str(r.person.pk): (r.person, _flat(r.figures())) for r in rows(current.distinct().select_related("team"), past)}
-        for pk in sorted(set(sent) | set(now), key=int):
-            person = now[pk][0] if pk in now else Person.objects.filter(pk=int(pk)).first()
-            if person is None or (mine is not None and person.pk not in mine):
-                continue
-            was, is_now = _flat(sent.get(pk, {})), now[pk][1] if pk in now else _flat({})
-            for key in sorted(set(was) | set(is_now)):
-                a, b = was.get(key), is_now.get(key)
-                if a == b or (not a and not b):
-                    continue
-                numeric = isinstance(a, int) and isinstance(b, int) and not isinstance(a, bool)
-                out.append(Correction(past, person, key, _label(key), a, b, (b - a) if numeric else None))
+    for past, run in lookback(month):
+        sent, now = recompute(past, run, among)
+        out += differences(past, sent, now)
     return out

@@ -138,3 +138,38 @@ def test_the_corrections_sheet_writes_leave_days_and_leaves_a_none_difference_em
     assert days[3:] == [0, 0.5, 0.5]
     appeared = next(row for row in rows if row[2] == "Jury service days")
     assert appeared[3] is None and appeared[4] == 1 and appeared[5] is None
+
+
+def test_the_previous_month_link_stops_at_january_2026(boss):
+    c = _client(boss)
+    assert 'aria-label="Previous month"' not in c.get("/reports/payroll/?month=2026-01").content.decode()
+    assert 'aria-label="Previous month"' in c.get("/reports/payroll/?month=2026-02").content.decode()
+
+
+def test_a_sixty_person_month_is_a_handful_of_queries(boss, django_assert_max_num_queries):
+    from datetime import datetime
+
+    from django.utils import timezone
+
+    from shifts.models import GpSession
+    teams = [make_team(n) for n in ("Reception", "Nursing", "Admin")]
+    people = [make_person(first_name=f"P{i:02d}", team=teams[i % 3], start_date=date(2020, 1, 6), weekly_hours=Decimal("37.5"), days_per_week=5,
+                          is_gp=(i % 20 == 0), end_date=date(2027, 1, 29) if i == 7 else None) for i in range(60)]
+    days = [d for d in (date(2026, 12, 1) + timedelta(days=n) for n in range(62)) if d.weekday() < 5]
+    Entry.objects.bulk_create([Entry(person=p, day=d, kind="shift", start=time(9), finish=time(17), break_minutes=30) for p in people if not p.is_gp for d in days])
+    now = timezone.make_aware(datetime(2027, 1, 1))
+    GpSession.objects.bulk_create([GpSession(person=p, day=d, part=part, label="Surgery", site="AG", synced_at=now)
+                                   for p in people if p.is_gp for d in days for part in ("AM", "PM")])
+    holiday, sick = make_type("Holiday"), make_type("Sick leave", requestable=False, sickness=True)
+    for p in people[:20]:
+        make_allowance(p, JAN, Decimal("172.5"), 0)
+        bookings.book(boss.user, p, holiday, date(2027, 1, 4), date(2027, 1, 5), "whole")
+        bookings.book(boss.user, p, holiday, date(2027, 1, 6), date(2027, 1, 6), "am")
+        bookings.book(boss.user, p, sick, date(2027, 1, 7), date(2027, 1, 7), "whole")
+    from payroll.services import runs
+    runs.mark_sent(boss.user, date(2026, 12, 1))
+    Entry.objects.filter(person=people[1], day=date(2026, 12, 1)).delete()          # a correction to December
+    c = _client(boss)
+    with django_assert_max_num_queries(40):
+        body = c.get("/reports/payroll/?month=2027-01").content.decode()
+    assert "P59" in body and "Corrections to months already sent" in body

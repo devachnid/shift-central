@@ -48,10 +48,11 @@ def payroll(request):
     following = report.month_end(month) + timedelta(days=1)
     today = timezone.localdate()
     has_next = following <= date(today.year + 1, today.month, 1)
+    has_previous = previous >= report.EARLIEST
     return render(request, "payroll/report.html", {
         "page_title": "Payroll", "month": month, "teams": teams, "totals": totals, "type_names": names,
         "corrections": corrections, "movers": [r for r in rows if r.started or r.leaves], "run": run,
-        "previous": previous, "following": following, "has_next": has_next, "all_teams": access.is_all_teams(request.user)})
+        "previous": previous, "following": following, "has_next": has_next, "has_previous": has_previous, "all_teams": access.is_all_teams(request.user)})
 
 
 @login_required

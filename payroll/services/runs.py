@@ -18,15 +18,33 @@ def latest(month):
     return PayrollRun.objects.filter(month=month).order_by("-sent_at", "-pk").first()
 
 
+def _figures(rows):
+    return {"generated_at": timezone.now().isoformat(), "rows": {str(r.person.pk): r.figures() for r in rows}}
+
+
 def mark_sent(user, month):
+    """Records what the bureau has now been told for every month the report
+    covered: the month itself as it stands, and each earlier sent month of
+    the twelve whose figures have changed since (the report's corrections),
+    as a fresh run with today's figures. The next report compares with that,
+    so a correction is sent once."""
     if not access.is_all_teams(user):
         raise PermissionDenied("only an all-teams manager marks the payroll sent")
-    people = report.people_for(user, month)
-    rows = report.rows(people, month)
-    figures = {"generated_at": timezone.now().isoformat(), "rows": {str(r.person.pk): r.figures() for r in rows}}
+    rows = report.rows(report.people_for(user, month), month)
+    corrected = []
+    for past, old in report.lookback(month):
+        sent, now = report.recompute(past, old)
+        if report.differences(past, sent, now):
+            corrected.append((past, list(now.values())))
     with transaction.atomic():
-        run = PayrollRun.objects.create(month=month, sent_at=timezone.now(), sent_by=user, people=len(rows), figures=figures)
-        audit.record_as(user, "payroll.payrollrun", run.pk, {"sent": ("", f"{month:%B %Y}, {len(rows)} people")}, note="marked sent to the bureau")
+        sent_at = timezone.now()
+        run = PayrollRun.objects.create(month=month, sent_at=sent_at, sent_by=user, people=len(rows), figures=_figures(rows))
+        for past, past_rows in corrected:
+            PayrollRun.objects.create(month=past, sent_at=sent_at, sent_by=user, people=len(past_rows), figures=_figures(past_rows))
+        note = "marked sent to the bureau"
+        if corrected:
+            note += ", with corrections to " + ", ".join(f"{past:%B %Y}" for past, _ in corrected)
+        audit.record_as(user, "payroll.payrollrun", run.pk, {"sent": ("", f"{month:%B %Y}, {len(rows)} people")}, note=note)
     return run
 
 

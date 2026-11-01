@@ -180,3 +180,59 @@ def test_only_an_all_teams_manager_marks_sent_and_the_health_line_appears_ten_da
     runs.mark_sent(boss.user, JAN)
     assert runs.unsent_due(boss.user, today=date(2027, 1, 25)) is None
     assert runs.latest(JAN).sent_by == boss.user and PayrollRun.objects.count() == 1
+
+
+def test_a_weekend_inside_a_booking_is_no_leave_day(boss, sam):
+    bookings.book(boss.user, sam, make_type("Holiday"), date(2027, 1, 8), date(2027, 1, 11), "whole")                  # Fri–Mon: two working days
+    bookings.book(boss.user, sam, make_type("Jury service"), date(2027, 1, 22), date(2027, 1, 25), "whole")            # Fri–Mon again
+    r = row_for(boss.user, sam)
+    assert r.paid_leave == h("15") and r.leave_half_days == 4 and r.leave_days_text == "2"
+    assert r.types == {"Jury service": {"days": 2, "seconds": h("15")}}
+
+
+def test_negative_half_days_read_with_their_sign():
+    assert [report.half_days_text(n) for n in (-1, -3, -4, 0, 1, 5)] == ["−½", "−1½", "−2", "0", "½", "2½"]
+    assert report.Row(person=None, team="", leave_half_days=-3).leave_days_text == "−1½"
+    from payroll.templatetags.payroll_extras import figure
+    assert figure(-1, "leave_half_days") == "−½" and figure(-3, "leave_half_days") == "−1½" and figure(-4, "leave_half_days") == "−2"
+    assert figure(-1800, "worked") == "−30 min" and figure(None, "worked") == ""
+
+
+def test_a_correction_is_sent_once(boss, sam):
+    dec = date(2026, 12, 1)
+    runs.mark_sent(boss.user, dec)
+    make_entry(sam, date(2026, 12, 19), start=time(9), finish=time(12), break_minutes=0)        # changed after December went
+    assert {(c.month, c.field) for c in report.corrections(boss.user, JAN)} >= {(dec, "worked"), (dec, "total")}
+    run = runs.mark_sent(boss.user, JAN)                                                        # January's report carried December's correction
+    assert AuditEntry.objects.get(model="payroll.payrollrun", object_id=run.pk).note == "marked sent to the bureau, with corrections to December 2026"
+    assert runs.latest(dec).figures["rows"][str(sam.pk)]["worked"] == h("3")                     # what the bureau has now been told for December
+    assert PayrollRun.objects.filter(month=dec).count() == 2
+    feb = date(2027, 2, 1)
+    assert [c for c in report.corrections(boss.user, feb) if c.month == dec] == []               # not repeated on February's
+    make_entry(sam, date(2026, 12, 20), start=time(9), finish=time(11), break_minutes=0)        # a second change: only that one is new
+    changes = {(c.month, c.field): (c.sent, c.now, c.delta) for c in report.corrections(boss.user, feb)}
+    assert changes[(dec, "worked")] == (h("3"), h("5"), h("2"))
+    runs.mark_sent(boss.user, JAN)                                                              # nothing changed in January: no extra January-only run beyond the re-send
+    assert report.corrections(boss.user, feb) == []
+
+
+def test_mark_sent_without_corrections_stores_only_its_own_month(boss, sam):
+    dec = date(2026, 12, 1)
+    runs.mark_sent(boss.user, dec)
+    runs.mark_sent(boss.user, JAN)
+    assert PayrollRun.objects.filter(month=dec).count() == 1
+    assert AuditEntry.objects.filter(model="payroll.payrollrun", note="marked sent to the bureau").count() == 2
+
+
+def test_a_team_manager_sees_only_their_peoples_corrections(boss, sam):
+    reception = sam.team
+    lead = make_person(first_name="Lead", team=reception)
+    make_user_for(lead)
+    make_team_manager(lead, reception)
+    nick = make_person(first_name="Nick", team=make_team("Nursing"), start_date=date(2020, 1, 6))
+    dec = date(2026, 12, 1)
+    runs.mark_sent(boss.user, dec)
+    make_entry(sam, date(2026, 12, 19), start=time(9), finish=time(12), break_minutes=0)
+    make_entry(nick, date(2026, 12, 19), start=time(9), finish=time(12), break_minutes=0)
+    assert {c.person for c in report.corrections(boss.user, JAN)} == {sam, nick}
+    assert {c.person for c in report.corrections(lead.user, JAN)} == {sam}
