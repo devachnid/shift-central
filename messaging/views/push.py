@@ -5,10 +5,9 @@ import json
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
-from messaging.models import PushDevice
 from messaging.services import push
 
 
@@ -61,7 +60,6 @@ def unsubscribe(request):
 @require_POST
 def remove_device(request, pk):
     person = _person(request)
-    if person is None:
+    if person is None or not push.remove_device(person, pk):
         raise Http404
-    get_object_or_404(PushDevice, pk=pk, person=person).delete()
     return redirect("notifications")

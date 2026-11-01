@@ -69,6 +69,7 @@ FCM = "https://fcm.googleapis.com/fcm/send/"
     {"endpoint": "https://user:pw@fcm.googleapis.com/x", "keys": {"p256dh": "a", "auth": "b"}},      # credentials
     {"endpoint": "https://fcm.googleapis.com:8443/x", "keys": {"p256dh": "a", "auth": "b"}},         # odd port
     {"endpoint": "https://127.0.0.1/x", "keys": {"p256dh": "a", "auth": "b"}},                        # an address
+    {"endpoint": "https://127.0.0.1\\.fcm.googleapis.com/x", "keys": {"p256dh": "a", "auth": "b"}},  # backslash ends the host elsewhere
 ])
 def test_a_bad_subscription_is_refused(push_on, bad):
     r = post_json(client_for(make_person()), "/push/subscribe/", bad)
@@ -152,3 +153,28 @@ def test_vapid_keys_will_not_overwrite_a_key(tmp_path):
 
 def test_the_nav_has_notifications_for_everyone():
     assert 'data-nav="notifications"' in client_for(make_person()).get("/rota/").content.decode()
+
+
+@pytest.mark.parametrize("bad", [
+    "https://127.0.0.1\\.fcm.googleapis.com/x", "https://evil.example\\.fcm.googleapis.com/x",
+    "https://evil.example;.fcm.googleapis.com/x", "https://evil.example%2f.fcm.googleapis.com/x",
+    "https://fcm.googleapis.com/a\tb", "https://fcm.googleapis.com/a b", "https://fcm.googleapis.com/a\\b",
+    "https://fcm.googleapis.com\n/x", "https://fcm.googleapis.com:8443/x", "https://fcm.googleapis.com@evil.example/x",
+    "http://fcm.googleapis.com/x", "https://fcm.googleapis.com.evil.example/x", "", None,
+])
+def test_endpoint_allowed_refuses_anything_a_second_parser_could_read_differently(bad):
+    assert not push.endpoint_allowed(bad)
+
+
+def test_endpoint_allowed_accepts_the_plain_forms():
+    assert push.endpoint_allowed("https://fcm.googleapis.com:443/fcm/send/abc?x=1")
+    assert push.endpoint_allowed("https://FCM.googleapis.com")
+    assert push.endpoint_allowed("https://updates.push.services.mozilla.com/wpush/v2/gAAAA")
+
+
+def test_remove_device_service_only_removes_the_owners(push_on):
+    a, b = make_person(first_name="A"), make_person(first_name="B")
+    d = make_push_device(a)
+    assert push.remove_device(b, d.pk) is False and PushDevice.objects.count() == 1
+    assert push.remove_device(a, d.pk) is True and PushDevice.objects.count() == 0
+    assert push.remove_device(a, d.pk) is False

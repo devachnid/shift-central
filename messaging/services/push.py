@@ -4,25 +4,29 @@ send_pending)."""
 
 import os
 import re
-from urllib.parse import urlsplit
 
 from django.conf import settings
 
 from messaging.models import PushDevice
 
 _B64URL = re.compile(r"^[A-Za-z0-9_\-=]+$")
+# The one shape of address accepted: https, a plain host name, the default port
+# at most, then a path of visible characters. Nothing that two URL parsers could
+# read differently (a backslash, userinfo, a space) gets through.
+_ENDPOINT = re.compile(r"https://([a-z0-9.-]+)(?::443)?(/[!-~]*)?", re.I)
 
 
 def endpoint_allowed(endpoint):
-    """An https address on a known push service: no credentials, the default
-    port. The server will POST to it, so it is never a free choice of host."""
-    try:
-        parts = urlsplit(endpoint)
-        host, port = (parts.hostname or "").lower(), parts.port
-    except ValueError:
+    """An https address on a known push service, in one strict shape. The server
+    will POST to it, so it is never a free choice of host, and it must mean the
+    same host to every URL parser (urlsplit and urllib3 differ on a backslash)."""
+    if not isinstance(endpoint, str) or "\\" in endpoint:
         return False
-    return (parts.scheme == "https" and parts.username is None and port in (None, 443)
-            and any(host == h or host.endswith("." + h) for h in settings.PUSH_ENDPOINT_HOSTS))
+    m = _ENDPOINT.fullmatch(endpoint)
+    if not m:
+        return False
+    host = m.group(1).lower()
+    return any(host == h or host.endswith("." + h) for h in settings.PUSH_ENDPOINT_HOSTS)
 
 
 def configured():
@@ -57,4 +61,10 @@ def register(person, endpoint, p256dh, auth, user_agent=""):
 def unregister(person, endpoint):
     """Remove this person's device with the endpoint; False when they have none."""
     deleted, _ = PushDevice.objects.filter(person=person, endpoint=endpoint).delete()
+    return bool(deleted)
+
+
+def remove_device(person, pk):
+    """Remove this person's device with this id; False when they have none."""
+    deleted, _ = PushDevice.objects.filter(person=person, pk=pk).delete()
     return bool(deleted)
