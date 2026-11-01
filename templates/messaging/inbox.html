@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Messages · AMG Shift Central{% endblock %}
+{% block content %}
+<table class="table">
+  <thead><tr><th>From</th><th>Subject</th><th>Sent</th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr{% if not r.read_at %} class="is-unread"{% endif %}><td>{{ r.message.sender.person.name|default:"A manager" }}</td>
+        <td><a href="{% url 'message' r.message.pk %}">{% if not r.read_at %}<strong>{{ r.message.subject }}</strong>{% else %}{{ r.message.subject }}{% endif %}</a></td>
+        <td>{{ r.message.created_at|date:"j M Y H:i" }}</td></tr>
+  {% empty %}<tr><td colspan="3">No messages.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

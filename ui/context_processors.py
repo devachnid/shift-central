@@ -3,10 +3,11 @@ item appears only when its spec has built it; later specs append here."""
 
 from django.conf import settings
 
+from messaging.services import messages as message_service
 from people.services import access
 
 
-def _items(request, role):
+def _items(request, role, badges):
     path = request.path
     rota_children = [{"label": "Open shifts", "url": "/rota/open/"}]
     if role != "staff":
@@ -32,6 +33,12 @@ def _items(request, role):
     if role != "staff":
         report_children += [{"label": "Payroll", "url": "/reports/payroll/"}, {"label": "Sickness summary", "url": "/reports/sickness/"},
                             {"label": "Leave summary", "url": "/reports/leave-summary/"}]
+    message_children = [{"label": "Inbox", "url": "/messages/"}]
+    if role != "staff":
+        message_children += [{"label": "Send a message…", "url": "/messages/new/", "dialog": True},
+                             {"label": "Sent messages", "url": "/messages/sent/"}]
+    items.append({"key": "messages", "label": "Messages", "icon": "mail", "url": "/messages/",
+                  "active": path.startswith("/messages/"), "children": message_children})
     items.append({"key": "reports", "label": "Reports", "icon": "report", "url": "/reports/hours/",
                   "active": path.startswith("/reports/"), "children": report_children})
     if role != "staff":
@@ -46,16 +53,19 @@ def _items(request, role):
                       "children": [{"label": "Leave types", "url": "/settings/leave-types/"}, {"label": "Leave settings", "url": "/settings/leave/"}]})
     items.append({"key": "notifications", "label": "Notifications", "icon": "bell", "url": "/notifications/",
                   "active": path.startswith("/notifications/"), "children": []})
+    for item in items:
+        item["badge"] = badges.get(item["key"], 0)
     return items
 
 
 def shell(request):
     user = getattr(request, "user", None)
     role = access.role(user) if user is not None and user.is_authenticated else "staff"
+    badges = {"messages": message_service.unread_count(user) if user is not None else 0, "outbox": 0}
     return {
         "settings_practice_hr_url": settings.PRACTICE_HR_URL,
         "role": role,
         "is_manager": role != "staff",
         "is_all_teams": role == "all",
-        "nav_items": _items(request, role) if user is not None and user.is_authenticated else [],
+        "nav_items": _items(request, role, badges) if user is not None and user.is_authenticated else [],
     }

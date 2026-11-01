@@ -25,6 +25,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .nav-icon { width: 18px; height: 18px; flex: none; }
 .is-collapsed .nav-label { display: none; }
 .nav-count { margin-left: auto; background: var(--amber); color: var(--amber-ink); border-radius: 10px; padding: 0 7px; font-size: var(--fs-xs); font-weight: 700; }
+.nav-badge { margin-left: auto; min-width: 1.4em; padding: 0 6px; border-radius: 999px; background: var(--amber); color: var(--amber-ink); font-size: var(--fs-xs); text-align: center; }
 .nav-flyout { display: none; position: absolute; left: 100%; top: 0; min-width: 180px; background: var(--navy-deep); box-shadow: 2px 2px 8px var(--shadow); z-index: 20; padding: var(--sp-1) 0; }
 .nav-item:hover > .nav-flyout, .nav-item:focus-within > .nav-flyout { display: block; }
 .nav-flyout a { display: block; padding: 8px var(--sp-4); color: var(--pale); text-decoration: none; white-space: nowrap; }

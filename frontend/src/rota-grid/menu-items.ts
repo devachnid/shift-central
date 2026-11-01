@@ -70,6 +70,6 @@ export function menuItems(g: GridState, act: Actions, k: CellKey, editCell: (k: 
     ] },
     { label: "Save selection as template…", href: "/rota/templates/save/" },
     { label: "Print", action: () => window.print() },
-    { label: `Message ${first}`.trim(), disabled: true, note: "coming later" },
+    { label: `Message ${first}`.trim(), href: `/messages/new/?person=${p}` },
   ];
 }

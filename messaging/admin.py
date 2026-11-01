@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from people.admin import ReadOnlyModelAdmin
 
-from .models import Outbox, PushDevice
+from .models import Message, MessageRecipient, Outbox, PushDevice
 
 
 @admin.register(Outbox)
@@ -13,3 +13,13 @@ class OutboxAdmin(ReadOnlyModelAdmin):
 @admin.register(PushDevice)
 class PushDeviceAdmin(ReadOnlyModelAdmin):
     list_display = ("person", "label", "created_at", "last_ok_at", "failures")
+
+
+@admin.register(Message)
+class MessageAdmin(ReadOnlyModelAdmin):
+    list_display = ("created_at", "sender", "subject", "everyone")
+
+
+@admin.register(MessageRecipient)
+class MessageRecipientAdmin(ReadOnlyModelAdmin):
+    list_display = ("message", "person", "read_at")
