@@ -523,7 +523,7 @@ sickness, the past schedule and converting holiday to sickness), the leaver, ret
 year-end flags, the payroll report and the one-page summaries are built: see
 [Absence and payroll](absence.md).
 
-- Push notifications to the phone app, messages and the notice board.
+- Messages, the notice board and phone notifications are built: see [Engagement](engagement.md).
 - Repeating time off, a limit on how many can be off at once, notice periods, a second level of
   approval, delegating approval and automatic approval.
 - Importing FindMyShift bookings or balances. They are typed in as adjustments, as above.

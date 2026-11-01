@@ -1,7 +1,7 @@
 # AMG Shift Central: engagement — design
 
 **Date:** 2026-11-01
-**Status:** approved in conversation, section by section; the written spec approved 2026-11-01
+**Status:** approved in conversation; written spec approved 2026-11-01; built and reviewed, with the deviations recorded at the end
 **Requirements:** `docs/requirements/` as amended by
 `docs/requirements/2026-10-29-proposed-amendments.md`. This spec covers
 ROTA-11 and REQ-16 (open shifts); NOTIF-01 (push, for every notification
@@ -632,3 +632,54 @@ Pytest under the existing clock fixtures, with factories extended
 - Whether a one-minute push delay is felt as too slow; the inline
   alternative is a small change in `messaging.send`.
 - Linking GPs into Staff by hour if the rota app ever sends clock times.
+
+## Deviations recorded during the build
+
+### Before the build (the plan's pre-flight)
+
+- The offline page is self-contained (inline styles, no links or scripts), so the
+  service worker caches that one page only, not "the static files that page needs".
+- There is no Account page to hold the push card, so it is its own page,
+  **Notifications**, with its own nav item for everyone.
+- `messaging/services.py` became a package so `push.py`, `messages.py`, `notices.py`
+  and `outbox.py` could sit beside `send`; `messaging.services.send` is unchanged
+  for its callers (a new optional `url`).
+- A claim made by seed_demo is written directly: claiming through the service needs
+  a signed-in login in the audience, and the fictional cast may not have signed in.
+- Approving an open shift refuses a whole day of approved leave (spec section 3,
+  restated here because it goes beyond "clashes only warn").
+
+### While building
+
+- `add_item` rebuilds the cell from all its rows, leave-covered ones included (as the
+  shift dialog does), then appends: the plan's version dropped a covered shift.
+- Approval is refused whenever the claimant's leave would hide the new shift (part-day
+  leave covers the day's shifts too), not only on a whole day; the new entry is found by
+  position, and nothing changes on refusal.
+- No manager decides their own claim (REQ-04).
+- Approving after the post's day has passed stays allowed (only claiming an expired post
+  is refused).
+- Push addresses must match one strict shape (https, an allowlisted host, no backslash,
+  credentials or odd port): the first version could be bypassed with a backslash.
+- Device removal goes through the push service.
+- Pushes carry a 24-hour time-to-live (the library default of 0 dropped pushes to phones
+  that were offline).
+- `MEDIA_ROOT` defaults beside the database rather than in the code tree; uploads use
+  `MEDIA_ROOT/uploads` (no separate `UPLOADS_DIR` setting).
+- A missing file on disk is logged with the row id only.
+- The dashboard's Today card is built from the Who's in today board (GPs counted,
+  hidden-from-rota people not).
+- A signed-in account with no Person cannot fetch `sw.js`, the manifest or the offline page (they
+  only ever see the holding page).
+- `seed_demo` writes the waiting claim directly and skips it (the claim left waiting) if
+  an approval is refused.
+- The Staff by hour Excel and the Shifts Excel follow the plan; the Shifts Excel has a
+  grand total only (per-person subtotals are on screen).
+- The decision dialog's Approve and Decline buttons did not work in a browser: the dialog
+  script posted to `form.action`, which a button named `action` replaces in the page, so
+  the post went to a nonsense address. `modal.js` now reads the form's `action`
+  attribute. The browser test for open shifts found it.
+- `vapid_keys` runs through `deploy/manage` as root, like `collectstatic`, with the settings
+  read from the environment file: the brief's bare `manage.py` stops without `SECRET_KEY`,
+  and the docs test forbids a hand-run `manage.py` on the server. The key file goes in
+  `/etc`, which the app's own user cannot write.
