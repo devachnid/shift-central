@@ -185,6 +185,8 @@ def approve(user, claim, overtime=None, base_url=""):
         claim = OpenShiftClaim.objects.select_related("open_shift__team", "open_shift__department", "person").get(pk=claim.pk)
         shift = claim.open_shift
         _require_owner(user, shift)
+        if access.is_self(user, claim.person):
+            raise PermissionDenied("you can't decide your own claim")
         if claim.state != WAITING or shift.state != OPEN:
             raise OpenShiftError("This claim has already been decided.")
         overtime = claim.overtime if overtime is None else overtime
@@ -197,16 +199,21 @@ def approve(user, claim, overtime=None, base_url=""):
         item = {"kind": "shift", "start": shift.start.strftime("%H:%M"), "finish": shift.finish.strftime("%H:%M"),
                 "break_minutes": shift.break_minutes, "department": shift.department_id, "text": shift.comment,
                 "wfh": False, "overtime": overtime}
+        position = Entry.objects.filter(person=claim.person, day=shift.day).count()   # add_item appends here
         try:
             rows = entries.add_item(user, claim.person, shift.day, item, via_open_shift=True)
         except ValueError as e:
             raise OpenShiftError(str(e)) from None
+        # Part-day leave covers the new row too (add_item returns visible rows only): refuse, and roll everything back.
+        new_row = next((r for r in rows if r.position == position), None)
+        if new_row is None:
+            raise OpenShiftError(f"{claim.person.name} is on leave that day.")
         others = list(shift.claims.filter(state=WAITING).exclude(pk=claim.pk).select_related("person"))
         now = timezone.now()
         shift.claims.filter(pk__in=[c.pk for c in others]).update(state=CLOSED, decided_by=user, decided_at=now)
         claim.state, claim.overtime, claim.decided_by, claim.decided_at = APPROVED, overtime, user, now
         claim.save(update_fields=["state", "overtime", "decided_by", "decided_at"])
-        shift.state, shift.filled_by, shift.entry = FILLED, claim.person, (rows[-1] if rows else None)
+        shift.state, shift.filled_by, shift.entry = FILLED, claim.person, new_row
         shift.save(update_fields=["state", "filled_by", "entry"])
         # The claimant hears from the approval email; the day is not left for the next Notify staff.
         rota_notify.settle_baseline(user, [claim.person], since, "open shift approved: the claimant is told by the approval email")
@@ -225,6 +232,8 @@ def decline(user, claim, base_url=""):
         claim = OpenShiftClaim.objects.select_related("open_shift__team", "open_shift__department", "person").get(pk=claim.pk)
         shift = claim.open_shift
         _require_owner(user, shift)
+        if access.is_self(user, claim.person):
+            raise PermissionDenied("you can't decide your own claim")
         if claim.state != WAITING or shift.state != OPEN:
             raise OpenShiftError("This claim has already been decided.")
         claim.state, claim.decided_by, claim.decided_at = DECLINED, user, timezone.now()

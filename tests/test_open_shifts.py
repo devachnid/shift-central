@@ -229,11 +229,28 @@ def test_an_overlapping_shift_only_warns(cast):
     assert open_shifts.approve(cast.lead.user, claim).state == "approved"
 
 
-def test_part_day_leave_only_warns_and_names_the_type(cast):
+def test_part_day_leave_is_named_by_clashes_and_blocks_approval_that_would_hide_the_shift(cast):
     bookings.book(cast.boss.user, cast.sam, make_type("Training"), DAY, DAY, "pm")
-    claim = open_shifts.claim(cast.sam.user, post(cast))
+    shift = post(cast)
+    claim = open_shifts.claim(cast.sam.user, shift)
     assert any("Training" in w for w in open_shifts.clashes(claim))
-    assert open_shifts.approve(cast.lead.user, claim).state == "approved"
+    with pytest.raises(OpenShiftError, match="on leave"):
+        open_shifts.approve(cast.lead.user, claim)
+    claim.refresh_from_db()
+    shift.refresh_from_db()
+    assert claim.state == "waiting" and shift.state == "open" and shift.entry is None
+    assert not Entry.objects.filter(person=cast.sam, day=DAY, start=time(9)).exists()
+
+
+def test_no_manager_decides_their_own_claim(cast):
+    claim = open_shifts.claim(cast.lead.user, post(cast))        # Lead manages Reception and is in its audience
+    with pytest.raises(PermissionDenied):
+        open_shifts.approve(cast.lead.user, claim)
+    with pytest.raises(PermissionDenied):
+        open_shifts.decline(cast.lead.user, claim)
+    assert OpenShiftClaim.objects.get(pk=claim.pk).state == "waiting"
+    assert open_shifts.approve(cast.boss.user, claim).state == "approved"
+    assert Entry.objects.filter(person=cast.lead, day=DAY).count() == 1
 
 
 def test_declining_tells_the_claimant_and_leaves_the_post_open(cast):
