@@ -189,3 +189,19 @@ def test_the_nav_has_uploads_for_everyone(cast):
 def test_the_backup_script_also_archives_the_media_folder():
     script = (Path(__file__).resolve().parents[1] / "deploy" / "backup.sh").read_text()
     assert "media" in script and "tar" in script
+
+
+def test_media_root_defaults_to_a_folder_beside_the_database(monkeypatch):
+    """The test run swaps the database name for an in-memory one, so read the
+    settings file afresh with the environment unset and check the expression."""
+    import runpy
+
+    from django.conf import settings as django_settings
+
+    for var in ("DB_PATH", "MEDIA_ROOT"):
+        monkeypatch.delenv(var, raising=False)
+    fresh = runpy.run_path(str(Path(django_settings.BASE_DIR) / "config" / "settings.py"))
+    assert fresh["MEDIA_ROOT"] == Path(fresh["DATABASES"]["default"]["NAME"]).parent / "media"
+    assert fresh["MEDIA_ROOT"] == Path(django_settings.BASE_DIR) / "media"
+    monkeypatch.setenv("DB_PATH", "/var/lib/shift-central/db.sqlite3")
+    assert runpy.run_path(str(Path(django_settings.BASE_DIR) / "config" / "settings.py"))["MEDIA_ROOT"] == Path("/var/lib/shift-central/media")

@@ -146,9 +146,10 @@ STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 # Uploaded documents (spec 5). Outside anything the web server serves; the
-# app writes here and the download view reads it. In production this is
-# under the systemd StateDirectory, so it is backed up with the database.
-MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT") or BASE_DIR / "media")
+# app writes here and the download view reads it. By default a "media" folder
+# beside the database: /var/lib/shift-central/media in production, where
+# deploy/backup.sh archives it each night with the database.
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT") or Path(DATABASES["default"]["NAME"]).parent / "media")
 UPLOAD_MAX_BYTES = int(os.environ.get("UPLOAD_MAX_BYTES", str(10 * 1024 * 1024)))
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
