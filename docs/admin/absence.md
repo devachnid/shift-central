@@ -53,9 +53,12 @@ and last days. The dialog previews as you type.
   block: *Record as a separate instance* always works.
 - **What Extend does.** The button reads **Extend the existing entry** and the existing booking's first
   or last day moves to cover the new days; the result is one entry and one instance. The existing entry keeps
-  its own manager note and flags; anything typed for the new entry is not kept. If the earlier entry is
-  a [past schedule](#the-past-schedule-section) one and the new days include today or later, Extend is not offered (a past
-  schedule entry cannot reach into today), the warning says so and the entry is recorded separately.
+  its own manager note and flags; anything typed for the new entry is not kept. **Extend joins entries of the
+  same kind only.** If the earlier entry is a [past schedule](#the-past-schedule-section) one, Extend is not
+  offered here: the warning says the entry "is recorded as a separate instance because the other entry is a
+  past schedule entry", so the new days keep their hours and reach the payroll report. The past schedule's
+  own dialog does the same the other way round ("…because the other entry has hours"), so typed history is
+  never costed.
 - **Long sickness** is an entry of **29 days or more**, first and last day counted (28 is not long, 29
   is). The dialog shows *This is long sickness (29 days or more): managers are emailed when [Name]
   returns*, the booking's view carries the same note, and see
@@ -110,7 +113,9 @@ What happens, in one step:
   trigger check runs; the trigger email goes if a level was reached.
 - **The person is emailed** "Your time off has been changed", saying which days are now sickness and that the hours have gone back.
   When the whole booking is converted they also get the usual cancellation email.
-- **The Activity log** shows every booking touched, each with the note "converted to sickness".
+- **The Activity log** shows each booking touched: the shortened holiday with the note "converted to
+  sickness", the others as a manager's booking or cancellation; the sickness booking's manager note says what
+  it was converted from.
 
 ## The past schedule section
 
@@ -134,7 +139,8 @@ list (its cost reads "dates only"), the planner, and the GP rota app's feed for 
 The list shows every past-schedule entry for your people: staff, first and last day, calendar days,
 type, *Long sickness*, who recorded it and when, the person's instances now and their trigger.
 
-**To correct an entry**, **Edit** changes its dates or type. **To remove one**, use **Remove**: it is the
+**To correct an entry**, **Edit** changes its dates or type, in 2027 as in 2026 (the leave-year rule does not apply
+to a past schedule entry; its last day must still be before today), and shows no hours. **To remove one**, use **Remove**: it is the
 ordinary cancel, the record is kept, and the entry stops counting. Past schedule entries never send the trigger email.
 
 ## Triggers and the sickness summary
@@ -186,7 +192,10 @@ If the date is already within a week when it arrives, one email covers both; if 
 email says "[Name] left on …" and no reminder follows. A date changed later is announced again, one
 unchanged is not announced twice, and clearing a date resets it without an email. A person who first appears in Practice HR's feed
 already carrying a finish date is not flagged, so the first import does not flood the managers (the Health
-card still lists them).
+card still lists them). If the "is leaving on" email cannot be worked out or sent, the Health card's
+Practice HR line says *leaver flag failed; see the journal*, because the next sync sees no change and does not
+try again: tell the managers by hand. A failure for one person never stops the week reminders or the return
+emails for the others.
 
 **The figure** in the email, and on the profile and the statement ("Leaves on 14 Oct 2026: 18 h 30 min of
 annual leave remaining"), is the person's **annual leave as at the leaving date**: their allowance
@@ -227,19 +236,23 @@ allowance), the managers decide what carries into the new year (LEAVE-21, 22, 24
 **When the flag opens.** On the first run of the [daily command](#the-daily-command) after a person's
 leave year starts (1 January for nearly everyone) and for up to 31 days after, so a missed run still
 catches it. It opens a row for the year that has just ended when that year has an **allowance typed**. A year with
-no allowance opens nothing: everyone starts 2027 on their full allowance with no 2026 allowance typed,
-so nothing opens on 1 January 2027, and the 2026 carry-over stays a **manual adjustment** typed in January 2027,
-with the reason "carried over from FindMyShift 2026". **The first year end the system handles is the
-leave year that ends in December 2027, flagged from 1 January 2028.** (If you do type a 2026 allowance for someone, their flag opens in
-January 2027 too.) A person with nothing left (no annual leave and no TOIL above zero) is closed straight away and not
-emailed.
+no allowance opens nothing, and **nor does a leave year that ended before the system started (1 January 2027)**,
+even if a 2026 allowance was typed for someone: the 2026 carry-over stays a **manual adjustment** typed in January 2027,
+with the reason "carried over from FindMyShift 2026", and is never carried a second time. **The first year end the system
+handles for a 1 January leave year is the one that ends in December 2027, flagged from 1 January 2028.** A person whose
+leave year starts on another day is flagged for the first year of theirs that ends after go-live: a 1 April leave year
+ending 31 March 2027 opens in April 2027. A person with nothing left (no annual leave and no TOIL above zero) is closed
+straight away and not emailed.
 
 **The email.** Each manager gets one: *Year end: 7 people have leave or TOIL left*, a line per person (annual
 leave left or over, the bank holiday balance folded in, and TOIL) and a link to the page.
 
 **The page.** Time off › **Year end** (`/time-off/year-end/`). *Waiting for a decision* lists your people with
 year ended, annual leave left (red when over) and TOIL left, a *long absence this year* marker where a long
-sickness or a flagged-return booking fell in the year, and **Decide…**. *Decided* lists the decisions with who made them and a note. The Health card's **Year-end
+sickness or a flagged-return booking fell in the year, and **Decide…**. The figures are worked out again each time
+the page or the dialog opens, and again when the decision is saved: a correction to last year typed in January,
+days converted to sickness or TOIL used since the flag opened all change what *Carry it all* carries and what
+*Lose it all* loses, and the decision records the figures it acted on. *Decided* lists the decisions with who made them and a note. The Health card's **Year-end
 decisions waiting** counts the open rows.
 
 **The three choices** (the dialog's note is optional):
@@ -279,14 +292,14 @@ managers, a practice total.
 |---|---|
 | **Worked** | Hours on shifts that were not covered by leave and not marked overtime, after breaks. A GP's sessions count at 4 h 10 min each (a session under a whole-day booking is hidden; under a half-day booking the other half is still shown). A half day's other half counts as worked |
 | **Paid leave** | Leave hours on paid types: Holiday, Bank holiday, TOIL, Training, paid Dependants', Compassionate and Authorised absence (the paid/unpaid choice on the booking decides) |
-| **Total to pay** | **Worked plus Paid leave**: the hours the bureau pays |
+| **Total to pay** | **Worked plus Paid leave**: the hours the bureau pays. Sickness, Unpaid leave and the always-reported types' columns are outside it |
 | **Paid overtime** | Shifts marked as overtime to be paid |
 | **Unpaid leave** | Leave hours resolving unpaid, including Unpaid leave |
 | **Sickness** | Hours of Sick leave days. It is not in Paid leave; sickness pay is the bureau's to work out |
 | **Instances** | Sickness entries that overlap the month (past schedule entries excluded) |
 | **TOIL taken** | TOIL hours taken, shown on their own as well as being inside Paid leave |
-| **Leave days** | Annual leave and bank holiday days taken, a half day or a timed booking as ½ (3½) |
-| One column per **always-reported type** | For each of KIT day, Maternity, Paternity, Adoption / shared parental, Unauthorised absence and Jury service that anyone has in the month: "1 day, 6 h". KIT days leave the balances untouched |
+| **Leave days** | Annual leave and bank holiday days taken, a half day or a timed booking as ½ (3½). Only days that cost something count: a weekend or a part-timer's day off inside a booking is not a leave day |
+| One column per **always-reported type** | For each of KIT day, Maternity, Paternity, Adoption / shared parental, Unauthorised absence and Jury service that anyone has in the month: "1 day, 6 h", counting only the days that cost something, as Leave days does. KIT days leave the balances untouched |
 | **Started / leaves** | Anyone whose start or finish date is in the month; a leaver's line adds their leave remaining or over |
 
 Past schedule (dates only) entries are never on the report. Every figure is the sum of days a manager
@@ -304,8 +317,10 @@ up), days are numbers and names are plain text. It is a draft until marked sent.
 
 **Mark as sent to the bureau** (all-teams managers only; team managers do not see the button, and the
 address answers 403) opens a confirm dialog naming the month and the number of people. Marking stores a
-snapshot of every figure as it stands and writes a line in the Activity log ("Payroll for October 2026 marked sent, 59 people"). A month can be marked again; the
-latest mark is what later corrections compare with. The page then reads "Sent to the bureau on 30 Oct
+snapshot of every figure as it stands and writes a line in the Activity log ("Payroll for October 2026 marked sent, 59 people"). It also records,
+for every earlier month whose corrections the report was carrying, those months' figures as they now stand,
+because the bureau has now been told them; the Activity log line names those months ("with corrections to
+September 2026"). A month can be marked again; the latest mark is what later corrections compare with. The page then reads "Sent to the bureau on 30 Oct
 2026 by [Name]". The month must be a real one, from January 2026 to a year ahead.
 
 **How corrections appear.** Each time a report is opened, every earlier month **in the last twelve** that was
@@ -313,9 +328,12 @@ marked sent is recomputed from the bookings and the rota as they are now and com
 difference (a booking added late, a sickness date corrected, a cost re-set) is listed under *Corrections to
 months already sent* with the month, the person, the figure, what was sent, what it is now and the
 difference; a person added or removed since is a line for each non-zero figure. The report for a
-month is therefore "this month as it stands, plus every earlier sent month's changes", which is what the
-bureau gets in the Excel's Corrections sheet. A correction older than twelve months
-has to be looked for by choosing that month by hand.
+month is therefore "this month as it stands, plus every earlier sent month's changes since they were last
+sent", which is what the bureau gets in the Excel's Corrections sheet. **A correction is sent once**: marking the
+month sent records the corrected months too, so the next month's report lists only what has changed since, and
+the bureau can apply each Corrections sheet as it stands. Download the Excel **before** marking the month sent:
+afterwards the corrections it carried are part of what was sent and leave the report. A correction older than
+twelve months has to be looked for by choosing that month by hand.
 
 **The Health line.** From ten days before a month's last day, until it is marked sent, all-teams managers
 see **Payroll for October not yet sent** on the Staff list's Health card, with an *Open* link.

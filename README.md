@@ -40,8 +40,8 @@ Health card), the rota grid release, leave, and absence and payroll:
   Excel, Mark as sent and the corrections to months already sent; and the sickness and
   leave one-pagers as a page, a PDF or an Excel file.
 
-Push notifications to the phone app, and the dashboard, shifts and staff-by-hour reports,
-follow in later specs (push notifications and the reports are spec 5's). Managers' guides:
+Push notifications to the phone app and the dashboard, shifts and staff-by-hour reports
+follow in spec 5. Managers' guides:
 [docs/admin/absence.md](docs/admin/absence.md), [docs/admin/leave.md](docs/admin/leave.md)
 and [docs/admin/rota.md](docs/admin/rota.md).
 

@@ -684,7 +684,7 @@ factories plus `make_sick(person, first, last, dates_only=False)`.
 
 ## Deviations recorded during the build
 
-Rulings the controller made while Tasks 1 to 10 were built, grouped by task. Each is a departure from, or a settlement of, the spec's text.
+Rulings the controller made while Tasks 1 to 10 were built and in the final review, grouped by task. Each is a departure from, or a settlement of, the spec's text.
 
 ### Before the build (the plan's pre-flight)
 1. `leave/views/detail.py` computes `can_convert` from the booking's own fields rather than importing `absence.services.convert`: the spec forbids `leave` importing `absence`. `convert.eligible` exists for the absence views.
@@ -729,3 +729,16 @@ Rulings the controller made while Tasks 1 to 10 were built, grouped by task. Eac
 
 ### Task 10: the one-pagers
 24. The practice and team "Instances in range" on the sickness summary count bookings overlapping the range; the per-person column is the rolling six months as at the range's end or today. The two summaries' sheets carry hours as "7 h 30 min" text; the payroll sheet alone carries decimal hours.
+
+### Final review
+25. Extend joins entries of the same kind only (ruling 12 widened): the Add dialog never extends a dates-only entry and the past schedule dialog never extends a costed one; the warning shows and the entry is recorded separately, "because the other entry is a past schedule entry" or "has hours".
+26. The Edit dialog of a dates-only entry checks the past schedule's rule (sickness type, whole days, before today), not the leave-year one, and shows no costs: 2026 history is corrected from the dialog in 2027.
+27. The booking view's "Dates only" and "Long sickness" notes, and the Time off CSV's "dates only", are for the person and their managers only, as the list is.
+28. The week-before reminder and the return email work out their figures before claiming the row, and one person's failure is logged by pk and stops nobody else.
+29. The year-end flag never opens for a leave year that ended before go-live (`yearend.LAUNCH`, 1 January 2027), even when a 2026 allowance was typed: MIG-04's typed carry-over is never carried twice. A leave year ending after it (a 1 April year ending 31 March 2027) opens as usual.
+30. A year-end decision acts on the figures as they stand when it is made, not as the flag found them: `decide` recomputes the ended year's statement inside its transaction and records those figures, and the page and the dialog show them live. When the year's allowance is no longer set, the stored figures stand.
+31. A leaver flag that fails in the HR sync is named in the run's message ("leaver flag failed; see the journal"), and the Health card shows a successful run's message as well as a failed one's.
+32. Leave days and each always-reported type's days count only the days that cost something: a weekend or a day off inside a booking is not a leave day.
+33. Mark as sent records what the bureau has now been told for every month the report covered: besides the month's own run, each earlier sent month of the twelve that shows corrections gets a fresh run with its current figures, and the audit note names those months. A correction therefore appears on one report only.
+34. The payroll rows read each table once for the whole people set (a handful of queries a month), and the corrections are worked out for the viewer's people only.
+35. The payroll screen's `figure` filter lives in `payroll/templatetags/payroll_extras.py`, so `leave` imports nothing from `payroll`.
