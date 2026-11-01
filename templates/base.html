@@ -9,6 +9,7 @@
 <link rel="apple-touch-icon" href="{% static 'img/apple-touch-icon.png' %}">
 <link rel="manifest" href="{% url 'manifest' %}">
 <meta name="theme-color" content="#143D5C">
+{% block head %}{% endblock %}
 <link rel="preload" href="{% static 'fonts/manrope-latin.woff2' %}" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
 <link rel="stylesheet" href="{% static 'css/tokens.css' %}">

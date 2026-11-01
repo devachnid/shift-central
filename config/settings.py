@@ -249,6 +249,9 @@ OIDC_CREATE_USER = True
 OIDC_AUTH_REQUEST_EXTRA_PARAMS = {"prompt": "login"}
 # Kept so signing out can hand it to HR's sign-out as id_token_hint.
 OIDC_STORE_ID_TOKEN = True
+# A callback whose state is already spent (the installed Android app and the
+# browser tab both loading HR's redirect) moves on instead of a 400.
+OIDC_CALLBACK_CLASS = "accounts.views.CallbackView"
 
 # The GP rota app's sessions feed (shifts/services/gp_sync.py). Both from
 # /etc/shift-central.env; either empty means no GP feed, and the Health

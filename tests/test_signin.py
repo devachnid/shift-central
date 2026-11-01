@@ -318,3 +318,63 @@ def test_a_request_after_ten_minutes_is_signed_out(client, db, monkeypatch):
     # session was stamped at force_login, 601 seconds ago by this clock.
     monkeypatch.setattr("django.utils.timezone.now", lambda: later)
     assert client.get("/staff/").status_code == 302
+
+
+# --- a callback that comes back twice ------------------------------------------
+# On Android the installed app shares Chrome's cookies, and Practice HR's
+# redirect to /oidc/callback/ can load in the browser tab and in the app at
+# once. The first load spends the state; the second, and any reload of the
+# address, must land somewhere useful rather than on a 400.
+
+def _with_states(client, states):
+    session = client.session
+    session["oidc_states"] = states
+    session.save()
+
+
+def test_a_spent_callback_while_signed_in_goes_on_into_the_app(staff_client, oidc_on):
+    _with_states(staff_client, {})
+    r = staff_client.get("/oidc/callback/?code=used&state=spent")
+    assert r.status_code == 302 and r["Location"] == "/"
+    assert "_auth_user_id" in staff_client.session
+
+
+def test_a_spent_callback_before_the_sign_in_lands_waits_and_tries_again(client, oidc_on):
+    """The race: the other load is still fetching the token, so wait a
+    moment and go home, which by then is signed in (or asks to sign in)."""
+    _with_states(client, {"other": {"nonce": "n", "code_verifier": None}})
+    r = client.get("/oidc/callback/?code=used&state=spent")
+    body = r.content.decode()
+    assert r.status_code == 200
+    assert '<meta http-equiv="refresh" content="2;url=/">' in body
+    assert 'href="/"' in body
+
+
+def test_a_callback_with_no_sign_in_started_waits_and_tries_again(client, oidc_on):
+    r = client.get("/oidc/callback/?code=used&state=spent")
+    assert r.status_code == 200 and 'content="2;url=/"' in r.content.decode()
+
+
+def test_a_spent_callback_signs_nobody_in(client, oidc_on, monkeypatch):
+    import mozilla_django_oidc.views as oidc_views
+    called = []
+    monkeypatch.setattr(oidc_views.auth, "authenticate", lambda **kw: called.append(kw))
+    _with_states(client, {"other": {"nonce": "n", "code_verifier": None}})
+    client.get("/oidc/callback/?code=used&state=spent")
+    assert called == [] and "_auth_user_id" not in client.session
+
+
+def test_a_live_callback_still_signs_in(client, oidc_on, monkeypatch, staff_user):
+    import mozilla_django_oidc.views as oidc_views
+    seen = []
+
+    def authenticate(**kwargs):
+        seen.append(kwargs["nonce"])
+        staff_user.backend = "accounts.oidc.PracticeAccountBackend"  # as authenticate() sets it
+        return staff_user
+    monkeypatch.setattr(oidc_views.auth, "authenticate", authenticate)
+    _with_states(client, {"live": {"nonce": "n1", "code_verifier": "v"}})
+    r = client.get("/oidc/callback/?code=fresh&state=live")
+    assert seen == ["n1"] and r.status_code == 302
+    assert client.session["_auth_user_id"] == str(staff_user.pk)
+    assert "live" not in client.session["oidc_states"]
