@@ -111,10 +111,17 @@ def test_everyone_downloads_shared_files_as_attachments_only(cast):
     assert "no-store" in r["Cache-Control"]
 
 
-def test_a_missing_file_on_disk_is_a_404(cast):
+def test_a_missing_file_on_disk_is_a_404_and_one_log_line_with_the_row_id_only(cast, caplog):
     f = add_shared(cast)
     (Path(services.root()) / f.stored_name).unlink()
-    assert client_for(cast.sam).get(f"/uploads/{f.pk}/download/").status_code == 404
+    with caplog.at_level("WARNING", logger="uploads"):
+        assert client_for(cast.sam).get(f"/uploads/{f.pk}/download/").status_code == 404
+    records = [r for r in caplog.records if r.name == "uploads" and r.levelname == "WARNING"]
+    assert len(records) == 1
+    message = records[0].getMessage()
+    assert str(f.pk) in message
+    for private in (f.original_name, f.title, f.stored_name):
+        assert private not in message
 
 
 def test_shared_delete_is_the_uploader_or_an_all_teams_manager(cast):

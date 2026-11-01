@@ -221,6 +221,7 @@ LOGGING = {
         "people": {"level": "INFO"},
         "shifts": {"level": "INFO"},
         "messaging": {"level": "INFO"},
+        "uploads": {"level": "INFO"},
     },
 }
 

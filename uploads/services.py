@@ -2,6 +2,7 @@
 name outside anything served; the only way out is open_file, which checks
 the permission and always sends a download."""
 
+import logging
 import os
 import secrets
 from pathlib import Path
@@ -12,6 +13,8 @@ from django.http import FileResponse, Http404
 
 from people.services import access, audit
 from uploads.models import UploadedFile
+
+log = logging.getLogger("uploads")
 
 # extension -> (content type, the signature its first bytes must carry)
 ZIP, OLE = b"PK\x03\x04", b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
@@ -146,6 +149,7 @@ def open_file(user, uploaded):
         raise Http404
     path = root() / uploaded.stored_name
     if not path.is_file():
+        log.warning("upload %s: file missing on disk", uploaded.pk)
         raise Http404
     if uploaded.kind == UploadedFile.Kind.PERSON:
         _audit(user, uploaded, "downloaded", uploaded.title)
