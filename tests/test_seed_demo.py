@@ -12,11 +12,12 @@ from django.core.management import CommandError, call_command
 from accounts.models import User
 from leave.models import Booking, BookingDay
 from leave.services import balances, years
-from messaging.models import Outbox
+from messaging.models import Message, Notice, Outbox
 from people.management.commands.seed_demo import ACTOR_EMAIL, CAST, REQUESTER_EMAIL
 from people.models import Allowance, AuditEntry, Person, TeamManager
 from people.services import health
-from shifts.models import DayChange, Entry
+from shifts.models import DayChange, Entry, OpenShift, OpenShiftClaim
+from uploads.models import UploadedFile
 from tests.factories import (make_allowance, make_bank_holiday, make_entry, make_gp_session, make_person, make_team, make_type,
                              make_user_for)
 
@@ -186,7 +187,8 @@ def test_the_rota_covers_five_weeks_on_each_persons_own_days_and_queues_nothing_
     assert [per_week("Tomasz Kowal", w) for w in range(5)] == [2, 2, 1, 2, 2]     # Tuesdays and Thursdays; the 17th is a Tuesday
     assert per_week("Aisha Rahman", 0) == 3 and per_week("Rosa Delgado", 0) == 5 and per_week("Rosa Delgado", 2) == 4
     assert per_week("Morgan Ellis", 0) == 0                                       # managers are off the seeded rota
-    shifts = set(Entry.objects.filter(person__team__name="Reception").values_list("start", "finish"))
+    rota = Entry.objects.filter(person__team__name="Reception").exclude(pk__in=OpenShift.objects.filter(entry__isnull=False).values("entry"))
+    shifts = set(rota.values_list("start", "finish"))                             # the filled open shift is not part of the rota pattern
     assert {(s.strftime("%H:%M"), f.strftime("%H:%M")) for s, f in shifts} == {("08:00", "16:15"), ("10:15", "18:30")}
     first = {n: Entry.objects.get(person__name=n, day=this).start.hour for n in ("Sophie Brennan", "Liam Doyle")}
     assert sorted(first.values()) == [8, 10]                                      # the desk is covered at both ends
@@ -330,3 +332,42 @@ def test_it_seeds_cleanly_on_other_days(people, today, manager, day):
     before = tables()
     seed()
     assert tables() == before
+
+
+# --- engagement (spec 5) --------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def media(settings, tmp_path):
+    """The sample document is written under MEDIA_ROOT: keep every seed run out of the real one."""
+    settings.MEDIA_ROOT = tmp_path / "media"
+
+
+def engagement():
+    return {m.__name__: m.objects.count() for m in (OpenShift, OpenShiftClaim, Notice, Message, UploadedFile)}
+
+
+def test_it_seeds_open_shifts_notices_a_message_and_a_document(people, media):
+    seed()
+    assert engagement() == {"OpenShift": 3, "OpenShiftClaim": 2, "Notice": 2, "Message": 1, "UploadedFile": 1}
+    assert OpenShift.objects.filter(state="filled").count() == 1
+    assert OpenShiftClaim.objects.filter(state="waiting").count() == 1
+    filled = OpenShift.objects.get(state="filled")
+    assert Entry.objects.filter(person=filled.filled_by, day=filled.day, start=filled.start).exists()
+
+
+def test_the_engagement_seed_sends_no_mail_and_queues_no_push(people, media, push_on):
+    from tests.factories import make_push_device
+    make_push_device(next(iter(people.values())))
+    seed()
+    assert Outbox.objects.count() == 0 and not mail.outbox
+
+
+def test_a_second_run_adds_no_engagement_rows(people, media):
+    seed()
+    before = engagement()
+    seed()
+    assert engagement() == before
+
+
+def test_the_report_mentions_the_engagement_rows(people, media):
+    assert "open shifts" in seed()

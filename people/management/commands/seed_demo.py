@@ -17,6 +17,10 @@ It is safe to run again: it fills gaps and never overwrites what a manager
 has typed, and a second run on the same day changes nothing. A later run adds
 the rota weeks that have come into range.
 
+It also writes three open shifts (one with a waiting claim, one filled), two
+notices, one message to everyone and one shared sample document, so the
+engagement pages are not empty.
+
 It sends NO mail and leaves no trace of any in the Outbox (see `_no_mail`).
 Never run it on production: it is the reason for the flag.
 """
@@ -27,6 +31,7 @@ from dataclasses import dataclass
 from datetime import date, time, timedelta
 from decimal import Decimal
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.utils import timezone
@@ -36,13 +41,18 @@ from leave.models import BankHoliday, Booking, LeaveType
 from leave.services import bookings, years
 from leave.services.common import LeaveError
 from messaging import services as messaging
-from messaging.models import Outbox
+from messaging.models import Message, Notice, Outbox
+from messaging.services import messages as message_service
+from messaging.services import notices as notice_service
 from people.models import Department, Person, Team, TeamManager
 from people.services import managers, profiles
-from shifts.models import Entry
-from shifts.services import entries
+from shifts.models import Entry, OpenShift, OpenShiftClaim
+from shifts.services import entries, open_shifts
 from shifts.services import notify as rota_notify
+from shifts.services.open_shifts import OpenShiftError
 from shifts.services.window import monday
+from uploads import services as upload_services
+from uploads.models import UploadedFile
 
 ACTOR_EMAIL = "seed-demo@shift-central.invalid"
 REQUESTER_EMAIL = "seed-demo-requester@shift-central.invalid"
@@ -257,6 +267,7 @@ class Command(BaseCommand):
         plan = self._plan(people, today)
         self._rota(actor, people, today, plan, counts)
         self._leave(actor, people, plan, counts)
+        self._engagement(actor, people, today, counts)
         counts["baseline"] = rota_notify.settle_baseline(
             actor, [p for m, p in people.items() if m.works], since,
             "seed_demo: the seeded rota is the starting point")
@@ -407,6 +418,56 @@ class Command(BaseCommand):
             booking.refresh_from_db()
             counts[f"bookings_{booking.status}"] += 1
 
+    # --- engagement (spec 5) --------------------------------------------------------
+
+    def _engagement(self, actor, people, today, counts):
+        """Open shifts, notices, a message and a shared document, so the new
+        pages are not empty. Posts and the one approval go through the service
+        layer; the waiting claim is written directly, because claiming needs a
+        signed-in login and the cast may not have one yet. No mail: _no_mail
+        holds for the whole run."""
+        first = max(_monday_on_or_after(today), today + timedelta(days=1))
+        by_first = {m.first: p for m, p in people.items()}
+        reception = Team.objects.filter(name="Reception").first()
+        nursing = Team.objects.filter(name="Nursing").first()
+        if reception is None or nursing is None:
+            return
+        desk = Department.objects.filter(name="Reception AG").first()
+        plan = (
+            ("demo data: front desk cover", reception, first + timedelta(days=1), time(9), time(13), [reception], desk),
+            ("demo data: phones", reception, first + timedelta(days=2), time(14), time(18), [reception], desk),
+            ("demo data: clinic support", nursing, first + timedelta(days=3), time(8, 30), time(12, 30), [nursing], None),
+        )
+        posts = []
+        for comment, team, day, start, finish, audience, dept in plan:
+            post = OpenShift.objects.filter(comment=comment).first()
+            if post is None:
+                post = open_shifts.post(actor, team, day, start, finish, 0, dept, comment, False, audience)
+                counts["open_shifts"] += 1
+            posts.append(post)
+        sophie, liam = by_first.get("Sophie"), by_first.get("Liam")
+        if sophie is not None and not posts[0].claims.exists():
+            OpenShiftClaim.objects.create(open_shift=posts[0], person=sophie, overtime="toil", note="Happy to cover")
+        if liam is not None and posts[1].state == OpenShift.State.OPEN and not posts[1].claims.exists():
+            claim = OpenShiftClaim.objects.create(open_shift=posts[1], person=liam)
+            try:
+                open_shifts.approve(actor, claim)
+            except OpenShiftError:
+                counts["claims_left_waiting"] += 1      # seeded leave hides the shift: the claim stays waiting
+        if not Notice.objects.filter(title="Fire drill on Thursday").exists():
+            notice_service.post(actor, "Fire drill on Thursday", "Meet at the front car park at 10:30. This is a test notice.", True, [], pinned=True)
+            counts["notices"] += 1
+        if not Notice.objects.filter(title="Car park resurfacing").exists():
+            notice_service.post(actor, "Car park resurfacing", "The staff car park is closed next Monday. This is a test notice.", False, [reception.pk])
+            counts["notices"] += 1
+        if not Message.objects.filter(subject="Welcome to the staging box").exists():
+            message_service.send(actor, "Welcome to the staging box", "This is demo data. Nothing here is real.", everyone=True)
+            counts["messages"] += 1
+        if not UploadedFile.objects.filter(title="Staff handbook (sample)").exists():
+            sample = SimpleUploadedFile("staff-handbook-sample.txt", b"Sample handbook. This is demo data.\n")
+            upload_services.add(actor, sample, "Staff handbook (sample)", UploadedFile.Kind.SHARED)
+            counts["documents"] += 1
+
     # --- the report ------------------------------------------------------------
 
     def _report(self, counts):
@@ -423,6 +484,10 @@ class Command(BaseCommand):
             out(f"  time off: {counts['bookings']} bookings made "
                 f"({counts['bookings_approved']} approved, {counts['bookings_pending']} waiting for a decision, "
                 f"{counts['bookings_cancelled']} cancelled), {counts['bookings_skipped']} left out")
+            out(f"  engagement: {counts['open_shifts']} open shifts, {counts['notices']} notices, "
+                f"{counts['messages']} message, {counts['documents']} document")
+            if counts["claims_left_waiting"]:
+                out(f"  {counts['claims_left_waiting']} claim left waiting: seeded leave is on its day")
         out("All-teams managers: made by Practice HR's 'Admin of shift-central' box when each signs in; "
             "nothing was done for them here.")
         out("No email was sent and none was queued.")
