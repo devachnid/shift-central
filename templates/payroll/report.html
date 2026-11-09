@@ -2,17 +2,19 @@
 {% load leave_extras payroll_extras %}
 {% block title %}Payroll · AMG Shift Central{% endblock %}
 {% block topbar_actions %}
-  <a class="topbar-action" href="?month={{ month|date:'Y-m' }}&amp;download=1">Download Excel</a>
+  <a class="topbar-action" href="?month={{ month|date:'Y-m' }}&amp;download=1{{ filter_query|escape }}">Download Excel</a>
   {% if all_teams %}<a class="topbar-action is-primary" href="{% url 'payroll-sent' %}?month={{ month|date:'Y-m' }}" data-dialog>Mark as sent to the bureau</a>{% endif %}
 {% endblock %}
 {% block content %}
 <form class="filters" method="get">
-  {% if has_previous %}<a class="btn btn-quiet" href="?month={{ previous|date:'Y-m' }}" aria-label="Previous month">‹</a>{% endif %}
+  {% if has_previous %}<a class="btn btn-quiet" href="?month={{ previous|date:'Y-m' }}{{ filter_query|escape }}" aria-label="Previous month">‹</a>{% endif %}
   <label>Month <input type="month" name="month" value="{{ month|date:'Y-m' }}"></label>
-  {% if has_next %}<a class="btn btn-quiet" href="?month={{ following|date:'Y-m' }}" aria-label="Next month">›</a>{% endif %}
+  {% if has_next %}<a class="btn btn-quiet" href="?month={{ following|date:'Y-m' }}{{ filter_query|escape }}" aria-label="Next month">›</a>{% endif %}
+  {% include "ui/_person_filter.html" %}
   <button class="btn btn-quiet" type="submit">Show</button>
   <span class="muted">{% if run %}Sent to the bureau on {{ run.sent_at|date:"j M Y" }} by {{ run.sent_by.person.name|default:run.sent_by.email|default:"—" }}{% else %}Not yet sent — a draft until it is marked sent{% endif %}</span>
 </form>
+{% if person %}<p class="flash flash-warning">Showing {{ person.name }} only. The download is theirs alone{% if all_teams %}; Mark as sent covers everyone{% endif %}.</p>{% endif %}
 <p class="field-help">{{ month|date:"F Y" }}: hours worked from the rota (the days still to come as it stands), paid leave and the rest from the bookings. Hours worked plus paid leave is the total to pay. The bureau does the pay.</p>
 {% for t in teams %}
 <section class="report-block">

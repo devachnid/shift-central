@@ -64,7 +64,7 @@ a:focus-visible, button:focus-visible, [tabindex]:focus-visible { outline: 2px s
 .flash { padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); margin-bottom: var(--sp-3); background: var(--ok-soft); color: var(--ok); }
 .flash-error { background: var(--danger-soft); color: var(--danger); }
 .flash-warning { background: var(--warning-soft); color: var(--warning); }
-.filters { display: flex; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3); font-size: var(--fs-sm); }
+.filters { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: center; margin-bottom: var(--sp-3); font-size: var(--fs-sm); }
 
 /* --- dialogs (FindMyShift's pop-ups) ---------------------------------- */
 #dialog:empty { display: none; }

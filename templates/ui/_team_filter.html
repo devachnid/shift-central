@@ -1,0 +1,1 @@
+{% if team_choices %}<label>Team <select name="team"><option value="">All teams</option>{% for t in team_choices %}<option value="{{ t.pk }}"{% if team and t.pk == team.pk %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></label>{% endif %}

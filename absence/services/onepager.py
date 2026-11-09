@@ -39,9 +39,11 @@ class PersonRow:
     level: int
 
 
-def _people(user, start, end):
-    return list(access.managed_people(user).filter(start_date__lte=end).exclude(end_date__lt=start)
-                .select_related("team").order_by("team__display_order", "team__name", "last_name", "first_name"))
+def _people(user, start, end, team=None):
+    people = access.managed_people(user).filter(start_date__lte=end).exclude(end_date__lt=start)
+    if team is not None:
+        people = people.filter(team=team)
+    return list(people.select_related("team").order_by("team__display_order", "team__name", "last_name", "first_name"))
 
 
 def _in_range(booking, start, end):
@@ -72,9 +74,10 @@ def _add(t, r, instances):
         t.trigger_3 += 1
 
 
-def summary(user, start, end):
-    practice, teams, people = Totals("Practice"), {}, []
-    for p in _people(user, start, end):
+def summary(user, start, end, team=None):
+    """`team`, one of the viewer's: only its people, its totals at the top."""
+    practice, teams, people = Totals(team.name if team else "Practice"), {}, []
+    for p in _people(user, start, end, team):
         r = _row(p, start, end)
         people.append(r)
         in_range = Booking.objects.filter(person=p, status__in=Booking.ACTIVE, type__sickness=True, first_day__lte=end, last_day__gte=start).count()
@@ -90,7 +93,7 @@ def _totals_row(t):
 def sections(data):
     """The three tables as text, for the PDF and the Excel alike."""
     head = ["", "People", "Instances in range", "Days off sick", "Hours off sick", "Trigger 1", "Trigger 2", "Trigger 3+"]
-    return [("Practice", head, [_totals_row(data["practice"])]),
+    return [(data["practice"].name, head, [_totals_row(data["practice"])]),
             ("Teams", head, [_totals_row(t) for t in data["teams"]]),
             ("People", ["Name", "Team", "Instances (rolling six months)", "Days off sick", "Hours off sick", "Longest instance (days)", "Trigger"],
              [[r.person.name, r.team, r.instances, r.days, hours.fmt(r.seconds), f"{r.longest}{' (long)' if r.long else ''}", r.trigger] for r in data["people"]])]

@@ -331,7 +331,9 @@ first.
 
 Sidebar › Reports › Hours (`/reports/hours/`). Choose **From** and **To** (up to a
 year; this week to begin with) and press Refresh. Managers see the people they
-manage and themselves; everyone else sees only themselves.
+manage and themselves; everyone else sees only themselves. Managers also have a
+**Person** box: choose someone to see only them (**Anyone** shows everyone), and
+**Download** then holds only their rows.
 
 Each person has a block headed *Nina Patel — 5 shifts / 37 h 30 min* (and
 *+ 4 h overtime* if any) with a row per shift: day, date, start, finish, break, the

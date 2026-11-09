@@ -32,10 +32,13 @@ def _row(r, names):
     return out
 
 
-def build(month, rows, names, corrections, run):
+def build(month, rows, names, corrections, run, only=None):
+    """`only`: the person the page was filtered to, named in the title so a
+    one-person sheet is never mistaken for the month's."""
     header = FIXED + [h for name in names for h in (f"{name} (days)", f"{name} (hours)")] + ["Started", "Leaves", "Leaver's leave remaining"]
     status = f"Sent {timezone.localtime(run.sent_at):%-d %b %Y}" if run else "Draft"
-    payroll = [[f"{month:%B %Y} — {status}"] + [None] * (len(header) - 1)] + [_row(r, names) for r in rows]
+    title = f"{month:%B %Y} — {status}" + (f" — {only.name} only" if only is not None else "")
+    payroll = [[title] + [None] * (len(header) - 1)] + [_row(r, names) for r in rows]
     corr = [[c.month.strftime("%B %Y"), c.person.name, c.label, _cell(c.sent, c.field), _cell(c.now, c.field), _cell(c.delta, c.field)] for c in corrections]
     movers = [[r.person.name, r.team, r.started, r.leaves, None if r.leaver_balance is None else xlsx.Hours(r.leaver_balance)]
               for r in rows if r.started or r.leaves]

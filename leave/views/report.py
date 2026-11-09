@@ -15,7 +15,7 @@ from django.utils import timezone
 from leave.models import Booking, BookingDay
 from leave.services import balances, hours, sickness, years
 from people.models import Person
-from people.services import access
+from people.services import access, filters
 from shifts.services import csv_safe
 from shifts.services.window import parse_day
 
@@ -54,10 +54,11 @@ def _people(user, start, end):
                 .select_related("team").order_by("team__display_order", "team__name", "last_name", "first_name"))
 
 
-def rows(user, start, end):
+def rows(user, start, end, people=None):
+    """One row per person: `people` (some of _people's) or all of them."""
     out = []
     today = timezone.localdate()
-    for p in _people(user, start, end):
+    for p in _people(user, start, end) if people is None else people:
         s = balances.statement(p, years.year_of(p, start))
         days = BookingDay.objects.filter(booking__person=p, booking__status__in=Booking.ACTIVE, day__range=(start, end))
         deducted = days.filter(account__in=DEDUCTS).aggregate(total=Sum("cost_seconds"))["total"] or 0
@@ -73,7 +74,10 @@ def rows(user, start, end):
 @login_required
 def leave_report(request):
     start, end = _dates(request)
-    data = rows(request.user, start, end)
+    everyone = _people(request.user, start, end)
+    choices = sorted(everyone, key=lambda p: p.name) if access.is_manager(request.user) else []
+    person = filters.chosen(request, choices, "person")
+    data = rows(request.user, start, end, [person] if person else everyone)
     if request.GET.get("download"):
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="leave-{start.isoformat()}-{end.isoformat()}.csv"'
@@ -94,4 +98,6 @@ def leave_report(request):
         if not r["missing"]:
             group["allowance"] += r["allowance"]
             group["remaining"] += r["remaining"]
-    return render(request, "leave/report.html", {"page_title": "Leave", "teams": teams, "start": start, "end": end})
+    return render(request, "leave/report.html", {"page_title": "Leave", "teams": teams, "start": start, "end": end,
+                                                 "person_choices": choices, "person": person,
+                                                 "filter_query": filters.query(person=person)})

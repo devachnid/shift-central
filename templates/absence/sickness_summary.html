@@ -2,17 +2,18 @@
 {% load leave_extras %}
 {% block title %}Sickness summary · AMG Shift Central{% endblock %}
 {% block topbar_actions %}
-  <a class="topbar-action" href="?from={{ start|date:'Y-m-d' }}&amp;to={{ end|date:'Y-m-d' }}&amp;format=pdf">Download PDF</a>
-  <a class="topbar-action" href="?from={{ start|date:'Y-m-d' }}&amp;to={{ end|date:'Y-m-d' }}&amp;format=xlsx">Download Excel</a>
+  <a class="topbar-action" href="?from={{ start|date:'Y-m-d' }}&amp;to={{ end|date:'Y-m-d' }}&amp;format=pdf{{ filter_query|escape }}">Download PDF</a>
+  <a class="topbar-action" href="?from={{ start|date:'Y-m-d' }}&amp;to={{ end|date:'Y-m-d' }}&amp;format=xlsx{{ filter_query|escape }}">Download Excel</a>
 {% endblock %}
 {% block content %}
 <form class="filters" method="get">
   <label>From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
   <label>To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  {% include "ui/_team_filter.html" %}
   <button class="btn btn-quiet" type="submit">Refresh</button>
 </form>
 <p class="field-help">Instances and days off sick inside the range; each person's instances and trigger are the rolling six months as at {{ end|date:"j M Y" }}. Dates-only entries from the past schedule count their days and have no hours.</p>
-<section class="report-block"><h2>Practice</h2>
+<section class="report-block"><h2>{{ practice.name }}</h2>
 <table class="table"><thead><tr><th>People</th><th>Instances</th><th>Days off sick</th><th>Hours off sick</th><th>Trigger 1</th><th>Trigger 2</th><th>Trigger 3+</th></tr></thead>
 <tbody><tr><td>{{ practice.people }}</td><td>{{ practice.instances }}</td><td>{{ practice.days }}</td><td>{{ practice.seconds|hm }}</td><td>{{ practice.trigger_1 }}</td><td>{{ practice.trigger_2 }}</td><td>{{ practice.trigger_3 }}</td></tr></tbody></table></section>
 <section class="report-block"><h2>Teams</h2>

@@ -35,17 +35,20 @@ def _rows(person, start, end):
     return rows
 
 
-def report(user, start, end):
+def report(user, start, end, person=None):
     """(blocks, start, end): the range actually reported, swapped if
     backwards and clamped to MAX_RANGE, so callers can show what was used.
     A person is listed when they were current on a day of the range or have
-    hours in it."""
+    hours in it. `person`, one of people_for(user), narrows it to them."""
     if end < start:
         start, end = end, start
     if end - start > MAX_RANGE:
         start = end - MAX_RANGE
     blocks = []
-    for person in people_for(user):
+    people = people_for(user)
+    if person is not None:
+        people = people.filter(pk=person.pk)
+    for person in people:
         rows = _rows(person, start, end)
         if not rows and not (person.start_date <= end and (person.end_date is None or person.end_date >= start)):
             continue   # not here in the range and nothing to show: a leaver, or someone not yet started

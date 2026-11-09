@@ -1,0 +1,1 @@
+{% if person_choices %}<label>Person <select name="person"><option value="">Anyone</option>{% for p in person_choices %}<option value="{{ p.pk }}"{% if person and p.pk == person.pk %} selected{% endif %}>{{ p.name }}</option>{% endfor %}</select></label>{% endif %}

@@ -7,10 +7,11 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseBadRequest, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
+from django.utils.text import slugify
 
 from exports import xlsx as exports_xlsx
 from payroll.services import report, runs, xlsx
-from people.services import access
+from people.services import access, filters
 
 def _month(request):
     try:
@@ -36,12 +37,18 @@ def payroll(request):
     month = _month(request)
     if not hasattr(month, "year"):
         return month
-    rows = report.rows(report.people_for(request.user, month), month)
+    people = report.people_for(request.user, month)
+    choices = sorted(people, key=lambda p: p.name)
+    person = filters.chosen(request, choices, "person")
+    rows = report.rows(people.filter(pk=person.pk) if person else people, month)
     names = report.type_names(rows)
     corrections = report.corrections(request.user, month)
+    if person is not None:
+        corrections = [c for c in corrections if c.person.pk == person.pk]
     run = runs.latest(month)
     if request.GET.get("download"):
-        return exports_xlsx.response(xlsx.build(month, rows, names, corrections, run), f"payroll-{month:%Y-%m}.xlsx")
+        stem = f"payroll-{month:%Y-%m}" + (f"-{slugify(person.name)}" if person else "")
+        return exports_xlsx.response(xlsx.build(month, rows, names, corrections, run, only=person), f"{stem}.xlsx")
     teams = _teams(rows)
     totals = {f: sum(g[f] for g in teams) for f in report.FIELDS}
     previous = (month - timedelta(days=1)).replace(day=1)
@@ -52,7 +59,8 @@ def payroll(request):
     return render(request, "payroll/report.html", {
         "page_title": "Payroll", "month": month, "teams": teams, "totals": totals, "type_names": names,
         "corrections": corrections, "movers": [r for r in rows if r.started or r.leaves], "run": run,
-        "previous": previous, "following": following, "has_next": has_next, "has_previous": has_previous, "all_teams": access.is_all_teams(request.user)})
+        "previous": previous, "following": following, "has_next": has_next, "has_previous": has_previous, "all_teams": access.is_all_teams(request.user),
+        "person_choices": choices, "person": person, "filter_query": filters.query(person=person)})
 
 
 @login_required

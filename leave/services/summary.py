@@ -51,11 +51,14 @@ def _add(t, r):
         setattr(t, f, getattr(t, f) + getattr(r, f))
 
 
-def summary(user, year):
+def summary(user, year, team=None):
+    """`team`, one of the viewer's: only its people, its totals at the top."""
     end = years.year_end(year)
-    people = (access.managed_people(user).filter(start_date__lte=end).exclude(end_date__lt=year)
-              .select_related("team").order_by("team__display_order", "team__name", "last_name", "first_name"))
-    practice, teams, rows, other_years = LeaveTotals("Practice"), {}, [], set()
+    people = access.managed_people(user).filter(start_date__lte=end).exclude(end_date__lt=year)
+    if team is not None:
+        people = people.filter(team=team)
+    people = people.select_related("team").order_by("team__display_order", "team__name", "last_name", "first_name")
+    practice, teams, rows, other_years = LeaveTotals(team.name if team else "Practice"), {}, [], set()
     for p in people:
         r = _row(p, year)
         rows.append(r)
@@ -73,7 +76,7 @@ def _t(t):
 
 def sections(data):
     head = ["", "People", "Allowance", "Adjustments", "Taken", "Remaining", "TOIL remaining", "Waiting for approval"]
-    return [("Practice", head, [_t(data["practice"])]), ("Teams", head, [_t(t) for t in data["teams"]]),
+    return [(data["practice"].name, head, [_t(data["practice"])]), ("Teams", head, [_t(t) for t in data["teams"]]),
             ("People", ["Name", "Team", "Leave year", "Allowance", "Adjustments", "Taken", "Remaining", "TOIL remaining", "Waiting for approval"],
              [[r.person.name, r.team, years.label(r.year), "not set" if r.missing else hours.fmt(r.allowance), hours.fmt(r.adjustments), hours.fmt(r.taken),
                "—" if r.missing else hours.fmt(r.remaining), hours.fmt(r.toil), hours.fmt(r.pending)] for r in data["people"]])]

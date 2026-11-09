@@ -2,20 +2,21 @@
 {% load leave_extras %}
 {% block title %}Leave summary · AMG Shift Central{% endblock %}
 {% block topbar_actions %}
-  <a class="topbar-action" href="?year={{ year.year }}&amp;format=pdf">Download PDF</a>
-  <a class="topbar-action" href="?year={{ year.year }}&amp;format=xlsx">Download Excel</a>
+  <a class="topbar-action" href="?year={{ year.year }}&amp;format=pdf{{ filter_query|escape }}">Download PDF</a>
+  <a class="topbar-action" href="?year={{ year.year }}&amp;format=xlsx{{ filter_query|escape }}">Download Excel</a>
 {% endblock %}
 {% block content %}
 <form class="filters" method="get">
-  <a class="btn btn-quiet" href="?year={{ previous }}" aria-label="Previous year">‹</a>
+  <a class="btn btn-quiet" href="?year={{ previous }}{{ filter_query|escape }}" aria-label="Previous year">‹</a>
   <label>Leave year <input type="number" name="year" min="2000" max="2100" value="{{ year.year }}"></label>
-  <a class="btn btn-quiet" href="?year={{ following }}" aria-label="Next year">›</a>
+  <a class="btn btn-quiet" href="?year={{ following }}{{ filter_query|escape }}" aria-label="Next year">›</a>
+  {% include "ui/_team_filter.html" %}
   <button class="btn btn-quiet" type="submit">Show</button>
 </form>
 {% for f in footnotes %}<p class="field-help">{{ f }}</p>{% endfor %}
-<section class="report-block"><h2>Practice</h2>
+<section class="report-block"><h2>{{ practice.name }}</h2>
 <table class="table"><thead><tr><th></th><th>People</th><th>Allowance</th><th>Adjustments</th><th>Taken</th><th>Remaining</th><th>TOIL remaining</th><th>Waiting for approval</th></tr></thead>
-<tbody><tr><td>Practice total</td><td>{{ practice.people }}</td><td>{{ practice.allowance|hm }}</td><td>{{ practice.adjustments|hm }}</td><td>{{ practice.taken|hm }}</td><td>{{ practice.remaining|hm }}</td><td>{{ practice.toil|hm }}</td><td>{{ practice.pending|hm }}</td></tr></tbody></table></section>
+<tbody><tr><td>{{ practice.name }} total</td><td>{{ practice.people }}</td><td>{{ practice.allowance|hm }}</td><td>{{ practice.adjustments|hm }}</td><td>{{ practice.taken|hm }}</td><td>{{ practice.remaining|hm }}</td><td>{{ practice.toil|hm }}</td><td>{{ practice.pending|hm }}</td></tr></tbody></table></section>
 <section class="report-block"><h2>Teams</h2>
 <table class="table"><thead><tr><th>Team</th><th>People</th><th>Allowance</th><th>Adjustments</th><th>Taken</th><th>Remaining</th><th>TOIL remaining</th><th>Waiting for approval</th></tr></thead>
 <tbody>{% for t in teams %}<tr><td>{{ t.name }}</td><td>{{ t.people }}</td><td>{{ t.allowance|hm }}</td><td>{{ t.adjustments|hm }}</td><td>{{ t.taken|hm }}</td><td>{{ t.remaining|hm }}</td><td>{{ t.toil|hm }}</td><td>{{ t.pending|hm }}</td></tr>{% endfor %}</tbody></table></section>
