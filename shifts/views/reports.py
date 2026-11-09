@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from exports import xlsx
 from people.models import Department, Team
-from people.services import access
+from people.services import access, filters
 from shifts.services import csv_safe, hours, shift_report, staff_by_hour
 from shifts.services import render as fmt
 from shifts.services.window import monday, parse_day
@@ -31,7 +31,9 @@ def _dates(request):
 @login_required
 def hours_report(request):
     start, end = _dates(request)
-    blocks, start, end = hours.report(request.user, start, end)
+    choices = list(hours.people_for(request.user).order_by("name")) if access.is_manager(request.user) else []
+    person = filters.chosen(request, choices, "person")
+    blocks, start, end = hours.report(request.user, start, end, person)
     if request.GET.get("download"):
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="hours-{start.isoformat()}-{end.isoformat()}.csv"'
@@ -52,7 +54,8 @@ def hours_report(request):
                 r["hours_text"] = fmt.duration(r["hours"]) if r["hours"] else ""
                 r["overtime_text"] = fmt.duration(r["overtime"]) if r["overtime"] else ""
     return render(request, "shifts/hours.html", {"page_title": "Hours", "blocks": blocks, "start": start, "end": end,
-                                                 "multi_week": monday(start) != monday(end)})
+                                                 "multi_week": monday(start) != monday(end), "person_choices": choices,
+                                                 "person": person, "filter_query": filters.query(person=person)})
 
 
 def _pick(model, value):

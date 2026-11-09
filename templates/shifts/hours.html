@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Hours · AMG Shift Central{% endblock %}
-{% block topbar_actions %}<a class="topbar-action" href="?from={{ start|date:'Y-m-d' }}&amp;to={{ end|date:'Y-m-d' }}&amp;download=1">Download</a>{% endblock %}
+{% block topbar_actions %}<a class="topbar-action" href="?from={{ start|date:'Y-m-d' }}&amp;to={{ end|date:'Y-m-d' }}&amp;download=1{{ filter_query|escape }}">Download</a>{% endblock %}
 {% block content %}
 <form class="filters" method="get">
   <label>From <input type="date" name="from" value="{{ start|date:'Y-m-d' }}"></label>
   <label>To <input type="date" name="to" value="{{ end|date:'Y-m-d' }}"></label>
+  {% include "ui/_person_filter.html" %}
   <button class="btn btn-quiet" type="submit">Refresh</button>
 </form>
 {% for b in blocks %}

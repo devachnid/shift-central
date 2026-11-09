@@ -145,7 +145,9 @@ ordinary cancel, the record is kept, and the entry stops counting. Past schedule
 
 ## Triggers and the sickness summary
 
-**Where:** Reports › **Sickness summary** (`/reports/sickness/`), managers, for their people.
+**Where:** Reports › **Sickness summary** (`/reports/sickness/`), managers, for their people. The **Team** box
+shows one of your teams only: its people, with its totals in place of the practice's. The downloads keep the
+choice and carry the team's name.
 
 | Level | Instances in the rolling six months | Shown as |
 |---|---|---|
@@ -282,6 +284,10 @@ Activity log carries the decision (what was left, carried, lost and any note) an
 **Where:** Reports › **Payroll** (`/reports/payroll/`), managers. All-teams managers see everyone;
 team managers see the people they manage.
 
+**Person** shows one person's row, their corrections and their starter or leaver line; the arrows keep the
+choice, and **Download Excel** then holds only them, with "Sam Patel only" in its title and the name in the
+file name. **Mark as sent** always covers everyone, whoever is shown.
+
 The report is one calendar **month** at a time: choose it with the arrows or the **Month** box and
 **Show**. It opens on this month. The month's figures take the days still to come from the rota as it
 stands, so a month in progress is a draft that moves; nothing is final until it is marked sent. The people are everyone who was current on any
@@ -340,7 +346,8 @@ see **Payroll for October not yet sent** on the Staff list's Health card, with a
 
 ## The leave summary
 
-**Where:** Reports › **Leave summary** (`/reports/leave-summary/`), managers, for their people.
+**Where:** Reports › **Leave summary** (`/reports/leave-summary/`), managers, for their people. The **Team** box
+shows one of your teams only, its totals in place of the practice's; the arrows and the downloads keep it.
 
 A leave year at a time (the current one to begin with; the arrows change it). Practice, team and person
 tables: **Leave year**, **Allowance** (annual plus bank holiday, pro-rated; "not set" if none),

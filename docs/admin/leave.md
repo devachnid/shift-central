@@ -460,7 +460,8 @@ the name and the type. It shows the type only, never the reason.
 
 **Leave report** (Reports › Leave, `/reports/leave/`). A table by team with a total for each,
 for a range (the viewer's current leave year to begin with; **Refresh** applies a new one).
-Managers see the people they manage and themselves; staff see only their own row.
+Managers see the people they manage and themselves; staff see only their own row. Managers can
+choose one person in the **Person** box; **Download** then holds only their row.
 
 | Column | Meaning |
 |---|---|
