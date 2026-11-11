@@ -415,6 +415,7 @@ It runs these steps in order and **stops at the first that fails**, so a stale
 manifest or a bad setting never reaches the running app:
 
     cd /srv/shift-central
+    git status --short --untracked-files=no   # must print nothing
     git pull --ff-only
     .venv/bin/pip install -r requirements.txt
     deploy/manage migrate
@@ -430,8 +431,13 @@ Between the check and the restart it puts the systemd units right: every
 installed is never installed by the script: if the pull added one, it says so,
 and this README says whether and how to enable it.
 
-- **It stopped at `git pull`:** someone edited a file on the box, or the
-  branch has diverged. `git status` shows which; nothing else was touched.
+- **It refused to start, listing files:** those tracked files were edited on
+  the box. It checks before pulling, because `git pull` alone stops only for an
+  edit to a file the pull changes, and any other edit would be restarted into
+  service. Put each back with `git checkout -- <file>`, or make the change in
+  the repository, and run it again. Nothing was touched.
+- **It stopped at `git pull`:** the branch has diverged from the one it
+  tracks. `git status` says how; nothing else was touched.
 - **It stopped at a later step:** fix what it printed and run it again. A run
   with nothing new to pull still does every step after the pull.
 

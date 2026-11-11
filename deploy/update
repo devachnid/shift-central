@@ -4,8 +4,12 @@
 #
 #   /srv/shift-central/deploy/update
 #
-# 1. git pull --ff-only: local edits or a branch that has diverged stop it
-#    here, with nothing else touched.
+# 0. Refuses if a tracked file has been edited on this box: git pull stops
+#    only for an edit to a file the pull changes, and any other edit would be
+#    restarted into service, code that is in no commit. Untracked files (the
+#    database, uploads, notes) are not looked at.
+# 1. git pull --ff-only: a branch that has diverged stops it here, with
+#    nothing else touched.
 # 2. pip install -r requirements.txt
 # 3. deploy/manage migrate
 # 4. deploy/manage collectstatic --noinput: with DEBUG=0 a stale manifest
@@ -34,6 +38,14 @@ main() {
     code="$(cd "$(dirname "$0")/.." && pwd)"
     units="${SHIFT_CENTRAL_UNITS:-/etc/systemd/system}"   # the tests point this elsewhere
     cd "$code"
+
+    edited="$(git status --porcelain --untracked-files=no)"
+    if [ -n "$edited" ]; then
+        echo "deploy/update: files edited on this box; nothing was changed. Put each back with" >&2
+        echo "  git checkout -- <file>   (or commit the change in the repository), then run this again:" >&2
+        echo "$edited" >&2
+        exit 1
+    fi
 
     before="$(git rev-parse HEAD)"
     step "Pulling"

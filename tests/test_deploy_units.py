@@ -496,3 +496,25 @@ def test_update_is_executable_and_runs_as_one_function():
 def test_update_refuses_to_run_without_root():
     r = subprocess.run(["sh", str(DEPLOY / "update")], capture_output=True, text=True)
     assert r.returncode == 1 and "run as root" in r.stderr
+
+
+def test_an_edit_the_pull_does_not_touch_stops_the_update_too(box):
+    """git pull refuses only when the pull changes the edited file. An edit to
+    any other tracked file, or with nothing to pull, would otherwise be restarted
+    into service: code running on the box that is in no commit."""
+    (box["origin"] / "requirements.txt").write_text("django\nopenpyxl\n")
+    _git(box["origin"], "commit", "-q", "-am", "second")
+    (box["box"] / "deploy" / "gunicorn.service").write_text("[Service]\nExecStart=edited on the box\n")
+    r, log = box["run"]()
+    assert r.returncode != 0 and log == []
+    assert "deploy/gunicorn.service" in r.stderr and "edited on this box" in r.stderr
+    assert (box["box"] / "requirements.txt").read_text() == "django\n"            # not even pulled
+    _git(box["box"], "checkout", "--", "deploy/gunicorn.service")
+    r, log = box["run"]()
+    assert r.returncode == 0 and log[-1] == "systemctl restart shift-central"
+
+
+def test_untracked_files_on_the_box_do_not_stop_the_update(box):
+    (box["box"] / "notes.txt").write_text("the database and the uploads are untracked too\n")
+    r, log = box["run"]()
+    assert r.returncode == 0, r.stderr
