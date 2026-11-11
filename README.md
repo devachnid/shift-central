@@ -407,17 +407,41 @@ pulling code that references a new asset without rebuilding the manifest makes
 *every page* return 500, with the traceback going only to the journal. The
 frontend bundle in `static/dist/` arrives with the pull, already built.
 
+One command does it all, as root:
+
+    /srv/shift-central/deploy/update
+
+It runs these steps in order and **stops at the first that fails**, so a stale
+manifest or a bad setting never reaches the running app:
+
     cd /srv/shift-central
-    git pull
+    git status --short --untracked-files=no   # must print nothing
+    git pull --ff-only
     .venv/bin/pip install -r requirements.txt
     deploy/manage migrate
     deploy/manage collectstatic --noinput
     deploy/manage check --deploy   # fails loudly if the manifest is stale
     systemctl restart shift-central
 
-The `git pull` runs as root, so the tree stays root's. A pull that changes a
-file in `deploy/` needs that unit copied into `/etc/systemd/system/` again,
-then `systemctl daemon-reload`. The `.service` files are the ones that change.
+Between the check and the restart it puts the systemd units right: every
+`deploy/*.service` and `*.timer` that is installed and differs from the copy in
+`/etc/systemd/system/` is copied over (`gunicorn.service` is installed as
+`shift-central.service`), as is the PBS drop-in if you installed it; then
+`systemctl daemon-reload`, and a changed timer is restarted. A unit that is not
+installed is never installed by the script: if the pull added one, it says so,
+and this README says whether and how to enable it.
+
+- **It refused to start, listing files:** those tracked files were edited on
+  the box. It checks before pulling, because `git pull` alone stops only for an
+  edit to a file the pull changes, and any other edit would be restarted into
+  service. Put each back with `git checkout -- <file>`, or make the change in
+  the repository, and run it again. Nothing was touched.
+- **It stopped at `git pull`:** the branch has diverged from the one it
+  tracks. `git status` says how; nothing else was touched.
+- **It stopped at a later step:** fix what it printed and run it again. A run
+  with nothing new to pull still does every step after the pull.
+
+The `git pull` runs as root, so the tree stays root's.
 
 ### Upgrading to the engagement release
 
