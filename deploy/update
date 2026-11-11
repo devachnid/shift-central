@@ -1,0 +1,97 @@
+#!/bin/sh
+# Bring this box up to date with the branch it tracks: the README's
+# Redeploying steps in order, stopping at the first that fails. Run as root.
+#
+#   /srv/shift-central/deploy/update
+#
+# 1. git pull --ff-only: local edits or a branch that has diverged stop it
+#    here, with nothing else touched.
+# 2. pip install -r requirements.txt
+# 3. deploy/manage migrate
+# 4. deploy/manage collectstatic --noinput: with DEBUG=0 a stale manifest
+#    makes every page a 500.
+# 5. deploy/manage check --deploy: a stale manifest or a bad setting stops it
+#    here, before the running app is touched.
+# 6. The units: each deploy/*.service and *.timer that is installed in
+#    /etc/systemd/system and differs from the copy there is copied over (and the
+#    PBS drop-in, if installed), then systemd reloads and a changed timer
+#    restarts. A unit that is not installed is never installed here: enabling
+#    one is a decision (README, Deploy); one this pull added is named.
+# 7. systemctl restart shift-central
+#
+# Safe to run again: a run with nothing to pull does steps 2 to 7 anyway, which
+# is what to do after fixing whatever stopped the last one.
+#
+# The whole script is one function, read in full before it runs, so a pull
+# that changes this file does not change the run already under way.
+set -eu
+
+main() {
+    if [ "$(id -u)" != 0 ]; then
+        echo "deploy/update: run as root; it runs the app's commands through deploy/manage" >&2
+        exit 1
+    fi
+    code="$(cd "$(dirname "$0")/.." && pwd)"
+    units="${SHIFT_CENTRAL_UNITS:-/etc/systemd/system}"   # the tests point this elsewhere
+    cd "$code"
+
+    before="$(git rev-parse HEAD)"
+    step "Pulling"
+    git pull --ff-only
+    after="$(git rev-parse HEAD)"
+
+    step "Installing requirements"
+    "$code/.venv/bin/pip" install --quiet --disable-pip-version-check -r requirements.txt
+    step "Migrating the database"
+    "$code/deploy/manage" migrate --noinput
+    step "Collecting static files"
+    "$code/deploy/manage" collectstatic --noinput
+    step "Checking the deployment"
+    "$code/deploy/manage" check --deploy
+
+    step "Checking the systemd units"
+    reload=""
+    timers=""
+    for unit in deploy/*.service deploy/*.timer; do
+        name="$(basename "$unit")"
+        [ "$name" = gunicorn.service ] && name=shift-central.service
+        installed="$units/$name"
+        if [ -e "$installed" ] && ! cmp -s "$unit" "$installed"; then
+            cp "$unit" "$installed"
+            echo "  updated $installed"
+            reload=1
+            case "$name" in *.timer) timers="$timers $name" ;; esac
+        fi
+    done
+    dropin="$units/shift-central-backup.service.d/pbs.conf"
+    if [ -e "$dropin" ] && ! cmp -s deploy/shift-central-backup-pbs.conf "$dropin"; then
+        cp deploy/shift-central-backup-pbs.conf "$dropin"
+        echo "  updated $dropin"
+        reload=1
+    fi
+    if [ "$before" != "$after" ]; then
+        for unit in $(git diff --name-only --diff-filter=A "$before" "$after" -- 'deploy/*.service' 'deploy/*.timer'); do
+            echo "  new unit, not installed: $unit (the README says whether and how to enable it)"
+        done
+    fi
+    if [ -n "$reload" ]; then
+        systemctl daemon-reload
+        for timer in $timers; do
+            systemctl try-restart "$timer"
+        done
+    fi
+
+    step "Restarting Shift Central"
+    systemctl restart shift-central
+    if [ "$before" = "$after" ]; then
+        echo "Shift Central is running $(git rev-parse --short HEAD); there was nothing new to pull."
+    else
+        echo "Shift Central updated: $(git rev-parse --short "$before") to $(git rev-parse --short HEAD)."
+    fi
+}
+
+step() {
+    echo "== $1"
+}
+
+main "$@"; exit

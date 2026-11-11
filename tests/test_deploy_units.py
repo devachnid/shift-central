@@ -370,3 +370,129 @@ def test_no_doc_sources_the_env_file_into_a_shell():
         if re.search(r"(^|[;&]\s*)\.\s+/etc/shift-central\.env", line)
     ]
     assert not bad, bad
+
+
+# --- deploy/update -------------------------------------------------------------
+# Run for real against a throwaway origin and a clone standing in for
+# /srv/shift-central. `id`, `systemctl`, pip and deploy/manage are stand-ins
+# that write what they were asked to a log; git is real.
+
+GIT_ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.org", "GIT_COMMITTER_NAME": "t",
+           "GIT_COMMITTER_EMAIL": "t@example.org", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_NOSYSTEM": "1"}
+
+
+def _git(cwd, *args):
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, env={**os.environ, **GIT_ENV})
+
+
+def _stub(path, body):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/sh\n" + body)
+    path.chmod(0o755)
+
+
+@pytest.fixture
+def box(tmp_path):
+    """origin (a work tree that pushes), the box (a clone), installed units, stand-ins."""
+    origin, box, units, bin_ = (tmp_path / n for n in ("origin", "box", "units", "bin"))
+    log = tmp_path / "log"
+    (origin / "deploy").mkdir(parents=True)
+    (origin / "deploy" / "update").write_text((DEPLOY / "update").read_text())
+    (origin / "deploy" / "update").chmod(0o755)
+    _stub(origin / "deploy" / "manage", f'echo "manage $*" >> {log}\n[ "$1 $2" != "check --deploy" ] || [ ! -e {tmp_path}/fail-check ]\n')
+    (origin / "deploy" / "gunicorn.service").write_text("[Service]\nExecStart=old\n")
+    (origin / "deploy" / "shift-central-hr-sync.timer").write_text("[Timer]\nOnCalendar=old\n")
+    (origin / "deploy" / "shift-central-pbs.service").write_text("[Service]\n")
+    (origin / "deploy" / "shift-central-backup-pbs.conf").write_text("[Service]\nold\n")
+    (origin / "requirements.txt").write_text("django\n")
+    (origin / ".gitignore").write_text(".venv/\n")
+    _git(origin, "init", "-q", "-b", "main")
+    _git(origin, "add", ".")
+    _git(origin, "commit", "-q", "-m", "first")
+    _git(tmp_path, "clone", "-q", str(origin), str(box))
+    _stub(box / ".venv" / "bin" / "pip", f'echo "pip $*" >> {log}\n')
+    _stub(bin_ / "id", 'echo 0\n')
+    _stub(bin_ / "systemctl", f'echo "systemctl $*" >> {log}\n')
+    (units / "shift-central-backup.service.d").mkdir(parents=True)
+    for src, name in (("gunicorn.service", "shift-central.service"), ("shift-central-hr-sync.timer", "shift-central-hr-sync.timer")):
+        (units / name).write_text((origin / "deploy" / src).read_text())
+    (units / "shift-central-backup.service.d" / "pbs.conf").write_text((origin / "deploy" / "shift-central-backup-pbs.conf").read_text())
+
+    def run():
+        env = {**os.environ, **GIT_ENV, "PATH": f"{bin_}:{os.environ['PATH']}", "SHIFT_CENTRAL_UNITS": str(units)}
+        r = subprocess.run(["sh", str(box / "deploy" / "update")], capture_output=True, text=True, env=env)
+        lines = log.read_text().splitlines() if log.exists() else []
+        log.unlink(missing_ok=True)
+        return r, lines
+
+    return {"origin": origin, "box": box, "units": units, "tmp": tmp_path, "run": run}
+
+
+def test_update_pulls_then_runs_the_redeploy_steps_in_order(box):
+    (box["origin"] / "requirements.txt").write_text("django\nopenpyxl\n")
+    _git(box["origin"], "commit", "-q", "-am", "second")
+    r, log = box["run"]()
+    assert r.returncode == 0, r.stderr
+    assert (box["box"] / "requirements.txt").read_text() == "django\nopenpyxl\n"
+    assert log == ["pip install --quiet --disable-pip-version-check -r requirements.txt", "manage migrate --noinput",
+                   "manage collectstatic --noinput", "manage check --deploy", "systemctl restart shift-central"]
+    assert "Shift Central updated:" in r.stdout
+
+
+def test_update_copies_changed_installed_units_and_names_new_ones(box):
+    o = box["origin"] / "deploy"
+    (o / "gunicorn.service").write_text("[Service]\nExecStart=new\n")
+    (o / "shift-central-hr-sync.timer").write_text("[Timer]\nOnCalendar=new\n")
+    (o / "shift-central-backup-pbs.conf").write_text("[Service]\nnew\n")
+    (o / "shift-central-pbs.service").write_text("[Service]\nchanged\n")           # not installed here: left alone
+    (o / "shift-central-new.timer").write_text("[Timer]\n")
+    _git(box["origin"], "add", ".")
+    _git(box["origin"], "commit", "-q", "-m", "units")
+    r, log = box["run"]()
+    assert r.returncode == 0, r.stderr
+    u = box["units"]
+    assert (u / "shift-central.service").read_text().endswith("new\n")              # gunicorn.service, installed under its name
+    assert (u / "shift-central-hr-sync.timer").read_text().endswith("new\n")
+    assert (u / "shift-central-backup.service.d" / "pbs.conf").read_text().endswith("new\n")
+    assert not (u / "shift-central-pbs.service").exists() and not (u / "shift-central-new.timer").exists()
+    assert "new unit, not installed: deploy/shift-central-new.timer" in r.stdout
+    assert "shift-central-pbs.service" not in "".join(line for line in r.stdout.splitlines() if line.startswith("  "))
+    assert log[-3:] == ["systemctl daemon-reload", "systemctl try-restart shift-central-hr-sync.timer", "systemctl restart shift-central"]
+
+
+def test_a_failed_check_stops_before_the_restart_and_a_rerun_finishes(box):
+    (box["origin"] / "deploy" / "gunicorn.service").write_text("[Service]\nExecStart=new\n")
+    _git(box["origin"], "commit", "-q", "-am", "second")
+    (box["tmp"] / "fail-check").touch()
+    r, log = box["run"]()
+    assert r.returncode != 0 and log[-1] == "manage check --deploy"
+    assert not any(line.startswith("systemctl") for line in log)
+    assert (box["units"] / "shift-central.service").read_text().endswith("old\n")
+    (box["tmp"] / "fail-check").unlink()
+    r, log = box["run"]()                     # nothing new to pull: the unit is still put right
+    assert r.returncode == 0, r.stderr
+    assert (box["units"] / "shift-central.service").read_text().endswith("new\n")
+    assert log[-2:] == ["systemctl daemon-reload", "systemctl restart shift-central"]
+    assert "nothing new to pull" in r.stdout
+
+
+def test_local_edits_stop_the_pull_and_everything_after_it(box):
+    (box["origin"] / "requirements.txt").write_text("django\nopenpyxl\n")
+    _git(box["origin"], "commit", "-q", "-am", "second")
+    (box["box"] / "requirements.txt").write_text("edited on the box\n")
+    r, log = box["run"]()
+    assert r.returncode != 0 and log == []
+
+
+def test_update_is_executable_and_runs_as_one_function():
+    """sh reads a script as it goes: a pull that rewrites this file mid-run would
+    otherwise run the rest of the new file from the old offset."""
+    assert os.access(DEPLOY / "update", os.X_OK)
+    text = (DEPLOY / "update").read_text()
+    assert text.rstrip().endswith('main "$@"; exit')
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="the refusal is for non-root callers")
+def test_update_refuses_to_run_without_root():
+    r = subprocess.run(["sh", str(DEPLOY / "update")], capture_output=True, text=True)
+    assert r.returncode == 1 and "run as root" in r.stderr
