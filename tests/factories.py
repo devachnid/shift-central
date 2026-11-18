@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from leave.models import BankHoliday, Booking, LeaveType
-from people.models import Allowance, Department, Person, Team, TeamManager
+from people.models import Allowance, Contract, Department, Person, Team, TeamManager
 from shifts.models import Entry, GpSession
 
 _next_id = iter(range(1000, 100000))
@@ -93,6 +93,23 @@ def make_bank_holiday(day, name="Bank holiday"):
 def make_allowance(person, year, annual, bank_holiday, **kw):
     kw.setdefault("from_day", year)
     return Allowance.objects.create(person=person, leave_year=year, annual_hours=annual, bank_holiday_hours=bank_holiday, **kw)
+
+
+def make_contract(person, weekly="37.5", base="22", steps=(), **kw):
+    """A copy of a Practice HR contract: hours unless unit="sessions", from
+    the person's start date, with leave terms of `base` days (weeks for
+    sessions) and `steps` of (after_years, total). base=None is a contract
+    with no terms, whose allowances are typed."""
+    from decimal import Decimal
+    sessions = kw.get("unit") == "sessions"
+    kw.setdefault("hr_id", next(_next_id))
+    kw.setdefault("unit", "hours")
+    kw.setdefault("type_name", "Salaried GP" if sessions else "Reception")
+    kw.setdefault("from_day", person.start_date)
+    kw.setdefault("full_time_weekly", Decimal("8") if sessions else Decimal("37.5"))
+    return Contract.objects.create(person=person, weekly_amount=Decimal(str(weekly)),
+                                   leave_base=None if base is None else Decimal(str(base)),
+                                   leave_steps=[[after, f"{Decimal(str(total)):.2f}"] for after, total in steps], **kw)
 
 
 def client_for(person, **user_kw):

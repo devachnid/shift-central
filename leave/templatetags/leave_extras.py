@@ -11,6 +11,11 @@ def hm(seconds):
 
 
 @register.filter
+def plain_hours(value):
+    return hours.plain(value)
+
+
+@register.filter
 def get_item(mapping, key):
     return (mapping or {}).get(key)
 

@@ -6,12 +6,13 @@ go with them. Manager grants allow a delete too (Django refuses a cascade
 into a model whose admin refuses it), though never an add or edit; an
 allowance row is never deleted on its own (a year's first row gone would
 make set_allowance edit the hours-change row), so the person's delete lets
-its allowances through itself."""
+its allowances through itself. The copies of Practice HR's contracts are
+shown read-only as well and go with their person in the same way."""
 
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from .models import Allowance, AuditEntry, Department, Person, SyncRun, Team, TeamManager
+from .models import Allowance, AuditEntry, Contract, Department, Person, SyncRun, Team, TeamManager
 
 
 class ReadOnlyModelAdmin(ModelAdmin):
@@ -41,15 +42,24 @@ class PersonAdmin(ReadOnlyModelAdmin):
                        "start_date", "end_date", "is_gp", "last_seen_from_hr")
 
     def get_deleted_objects(self, objs, request):
-        """The person's allowances go with them, though their admin refuses a delete of one alone."""
+        """The person's allowances and copied contracts go with them, though their admins refuse a delete of one alone."""
         to_delete, model_count, perms_needed, protected = super().get_deleted_objects(objs, request)
         perms_needed.discard(Allowance._meta.verbose_name)
+        perms_needed.discard(Contract._meta.verbose_name)
         return to_delete, model_count, perms_needed, protected
 
 
 @admin.register(Allowance)
 class AllowanceAdmin(ReadOnlyModelAdmin):
-    list_display = ("person", "leave_year", "from_day", "annual_hours", "bank_holiday_hours", "weekly_hours", "days_per_week")
+    list_display = ("person", "leave_year", "from_day", "annual_hours", "bank_holiday_hours", "weekly_hours", "days_per_week",
+                    "source", "checked_at")
+    list_filter = ("source",)
+
+
+@admin.register(Contract)
+class ContractAdmin(ReadOnlyModelAdmin):
+    list_display = ("person", "type_name", "unit", "from_day", "to_day", "weekly_amount", "leave_base", "hr_id")
+    search_fields = ("person__name",)
 
 
 @admin.register(Department)

@@ -124,7 +124,7 @@ def _lines(s):
             out.append(("allowance", f"{label}: not set", 0))
             continue
         for ln in pr.lines:
-            out.append(("allowance", f"{label} {ln.from_day:%-d %b}–{ln.to_day:%-d %b}: {ln.weeks} weeks of 52 at {ln.full_hours} h", hours.from_hours(ln.share_hours.quantize(Decimal("0.01")))))
+            out.append(("allowance", f"{label} {ln.from_day:%-d %b}–{ln.to_day:%-d %b}: {ln.weeks} weeks of 52 at {hours.plain(ln.full_hours)} h", hours.from_hours(ln.share_hours.quantize(Decimal("0.01")))))
         if len(pr.lines) != 1 or pr.capped or pr.seconds != hours.from_hours(pr.lines[0].share_hours.quantize(Decimal("0.01"))):
             out.append(("allowance", f"{label} rounded to the half hour{' and capped at the full-year figure' if pr.capped else ''}", pr.seconds))
     for row in Adjustment.objects.filter(person=s.person, leave_year=s.year).exclude(account="toil").order_by("at"):

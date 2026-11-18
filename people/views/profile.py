@@ -2,6 +2,7 @@
 POST to save. Who may see which tab is decided here from access.*."""
 
 from copy import copy
+from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -62,8 +63,8 @@ def _stored(person, years):
     initial = {"weekly_hours": person.weekly_hours, "days_per_week": person.days_per_week,
                "leave_year_start": person.leave_year_start}
     for a in person.allowances.filter(leave_year__in=years):
-        initial[f"annual_{a.leave_year.year}"] = a.annual_hours
-        initial[f"bank_holiday_{a.leave_year.year}"] = a.bank_holiday_hours
+        initial[f"annual_{a.leave_year.year}"] = a.annual_hours.quantize(Decimal("0.01"))
+        initial[f"bank_holiday_{a.leave_year.year}"] = a.bank_holiday_hours.quantize(Decimal("0.01"))
     return initial
 
 

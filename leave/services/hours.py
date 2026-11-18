@@ -12,6 +12,14 @@ def from_hours(value):
     return int((Decimal(value) * 3600).to_integral_value())
 
 
+def plain(value):
+    """An allowance figure as it is typed and read back: two decimal places,
+    and four only when it needs them (a GP's whole sessions: 266.6667)."""
+    value = Decimal(value)
+    two = value.quantize(Decimal("0.01"))
+    return str(two if two == value else value)
+
+
 def fmt(seconds):
     sign = "−" if seconds < 0 else ""
     total = abs(int(seconds))

@@ -46,7 +46,7 @@ class BankHolidayAdmin(ReadOnlyModelAdmin):
 
 @admin.register(LeaveSetting)
 class LeaveSettingAdmin(ReadOnlyModelAdmin):
-    list_display = ("reminder_working_days",)
+    list_display = ("reminder_working_days", "allowances_need_checking")
 
 
 @admin.register(YearEnd)

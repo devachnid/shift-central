@@ -8,7 +8,7 @@ from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from leave.services import years
+from leave.services import hours, years
 from people.models import Allowance
 from people.services import access, audit
 
@@ -73,7 +73,7 @@ def set_allowance(actor, person, leave_year, annual_hours, bank_holiday_hours, n
     for field, after in (("annual_hours", annual_hours), ("bank_holiday_hours", bank_holiday_hours)):
         before = getattr(allowance, field)
         if before != after:
-            changes[field] = (before, after)
+            changes[field] = (hours.plain(before), after)
     if not changes:
         return []
     if not note.strip():

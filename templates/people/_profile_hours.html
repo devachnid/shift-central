@@ -1,3 +1,4 @@
+{% load leave_extras %}
 {% if manages %}
 <form method="post" action="{% url 'profile' person.pk %}?tab=hours" data-dialog-form>
   {% csrf_token %}
@@ -53,8 +54,8 @@
   {% endif %}
   <dt>Leave year starts</dt><dd>{{ person.leave_year_start }}</dd>
   {% for year, allowance in allowance_rows %}
-  <dt>Annual leave allowance {{ year.year }}</dt><dd>{% if allowance %}{{ allowance.annual_hours }} h{% else %}—{% endif %}</dd>
-  <dt>Bank holiday allowance {{ year.year }}</dt><dd>{% if allowance %}{{ allowance.bank_holiday_hours }} h{% else %}—{% endif %}</dd>
+  <dt>Annual leave allowance {{ year.year }}</dt><dd>{% if allowance %}{{ allowance.annual_hours|plain_hours }} h{% else %}—{% endif %}</dd>
+  <dt>Bank holiday allowance {{ year.year }}</dt><dd>{% if allowance %}{{ allowance.bank_holiday_hours|plain_hours }} h{% else %}—{% endif %}</dd>
   {% endfor %}
 </dl>
 {% endif %}
