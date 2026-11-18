@@ -18,6 +18,7 @@ def figures(user):
     Setup is hours, days and an allowance: someone with an allowance for
     neither this leave year nor the next still needs a manager. Whatever day
     a person's leave year starts, those two years begin within a year of today."""
+    from leave.services import entitlement
     from payroll.services import runs
     from messaging.services import push
     from shifts.services import gp_sync, notify
@@ -44,6 +45,7 @@ def figures(user):
         "leaving_soon": _leaving(people, today),
         "payroll_unsent": runs.unsent_due(user, today),
         "push": push_status,
+        "allowances": entitlement.review(user, today=today),
         **leave,
     }
 

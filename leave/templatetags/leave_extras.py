@@ -16,6 +16,12 @@ def plain_hours(value):
 
 
 @register.filter
+def hours_hm(value):
+    """Decimal hours (an allowance figure) as hours and minutes."""
+    return hours.fmt(hours.from_hours(value))
+
+
+@register.filter
 def get_item(mapping, key):
     return (mapping or {}).get(key)
 

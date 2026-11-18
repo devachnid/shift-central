@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% load leave_extras %}
+{% block title %}Allowances · AMG Shift Central{% endblock %}
+{% block content %}
+<p class="field-help">Full-year allowances are worked out from each person's contract in Practice HR, for this leave year and the next, at every read of Practice HR. A worked-out figure counts straight away; it stays on the first list until a manager has checked it.</p>
+{% if team_choices %}<form class="filters" method="get">{% include "ui/_team_filter.html" %}<button class="btn btn-quiet" type="submit">Show</button></form>{% endif %}
+
+<h2 id="to-check">Allowances to check</h2>
+<table class="table">
+  <thead><tr><th>Staff</th><th>Leave year</th><th>From</th><th>Annual leave</th><th>Bank holidays</th><th>How it was worked out</th><th></th></tr></thead>
+  <tbody>
+  {% for i in review.to_check %}
+  <tr>
+    <td><a href="{% url 'profile' i.person.pk %}?tab=hours" data-dialog>{{ i.person.name }}</a></td><td>{{ i.year|year_label }}</td>
+    {% if i.shown %}{% with r=i.shown.row %}
+    <td>{{ r.from_day|date:"j M Y" }}</td><td>{{ r.annual_hours|hours_hm }}</td><td>{{ r.bank_holiday_hours|hours_hm }}</td>
+    <td>{{ i.text }}{% if i.shown.working %}<br><span class="field-help">{{ i.shown.working.0 }}<br>{{ i.shown.working.1 }}</span>{% endif %}</td>
+    <td>{% if i.can_act %}
+      <form method="post" action="{% url 'allowances-confirm' %}{{ back_query }}" class="inline-form">{% csrf_token %}
+        {% include "people/_allowance_confirm_fields.html" %}
+        {% if i.shown.takes_days %}<label>Days per week <input type="number" name="days_{{ r.pk }}" min="1" max="7" value="{{ r.days_per_week|default_if_none:'' }}"></label>{% endif %}
+        <button class="btn btn-quiet" aria-label="Confirm {{ i.person.name }}, {{ r.from_day|date:'j M Y' }}">Confirm</button>
+      </form>
+      <a href="{% url 'allowance-change' r.pk %}" data-dialog>Change…</a>
+    {% endif %}</td>
+    {% endwith %}{% else %}
+    <td colspan="4">{{ i.text }}</td>
+    <td>{% if i.can_act %}<a href="{% url 'leave-hours-change' i.person.pk %}" data-dialog>Add hours change…</a>{% endif %}</td>
+    {% endif %}
+  </tr>
+  {% empty %}<tr><td colspan="7">Nothing to check.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% if confirmable %}
+<form method="post" action="{% url 'allowances-confirm' %}{{ back_query }}">{% csrf_token %}
+  {% for i in confirmable %}{% with r=i.shown.row %}{% include "people/_allowance_confirm_fields.html" %}{% endwith %}{% endfor %}
+  <button class="btn btn-dark">Confirm all shown ({{ confirmable|length }})</button>
+</form>
+{% endif %}
+
+<h2 id="differ">Allowances that differ from the contract</h2>
+<table class="table">
+  <thead><tr><th>Staff</th><th>Leave year</th><th>From</th><th>Typed</th><th>The contract gives</th><th></th><th></th></tr></thead>
+  <tbody>
+  {% for i in review.differ %}
+  <tr>
+    <td><a href="{% url 'profile' i.person.pk %}?tab=hours{% if i.year %}&amp;year={{ i.year|date:'Y-m-d' }}{% endif %}" data-dialog>{{ i.person.name }}</a></td><td>{{ i.year|year_label }}</td>
+    {% if i.shown %}{% with r=i.shown.row rule=i.shown.rule %}
+    <td>{{ r.from_day|date:"j M Y" }}</td>
+    <td>{{ r.annual_hours|hours_hm }} and {{ r.bank_holiday_hours|hours_hm }}</td>
+    <td>{% if rule %}{{ rule.annual|hours_hm }} and {{ rule.bank_holiday|hours_hm }}<br><span class="field-help">{{ rule.working.0 }}<br>{{ rule.working.1 }}</span>{% else %}no change on this day{% endif %}</td>
+    <td>{{ i.text }}</td>
+    <td>{% if i.can_act %}
+      <form method="post" action="{% url 'allowance-use' r.pk %}{{ back_query }}" class="inline-form">{% csrf_token %}
+        <button class="btn btn-quiet" aria-label="{% if rule %}Use the worked-out figure for{% else %}Remove the change for{% endif %} {{ i.person.name }}, {{ r.from_day|date:'j M Y' }}">{% if rule %}Use the worked-out figure{% else %}Remove this change{% endif %}</button>
+      </form>
+    {% endif %}</td>
+    {% endwith %}{% else %}
+    <td colspan="5">{{ i.text }}</td>
+    {% endif %}
+  </tr>
+  {% empty %}<tr><td colspan="7">Every typed figure is what its contract gives.</td></tr>{% endfor %}
+  </tbody>
+</table>
+
+<h2 id="bank-holidays">Bank holidays not entered</h2>
+{% if review.bank_holidays %}
+<p>No bank holidays are on the list for {% for y in review.bank_holidays %}<a href="{% url 'bank-holidays' %}?year={{ y.year }}">{{ y|year_label }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}. Until they are, the bank holiday allowance worked out for that year is nothing, and nothing is deducted either.</p>
+{% else %}<p class="muted">Every leave year being worked out has its bank holidays.</p>{% endif %}
+
+<h2 id="contracts">Contracts to look at in Practice HR</h2>
+<table class="table">
+  <thead><tr><th>Staff</th><th>Team</th><th>What to look at</th></tr></thead>
+  <tbody>
+  {% for i in review.contracts %}
+  <tr><td><a href="{% url 'profile' i.person.pk %}?tab=hours" data-dialog>{{ i.person.name }}</a></td><td>{{ i.person.team.name|default:"—" }}</td><td>{{ i.text }}</td></tr>
+  {% empty %}<tr><td colspan="3">Nothing to look at.</td></tr>{% endfor %}
+  </tbody>
+</table>
+{% endblock %}

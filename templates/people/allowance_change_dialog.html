@@ -1,0 +1,12 @@
+{% extends "ui/_dialog.html" %}
+{% load leave_extras %}
+{% block dialog_title %}Change allowance — {{ row.person.name }}{% endblock %}
+{% block dialog_body %}
+<form method="post" action="{% url 'allowance-change' row.pk %}" data-dialog-form>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
+  <p class="field-help">Leave year {{ row.leave_year|year_label }}, from {{ row.from_day|date:"j M Y" }}: {{ state }}. Figures typed here are kept as typed, and are listed while they differ from what the contract gives.{% if form.days_per_week %} Changing only the days per week leaves the figures as they are.{% endif %}</p>
+  {% for f in form %}{% include "ui/_field.html" with field=f %}{% endfor %}
+  <button class="btn btn-dark">Change allowance</button>
+</form>
+{% endblock %}
