@@ -126,7 +126,8 @@ def _lines(s):
         for ln in pr.lines:
             out.append(("allowance", f"{label} {ln.from_day:%-d %b}–{ln.to_day:%-d %b}: {ln.weeks} weeks of 52 at {hours.plain(ln.full_hours)} h", hours.from_hours(ln.share_hours.quantize(Decimal("0.01")))))
         if len(pr.lines) != 1 or pr.capped or pr.seconds != hours.from_hours(pr.lines[0].share_hours.quantize(Decimal("0.01"))):
-            out.append(("allowance", f"{label} rounded to the half hour{' and capped at the full-year figure' if pr.capped else ''}", pr.seconds))
+            unit = "whole session" if s.person.is_gp else "half hour"
+            out.append(("allowance", f"{label} rounded to the {unit}{' and capped at the full-year figure' if pr.capped else ''}", pr.seconds))
     for row in Adjustment.objects.filter(person=s.person, leave_year=s.year).exclude(account="toil").order_by("at"):
         out.append(("adjustment", f"{row.reason} ({row.account.replace('_', ' ')})", row.seconds))
     for bd in (BookingDay.objects.filter(booking__person=s.person, booking__status__in=Booking.ACTIVE, day__range=(s.year, years.year_end(s.year)))
