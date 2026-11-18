@@ -64,8 +64,10 @@ to the run's message.
 **Never fetched:** date of birth, gender, phone numbers, address, NI number, pay,
 patterns and absences. HR holds them; this app does not need them.
 
-New people arrive with the defaults: no hours, no allowances, navy name colour,
-display order 100, and the three display switches ticked.
+New people arrive with the defaults: navy name colour, display order 100, and the three
+display switches ticked. A starter whose contract is in Practice HR arrives with their
+weekly hours and both allowances from it; anyone else arrives with no hours and no
+allowances, for a manager to type.
 
 ## When the sync fails
 
@@ -220,6 +222,17 @@ screen instead of in a journal.
 `shift-central-hr-sync.service` is the unit the timer starts. It fails (shown in
 `systemctl status shift-central-hr-sync`) when a run fails, which is the second
 place to look beside the Health card.
+
+### A dry run
+
+    deploy/manage hr_sync --dry-run
+
+reads the feed and does everything a run would do to people, contracts, weekly hours and
+allowances, then undoes all of it: no leaver flag, no email or push, no run on the Health
+card, nothing left behind. It prints counts only, never a name or a figure: people in the
+feed, people whose weekly hours would be set from a contract, allowance rows that would be
+created, changed, taken over from typed and removed, and whether working out the allowances
+would fail for anyone. A feed error stops it with the same message as a run.
 
 ## GP sessions from the rota app
 

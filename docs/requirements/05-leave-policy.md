@@ -153,7 +153,7 @@ These rules apply to **everyone**: all staff groups and all GPs (partners, salar
 | HR design decision | Practice's choice |
 |---|---|
 | Unit per contract type: sessions for GPs | Hours for everyone; session = 4 h 10 min |
-| Entitlement = weeks × weekly hours; service steps | Full-year hours typed in by manager; no service steps |
+| Entitlement = weeks × weekly hours; service steps | Full-year hours typed in by manager; no service steps (amended November 2026: see LEAVE-01 and D-34) |
 | Accrues day by day | Weeks on contract ÷ 52, part week = whole week, round to 0.5 h |
 | Booking costs the dated weekly pattern | Costs scheduled rota hours that day |
 | Bank holiday: three options | Separate pro-rata allowance (matches one option) |

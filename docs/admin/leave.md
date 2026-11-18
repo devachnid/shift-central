@@ -100,7 +100,7 @@ a new contract there starts a new allowance from its date by itself.
   has to remember to visit the profile. It is copied once: a manager's later edit to the
   profile is not overwritten by the next sync.
 - If the change leaves the person's annual leave **below zero**, the managers are emailed,
-  and a person who is not a GP is on the Health card's *Negative leave balances* list.
+  and the person is on the Health card's *Negative leave balances* list.
   Nothing is blocked.
 - For a GP the new weekly hours are not copied onto the profile; their sessions, not hours,
   cost their leave, so the allowances are what the change is for.
@@ -152,20 +152,28 @@ complete year on 1 Jan 2027) × 37.5 h ÷ 5 = 172 h 30 min":
 
 | What happens in Practice HR | What Shift Central does |
 |---|---|
-| A new contract, or a change of weekly hours or sessions | Adds a new allowance from the contract's start date, with the new weekly hours. This is what **Add hours change…** does by hand. The days per week are copied from the ones in force; if the new contract changes them, correct them in the box beside **Confirm**, or at any time afterwards with **Change…**. |
-| The leave terms change | Every figure in the two leave years is worked out again and goes back to "not yet checked". |
+| A new contract, or a change of weekly hours or sessions | Adds a new allowance from the contract's start date, with the new weekly hours. This is what **Add hours change…** does by hand. The days per week are copied from the ones in force; if the new contract changes them, correct them in the box beside **Confirm**, or at any time afterwards with **Change…**. An allowance from a date part-way through the year always waits for a manager, even with *Count as checked straight away*: the contract does not say how many days a week the person works, so someone must look. |
+| The leave terms change | Every figure in the two leave years is worked out again. A figure that comes out different goes back to "not yet checked"; one that comes out the same keeps its check. |
 | A contract's date is corrected | The allowance moves to the corrected date. |
 | A bank holiday is added or removed here | The bank holiday allowance is worked out again at the next read and goes back to "not yet checked". |
 
 - **A figure a manager typed is never overwritten.** If it is what the contract gives, it
-  becomes "worked out" and follows the contract from then on. If it differs it is kept, and
+  becomes "worked out" and follows the contract from then on. The boxes take two decimal
+  places, so a GP's figure typed as 66.67 is the contract's 16 sessions (66.6667 h): it is
+  taken over at the exact figure. If it differs it is kept, and
   listed under *Allowances that differ from the contract* with both figures until a manager
   either presses **Use the worked-out figure** or leaves it as it is.
 - **A leave year that has ended is never rewritten.** If a contract is changed with a date
   inside last year, the person is listed, for a manager to put the difference right with an
   [adjustment](#adjustments).
 - **Nothing booked is ever cancelled** because a figure went down. The person appears on the
-  Health card's *Negative leave balances* list like anyone else below zero.
+  Health card's *Negative leave balances* list like anyone else below zero, a GP included.
+- **A worked-out figure whose contract no longer gives one** (the terms removed, the contract
+  ended or gone from Practice HR) is left as it is, with its check, in case the feed is wrong
+  for a while. The person is listed under *Contracts to look at in Practice HR* ("the 2027
+  allowance was worked out, but the contracts no longer give a figure (no contract from
+  Practice HR)"). Put the contract right, or take the figure over: **Change…** with the same
+  figures and a reason makes it typed.
 
 **Who is not worked out.** A year is left as typed, and the profile says nothing about a
 working, when the person has no contract in Practice HR yet; when their contract has no leave
@@ -182,26 +190,46 @@ as it was), and one that is not is replaced by the worked-out figure.
 
 | List | Who is on it | What to do |
 |---|---|---|
-| **Allowances to check** | Every worked-out or copied figure nobody has checked. Also "hours changed on 1 June; add the hours change" for a typed person whose contract changed in the year. | Read the working. **Confirm** if it is right; **Change…** to type your own figures with a reason (the row becomes typed), or, on an allowance from a later date, to correct only its days per week (the figures stay worked out); **Add hours change…** for the second kind. **Confirm all shown** confirms every row listed, as filtered by the Team box. |
+| **Allowances to check** | Every worked-out or copied figure nobody has checked. Also "hours changed on 1 June; add the hours change" for a typed person whose contract changed in the year. | Read the working. **Confirm** if it is right; **Change…** to type your own figures with a reason (the row becomes typed), or, on an allowance from a later date, to correct only its days per week (the figures stay worked out); **Add hours change…** for the second kind. **Confirm all shown** confirms every row listed that you can act on, as filtered by the Team box; your own rows are not confirmed. |
 | **Allowances that differ from the contract** | Typed figures that are not what the contract gives, with both shown; a typed hours change on a day the contracts do not change; a finished year whose figures the contracts no longer give. | **Use the worked-out figure**, or **Remove this change**, or leave it: a typed figure is a manager's decision. For a finished year, an adjustment. |
-| **Bank holidays not entered** | A leave year being worked out with no bank holiday on the list. Empty until Practice HR has sent its first contract. | Add them under Time off › Bank holidays. |
-| **Contracts to look at in Practice HR** | Someone with no contract in force today, or none from a day in the year ("no contract from 1 July 2027"), or whose steps do not rise. Empty until Practice HR has sent its first contract. | Put the contract right in Practice HR. Until then the earlier figures carry on. |
+| **Bank holidays not entered** | A leave year being worked out with no bank holiday on the list. Empty until Practice HR has sent its first contract; it stays on once a figure has been worked out, even if the contracts later go. | Add them under Time off › Bank holidays. |
+| **Contracts to look at in Practice HR** | Someone with no contract in force today, or none from a day in the year ("no contract from 1 July 2027"), or whose steps do not rise, or whose worked-out figure the contracts no longer give. Empty until Practice HR has sent its first contract; it stays on once a figure has been worked out. | Put the contract right in Practice HR. Until then the earlier figures carry on. |
 
 - A team manager sees their own team. **Nobody confirms or changes their own figures**: a
-  manager's own rows are listed without buttons, for another manager.
-- **Confirm all shown** sends each row with the figures the page showed. If a figure changed
-  in the meantime (a read of Practice HR happened), that row is skipped and the page says "1
-  skipped: its figures changed after this page was drawn", so nothing is confirmed unseen.
+  manager's own rows are listed without buttons, for another manager. The Health card counts
+  only the rows you can act on, so your own waiting figure shows on the page but not in the
+  count.
+- **Confirm all shown** sends each row with the figures the page showed. A row whose figure
+  changed in the meantime (a read of Practice HR happened), that was confirmed already, that
+  is not yours to confirm, or that came with days per week outside 1 to 7 is not confirmed,
+  and the page says "1 not confirmed: changed since this page was drawn, already confirmed,
+  not yours to confirm, or days per week not from 1 to 7", so nothing is confirmed unseen.
+- **Change…** is not offered on a figure of a leave year that has ended, and a change of
+  its figures is refused: put it right with an [adjustment](#adjustments). Its days per week
+  and its **Confirm** still work.
 - The same state, working and buttons are beside each figure on the person's
   [Pay & time off tab](people.md#typed-here-the-pay--time-off-tab). Staff see their figures as
   before, with no state and no working.
 - Every figure written, confirmed, changed or removed is in the Activity log and the person's
   History. The app's own writes are by `practice-hr`, with the working as the reason.
 
+Three things worth knowing:
+
+- **A figure typed over the contract's stays listed** under *Allowances that differ from the
+  contract* for as long as it differs. There is no way to mark it as meant; the list is the
+  reminder.
+- **A typed first figure does not carry past the next contract change.** The figures from the
+  new contract's date are worked out and listed for checking, and can be changed there with
+  **Change…**.
+- **With *Count as checked straight away*** a figure can change after a contract change with
+  only the History entry to show it, except a change part-way through a year, which always
+  waits for a manager.
+
 **Once the first year has been checked**, an all-teams manager can turn the checking off:
 Settings › Leave settings › **Allowances worked out from a contract** › *Count as checked
-straight away*. Figures made or changed after that no longer wait; ones already waiting still
-do; typed figures that differ are listed either way.
+straight away*. Figures made or changed after that no longer wait, except an allowance from a
+date part-way through a year, which always waits because its days per week need a person to
+look; ones already waiting still do; typed figures that differ are listed either way.
 
 ## What a day costs
 
@@ -552,7 +580,7 @@ approved holiday does. Hours worked and marked TOIL for a day not yet reached do
 that day.
 
 Remaining goes **negative** when a manager books or approves more than is left, or after an
-hours change. That is allowed; it shows in red on the Health card (for people who are not GPs).
+hours change. That is allowed; it shows in red on the Health card, for GPs as for anyone else.
 
 ## The year planner and the leave report
 
@@ -625,8 +653,9 @@ GPs are booked, requested and approved exactly like anyone else, with these diff
   allowances are [worked out from their contract](#allowances-worked-out-from-the-contract)
   in whole sessions (8 weeks at 6 sessions a week is 48 sessions, 200 h); a GP trainee's are
   typed, in the same way as for anyone else. A part-year figure for any GP is rounded to the
-  whole session. A GP is never on the Health card's *Needs hours and allowances* or
-  *Negative leave balances* lists.
+  whole session. A GP is never on the Health card's *Needs hours and allowances* list; a GP
+  whose leave goes below zero is on *Negative leave balances* like anyone else. Their
+  statement shows a full-year figure such as 266.6667 h as 266 h 40 min.
 
 ## What is not here yet
 

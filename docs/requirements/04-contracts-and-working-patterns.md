@@ -1,6 +1,6 @@
 # 04 — Contracts and working patterns
 
-**PAT-01** — Each non-GP person has **contracted weekly hours** and **days worked per week** on their profile, typed in by a manager.
+**PAT-01** — Each non-GP person has **contracted weekly hours** and **days worked per week** on their profile, typed in by a manager. (amended November 2026: see LEAVE-01 and D-34)
 *Why:* only the weekly total is fixed; days and hours are set by the rota. Days per week is needed for the leave placeholder (PAT-05).
 
 **PAT-02** — There is **no fixed weekly pattern**. Which days someone works and how long each day is comes from **the rota**.

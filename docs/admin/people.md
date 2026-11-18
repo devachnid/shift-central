@@ -82,7 +82,7 @@ Things that surprise people:
 - You cannot clear an allowance by blanking it: empty boxes mean "no change". To correct a figure, type the right one and give a reason.
 - The tab saves as a whole. If the allowance change is refused (no reason), the hours and days typed with it are **not** saved either.
 - The two years roll over on the first day of the person's leave year (1 January for most): from then, the tab shows the new current year and the one after; the earlier year's figures are still on record but no longer on the tab.
-- A GP's allowances are entered here the same way, even though their hours are not.
+- A GP whose contract has no leave terms (a GP trainee) has their allowances entered here the same way, even though their hours are not. A partner's or salaried GP's are worked out from their contract.
 
 **Under the form, managers see "Where the allowances come from"**: one line for each allowance
 of the two leave years, the year's first and any from a later date, with its state ("worked

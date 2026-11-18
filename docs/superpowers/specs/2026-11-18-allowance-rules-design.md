@@ -225,7 +225,7 @@ Refresh never writes to a leave year that has ended. A contract change dated ins
 
 ### 7.6 The setting
 
-While `allowances_need_checking` is on, a row refresh creates or changes needs checking. Once it is off, such rows are written already checked (`checked_at` set, `checked_by` null) and rows waiting are left for a manager to confirm. Typed figures that differ are listed either way. All-teams managers change the setting, on the Leave settings page; other managers see it.
+While `allowances_need_checking` is on, a row refresh creates or changes needs checking. Once it is off, such rows are written already checked (`checked_at` set, `checked_by` null) and rows waiting are left for a manager to confirm. A dated row (a period after the year's first) that refresh creates or changes needs checking whatever the setting: the contract cannot give its days per week, so a person must look. The year's first row follows the setting. Typed figures that differ are listed either way. All-teams managers change the setting, on the Leave settings page; other managers see it.
 
 ### 7.7 What a manager does to a row (`people/services/profiles.py`)
 
@@ -262,7 +262,7 @@ Whoever can manage the person (`access.can_manage`; no one manages themselves):
 | Practice HR cannot be reached, or the feed is bad | The run fails as today; figures and the copy of contracts stay as they were. |
 | Practice HR does not send `contracts` | Everything is typed, as today. |
 | A year has no bank holidays entered | The bank holiday figure is 0, and nothing is deducted either; the Health card says so. Entering them changes the figure at the next read, and a confirmed row goes back to "not yet checked". |
-| A figure drops below what is booked | Nothing is cancelled. The person is on the Health card's existing "below zero" line. |
+| A figure drops below what is booked | Nothing is cancelled. The person, a GP included, is on the Health card's existing "below zero" line (*Negative leave balances*). |
 | A contract ends with nothing after it, the person still employed | The earlier figures carry on; the person is on "Contracts to look at in Practice HR". |
 | Steps that do not rise reach Shift Central | That person's year is not worked out and their rows are left alone; they are on "Contracts to look at in Practice HR". |
 | A contract with a weekly amount of 0 (bank staff) | That person's year is not worked out; their allowance is typed, and they are not listed. |
@@ -325,3 +325,18 @@ Built as designed, with these choices where the text above left room or met the 
 - **The setting is a choice, not a tick box** (7.6), so a post that does not carry it leaves it alone.
 - **A finished year is compared, never written** (7.4): the previous leave year is listed when its rows are not the periods the contracts now give, and a row of it still waiting can still be confirmed. "Use the worked-out figure" is refused for a year that has ended.
 - **Order of tasks**: models before the GP rounding (its tests need 66.6667 stored), and the Health card's lines with the page they link to.
+- **"Use the worked-out figure" is offered on any typed row that differs** from what the contracts give, the year's first or a dated one, on the page and on the profile.
+- **The page lists the viewer's own rows without buttons** (8), for another manager to act on; nobody confirms or changes their own.
+- **`sound()` also rejects a base of 0 or less and a sessions full-time week of 0** (5.1), besides steps that do not rise: either would divide by nothing or give nothing.
+- **A person whose leave year does not start on 1 January has their 2026/27 year worked out**, because it ends after launch (7.1): only a year that ended before 1 January 2027 is left out.
+
+After the whole-branch review (November 2026):
+
+- **A GP below zero is on *Negative leave balances*** (9). GPs' figures are worked out unattended now, so a GP in deficit must show; *Needs hours and allowances* still leaves GPs out.
+- **`hr_sync --dry-run`** (`hr_sync.preview()`): the feed is applied to people, contracts and weekly hours and the allowances refreshed, inside one transaction that is always rolled back, with no leaver flag, email, push or SyncRun. It prints counts only, read from the audit entries the transaction wrote: people in the feed, weekly hours set from a contract, allowance rows created, changed, taken over from typed and removed, and whether refresh failed for anyone. The setup guide's first-run procedure uses it, with a backup and a back-out.
+- **A dated row refresh makes or rewrites always waits for a manager** (7.6), and a placeholder day on a dated row with weekly hours but no days per week uses the person's days per week, instead of costing nothing.
+- **A typed row is compared with the rule at two decimal places** (7.2, 8), as a manager types it. Equal there, it is adopted as before and takes the rule's exact four-place figures: a GP's 66.67 becomes 66.6667, 16 whole sessions. Every other row is compared exactly.
+- **Change refuses new figures for a leave year that has ended** ("That leave year has ended; correct it with an adjustment") and is not offered there; days per week alone, and Confirm, still work.
+- **The lists and copy-forward are gated on anything having come from Practice HR**: a copied contract, or a row worked out from one. Emptying every contract after figures were worked out leaves the lists on, with the people under *Contracts to look at*. With nothing ever copied or worked out, everything is as before.
+- **A worked-out row in a year the contracts no longer give a figure for** is left as it is, its check included, and the person is listed under *Contracts to look at* ("the 2027 allowance was worked out, but the contracts no longer give a figure (…)"). Change with the same figures and a reason takes it over as typed; anywhere else the same figures are no change.
+- **The Health card counts only rows the viewer can act on** for *Allowances to check* and *Allowances that differ*; the page still lists the viewer's own rows without buttons.

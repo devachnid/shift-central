@@ -15,9 +15,9 @@ All decisions were made by the practice manager during the interview on **29 Oct
 | D-07 | GP rotas built in the new grid; two-way sync with the GP rota app; clashes flagged | Need GPs for leave, hours, training | ROTA-GP-01–04 |
 | D-08 | Rota changes saved quietly; staff told on "notify staff" | Avoid flooding staff while planning ahead | ROTA-09 |
 | D-09 | Adding time off removes (or shortens) the shift | No overlap of shifts and leave | ROTA-10 |
-| D-10 | Staff details typed into the new system; new system is master for hours and leave; Practice HR leave design not used | Practice manager's preference | PAT-07 |
+| D-10 | Staff details typed into the new system; new system is master for hours and leave; Practice HR leave design not used (amended November 2026: see LEAVE-01 and D-34) | Practice manager's preference | PAT-07 |
 | D-11 | Leave in **hours** for everyone; GP session = 4 h 10 min | One unit for all | LEAVE-02 |
-| D-12 | Allowances typed in by managers as full-year hours (annual + separate bank holiday) | Entitlements vary by contract | LEAVE-01 |
+| D-12 | Allowances typed in by managers as full-year hours (annual + separate bank holiday) (amended November 2026: see LEAVE-01 and D-34) | Entitlements vary by contract | LEAVE-01 |
 | D-13 | A day costs **scheduled rota hours**, excluding overtime; average day only as placeholder | Reflects individual working patterns | LEAVE-05, 06 |
 | D-14 | Starter/leaver: **weeks ÷ 52, part week = whole week, round once to 0.5 h**. Monthly rule and FindMyShift's daily rule rejected | Practice's chosen formula | LEAVE-10 |
 | D-15 | Hours change: part weeks whole on both sides (53 weeks counted) | Consistent with starter rule | LEAVE-12 |
