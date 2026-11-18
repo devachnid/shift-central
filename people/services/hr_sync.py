@@ -18,7 +18,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from people.models import Contract, Person, SyncRun, Team
+from people.models import Allowance, AuditEntry, Contract, Person, SyncRun, Team
 from people.services import audit, contracts, profiles
 from people.services.hr_client import HRClient, HRError
 
@@ -245,6 +245,53 @@ def sync(client=None):
             run.message = (run.message + "; " if run.message else "") + "hours changes failed; see the journal"
             run.save(update_fields=["message"])
     return run
+
+
+def preview(client=None):
+    """What a run would do, without doing it (`hr_sync --dry-run`): the
+    feed is read, applied to people, contracts and weekly hours, and the
+    allowances refreshed, inside one transaction that is always rolled
+    back. No leaver flag, no email or push, no SyncRun, nothing left
+    behind. The counts are read from the audit entries the transaction
+    wrote, and are only counts: never a name, a figure or a term. A feed
+    or record error is the returned `message`, as a run's would be."""
+    client = client or HRClient.from_settings()
+    out = {"message": "", "people": 0, "weekly_hours": 0, "created": 0, "changed": 0, "adopted": 0, "removed": 0,
+           "allowances_failed": False}
+    try:
+        records = client.people()
+        out["people"] = len(records)
+        with transaction.atomic():
+            last = AuditEntry.objects.order_by("-pk").values_list("pk", flat=True).first() or 0
+            _apply(records, timezone.now())
+            from leave.services import entitlement       # people → leave only here, at call time
+            try:
+                with transaction.atomic():
+                    out["allowances_failed"] = entitlement.refresh().failed > 0
+            except Exception:
+                log.exception("allowances failed")
+                out["allowances_failed"] = True
+            out.update(_counted(AuditEntry.objects.filter(pk__gt=last)))
+            transaction.set_rollback(True)
+    except (HRError, BadRecord) as e:
+        out["message"] = str(e)[:300]
+    except Exception:
+        out["message"] = "unexpected error; see the journal"
+        log.exception("hr_sync dry run failed")
+    return out
+
+
+def _counted(entries):
+    """preview()'s counts from the audit entries a run wrote."""
+    people = entries.filter(model="people.person")
+    rows = entries.filter(model="people.allowance")
+    created = set(rows.filter(field="source", before="").values_list("object_id", flat=True))
+    adopted = set(rows.filter(field="source", before=Allowance.Source.TYPED,
+                              after=Allowance.Source.WORKED_OUT).values_list("object_id", flat=True))
+    touched = set(rows.values_list("object_id", flat=True))
+    return {"weekly_hours": people.filter(field="weekly_hours").values("object_id").distinct().count(),
+            "created": len(created), "adopted": len(adopted - created), "changed": len(touched - created - adopted),
+            "removed": people.filter(field__startswith="allowance from ").count()}
 
 
 def not_seen_recently(now=None):
