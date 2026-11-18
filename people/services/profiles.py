@@ -10,10 +10,11 @@ from django.utils import timezone
 
 from leave.services import hours, years
 from people.models import Allowance
-from people.services import access, audit
+from people.services import access, audit, contracts
 
 DISPLAY_FIELDS = ("job_title", "name_colour", "display_order", "display_on_rota",
                   "show_to_other_staff", "can_see_other_staff")
+TWO_PLACES = Decimal("0.01")
 
 
 def _apply(actor, person, fields, note=""):
@@ -36,10 +37,23 @@ def update_display(actor, person, **fields):
 
 
 def update_hours(actor, person, weekly_hours, days_per_week, note=""):
+    """Weekly hours and days per week, as typed. While the person's hours
+    contracts in Practice HR add up to more than 0 their weekly hours are
+    HR's (allowance spec, 5.4): only the days per week are written,
+    whatever is passed."""
     if person.is_gp:
         raise ValueError("a GP's sessions come from the GP rota")
+    if contracts.hours_from_hr(person):
+        return _apply(actor, person, {"days_per_week": days_per_week}, note=note)
     weekly_hours = Decimal(weekly_hours).quantize(Decimal("0.01")) if weekly_hours is not None else None
     return _apply(actor, person, {"weekly_hours": weekly_hours, "days_per_week": days_per_week}, note=note)
+
+
+def set_weekly_hours_from_hr(person, weekly_hours):
+    """The sync's write of a person's weekly hours: the sum, more than 0,
+    of their hours contracts in force in Practice HR. Nothing else writes
+    them for such a person."""
+    return _apply(None, person, {"weekly_hours": Decimal(weekly_hours).quantize(TWO_PLACES)}, note=audit.SYNC_NOTE)
 
 
 def update_leave_year_start(actor, person, text):
@@ -186,7 +200,11 @@ def apply_due_hours_changes(today=None):
         if person.is_gp:
             continue
         with transaction.atomic():
-            if person.weekly_hours != latest.weekly_hours or person.days_per_week != latest.days_per_week:
+            if contracts.hours_from_hr(person, today):       # weekly hours are Practice HR's: only the days are copied
+                differs = latest.days_per_week is not None and person.days_per_week != latest.days_per_week
+            else:
+                differs = person.weekly_hours != latest.weekly_hours or person.days_per_week != latest.days_per_week
+            if differs:
                 update_hours(None, person, latest.weekly_hours, latest.days_per_week, note="hours change due")
                 changed += 1
             Allowance.objects.filter(pk__in=[r.pk for r in rows]).update(hours_applied=True)
