@@ -43,9 +43,13 @@ def type_edit(request, pk):
 @access.manager_required
 def leave_settings(request):
     current = leave_settings_service.get()
-    form = SettingsForm(request.POST or None, initial={"reminder_working_days": current.reminder_working_days})
+    form = SettingsForm(request.POST or None, initial={"reminder_working_days": current.reminder_working_days,
+                                                       "allowances_need_checking": "yes" if current.allowances_need_checking else "no"})
     saved = False
     if request.method == "POST" and form.is_valid():
-        leave_settings_service.update(request.user, form.cleaned_data["reminder_working_days"])
+        # Only an all-teams manager is offered the allowances choice; from anyone else it is not read.
+        checking = form.cleaned_data["allowances_need_checking"] if access.is_all_teams(request.user) else None
+        current = leave_settings_service.update(request.user, form.cleaned_data["reminder_working_days"], checking)
         saved = True
-    return render(request, "leave/settings.html", {"page_title": "Leave settings", "form": form, "saved": saved})
+    return render(request, "leave/settings.html", {"page_title": "Leave settings", "form": form, "saved": saved,
+                                                   "need_checking": current.allowances_need_checking})

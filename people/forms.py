@@ -24,10 +24,12 @@ class HoursForm(forms.Form):
                                         label="Leave year starts (MM-DD)", error_messages={"invalid": "Type the month and day as MM-DD, e.g. 04-01"})
     note = forms.CharField(max_length=300, required=False, label="Reason for the change")
 
-    def __init__(self, *args, years, is_gp=False, **kwargs):
+    def __init__(self, *args, years, is_gp=False, hours_from_hr=False, **kwargs):
         super().__init__(*args, **kwargs)
         if is_gp:
             del self.fields["weekly_hours"], self.fields["days_per_week"]
+        elif hours_from_hr:      # weekly hours are Practice HR's: shown, not typed
+            del self.fields["weekly_hours"]
         self.years = years
         for year in years:
             # A year that starts after 1 January is named by its first day.

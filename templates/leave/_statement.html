@@ -32,6 +32,14 @@
     {% endfor %}
     </tbody>
   </table>
+  {% if manages and workings %}
+  <table class="table">
+    <thead><tr><th>Full-year figures, from the contract in Practice HR</th></tr></thead>
+    <tbody>
+    {% for day, annual, bank_holiday in workings %}<tr class="statement-working"><td>From {{ day|date:"j M Y" }}, annual leave: {{ annual }}<br>Bank holidays: {{ bank_holiday }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
   {% if s.no_allowance_lines %}
   <table class="table">
     <thead><tr><th>Leave that draws on no allowance</th><th>Hours</th></tr></thead>
@@ -43,7 +51,7 @@
   {% if manages %}
   <div class="dialog-links">
     <a href="{% url 'leave-adjust' person.pk %}" data-dialog>Adjust…</a>
-    <a href="{% url 'leave-hours-change' person.pk %}" data-dialog>Add hours change…</a>
+    {% if hours_from_contract %}<span>Hours changes come from Practice HR.</span>{% else %}<a href="{% url 'leave-hours-change' person.pk %}" data-dialog>Add hours change…</a>{% endif %}
   </div>
   {% endif %}
 </section>

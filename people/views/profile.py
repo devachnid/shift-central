@@ -7,14 +7,16 @@ from decimal import Decimal
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404, render
 
+from leave.services import entitlement
 from leave.services import years as leave_years
 from leave.views.statement import statement_context
 from people.forms import DisplayForm, HoursForm, NotesForm
 from people.models import AuditEntry, Person
-from people.services import access, profiles
+from people.services import access, contracts, profiles
 
 TABS = ("general", "display", "hours", "notes")
 
@@ -62,10 +64,30 @@ def _stored(person, years):
     """The hours form's initial values: what is stored now."""
     initial = {"weekly_hours": person.weekly_hours, "days_per_week": person.days_per_week,
                "leave_year_start": person.leave_year_start}
-    for a in person.allowances.filter(leave_year__in=years):
+    # The year's first row: it is the one these boxes change. A dated row
+    # is changed from the list beneath. Two places, as the boxes take them.
+    for a in person.allowances.filter(leave_year__in=years, from_day=F("leave_year")):
         initial[f"annual_{a.leave_year.year}"] = a.annual_hours.quantize(Decimal("0.01"))
         initial[f"bank_holiday_{a.leave_year.year}"] = a.bank_holiday_hours.quantize(Decimal("0.01"))
     return initial
+
+
+def _allowance_action(request, person, context):
+    """The buttons beside each figure: Confirm, and Use the worked-out
+    figure (allowance spec, 7.7). A refusal is shown above the list."""
+    action, row_id = request.POST["allowance_action"], request.POST.get("row", "")
+    if action not in ("confirm", "use") or not row_id.isascii() or not row_id.isdigit():
+        raise Http404
+    row = get_object_or_404(person.allowances.select_related("person__team", "checked_by"), pk=int(row_id))
+    days = request.POST.get("days_per_week", "")
+    try:
+        if action == "use":
+            profiles.use_worked_out(request.user, row)
+        else:
+            profiles.confirm_allowance(request.user, row, int(days) if days in list("1234567") else None)
+        context["saved"] = True
+    except ValueError as e:
+        context["allowance_error"] = str(e)
 
 
 def _posted_years(person, start):
@@ -82,10 +104,13 @@ def _posted_years(person, start):
 
 def _hours(request, person, context):
     year_list = leave_years.years_for(person)
+    from_hr = contracts.hours_from_hr(person)
     form = None
-    if request.method == "POST":
+    if request.method == "POST" and "allowance_action" in request.POST:
+        _allowance_action(request, person, context)
+    elif request.method == "POST":
         year_list = _posted_years(person, request.POST.get("leave_year_start", ""))
-        form = HoursForm(request.POST, years=year_list, is_gp=person.is_gp)
+        form = HoursForm(request.POST, years=year_list, is_gp=person.is_gp, hours_from_hr=from_hr)
         if form.is_valid():
             field = "leave_year_start"
             try:
@@ -94,7 +119,7 @@ def _hours(request, person, context):
                         profiles.update_leave_year_start(request.user, person, form.cleaned_data["leave_year_start"])
                     field = "note"
                     if not person.is_gp:
-                        profiles.update_hours(request.user, person, form.cleaned_data["weekly_hours"],
+                        profiles.update_hours(request.user, person, form.cleaned_data.get("weekly_hours"),
                                               form.cleaned_data["days_per_week"])
                     for year, annual, bank in form.allowances():
                         profiles.set_allowance(request.user, person, year, annual, bank,
@@ -103,14 +128,16 @@ def _hours(request, person, context):
             except ValueError as e:
                 person.refresh_from_db()
                 if field == "leave_year_start":      # the year did not move: show the fields for the years it has
-                    form = HoursForm(request.POST, years=leave_years.years_for(person), is_gp=person.is_gp)
+                    form = HoursForm(request.POST, years=leave_years.years_for(person), is_gp=person.is_gp, hours_from_hr=from_hr)
                     form.full_clean()
                 form.add_error(field, str(e))
     year_list = leave_years.years_for(person)
     if form is None or context["saved"]:
-        form = HoursForm(initial=_stored(person, year_list), years=year_list, is_gp=person.is_gp)
+        form = HoursForm(initial=_stored(person, year_list), years=year_list, is_gp=person.is_gp, hours_from_hr=from_hr)
     existing = {a.leave_year: a for a in person.allowances.filter(leave_year__in=year_list)}
-    context.update({"form": form, "allowance_rows": [(y, existing.get(y)) for y in year_list]})
+    context.update({"form": form, "allowance_rows": [(y, existing.get(y)) for y in year_list], "hours_from_hr": from_hr,
+                    # Managers only: staff see their figures with no state and no working.
+                    "figures": entitlement.shown(person, year_list) if context["manages"] else []})
     context.update(statement_context(person, request.GET.get("year"), manages=context["manages"], in_dialog=True))
 
 

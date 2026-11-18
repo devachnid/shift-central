@@ -5,11 +5,18 @@
   {% if person.is_gp %}
   <p>Hours: sessions, from the GP rota (4 h 10 min each)</p>
   {% else %}
+  {% if hours_from_hr %}
+  <div class="field">
+    <label>Weekly hours</label>
+    <p>{{ person.weekly_hours|default_if_none:"—" }} <span class="field-help">from Practice HR</span></p>
+  </div>
+  {% else %}
   <div class="field{% if form.weekly_hours.errors %} has-error{% endif %}">
     <label for="id_weekly_hours">Weekly hours</label>
     {{ form.weekly_hours }}
     {% for e in form.weekly_hours.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
   </div>
+  {% endif %}
   <div class="field{% if form.days_per_week.errors %} has-error{% endif %}">
     <label for="id_days_per_week">Days per week</label>
     {{ form.days_per_week }}
@@ -43,6 +50,41 @@
   </div>
   <button class="btn btn-dark">Update profile</button>
 </form>
+{% if figures %}
+<h3>Where the allowances come from</h3>
+{% if allowance_error %}<p class="flash flash-error">{{ allowance_error }}</p>{% endif %}
+<table class="table">
+  <thead><tr><th>Leave year</th><th>From</th><th>Annual leave</th><th>Bank holidays</th><th>How it was worked out</th><th></th></tr></thead>
+  <tbody>
+  {% for f in figures %}{% with r=f.row %}
+  <tr>
+    <td>{{ r.leave_year|year_label }}</td><td>{{ r.from_day|date:"j M Y" }}</td>
+    <td>{{ r.annual_hours|hours_hm }}</td><td>{{ r.bank_holiday_hours|hours_hm }}</td>
+    <td>{{ f.state }}
+      {% if f.working %}<br><span class="field-help">{{ f.working.0 }}<br>{{ f.working.1 }}</span>{% endif %}
+      {% if f.rule %}<br><span class="field-help">The contract gives {{ f.rule.annual|hours_hm }} and {{ f.rule.bank_holiday|hours_hm }}: {{ f.rule.working.0 }}; {{ f.rule.working.1 }}</span>{% endif %}
+      {% if f.orphan %}<br><span class="field-help">The contracts in Practice HR do not change on this day.</span>{% endif %}</td>
+    <td>
+      {% if r.needs_checking %}
+      <form method="post" action="{% url 'profile' person.pk %}?tab=hours" data-dialog-form class="inline-form">{% csrf_token %}
+        <input type="hidden" name="allowance_action" value="confirm"><input type="hidden" name="row" value="{{ r.pk }}">
+        {% if f.takes_days %}<label>Days per week <input type="number" name="days_per_week" min="1" max="7" value="{{ r.days_per_week|default_if_none:'' }}"></label>{% endif %}
+        <button class="btn btn-quiet" aria-label="Confirm the figures from {{ r.from_day|date:'j M Y' }}">Confirm</button>
+      </form>
+      {% endif %}
+      {% if f.differs %}
+      <form method="post" action="{% url 'profile' person.pk %}?tab=hours" data-dialog-form class="inline-form">{% csrf_token %}
+        <input type="hidden" name="allowance_action" value="use"><input type="hidden" name="row" value="{{ r.pk }}">
+        <button class="btn btn-quiet">{% if f.rule %}Use the worked-out figure{% else %}Remove this change{% endif %}</button>
+      </form>
+      {% endif %}
+      <a href="{% url 'allowance-change' r.pk %}" data-dialog>Change…</a>
+    </td>
+  </tr>
+  {% endwith %}{% endfor %}
+  </tbody>
+</table>
+{% endif %}
 {% else %}
 <dl class="defs">
   {% if person.is_gp %}
