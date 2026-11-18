@@ -56,8 +56,10 @@ def index(request):
 
 
 def _posted(request):
-    """[(row id, annual, bank holiday, days per week or None)] from the
-    page's hidden fields; a row whose fields do not read is left out."""
+    """([(row id, annual, bank holiday, days per week or None)], how many
+    rows came with days per week outside 1 to 7) from the page's hidden
+    fields. A row whose fields do not read is left out; one with such
+    days is not confirmed, and counted."""
     items = []
     for value in request.POST.getlist("row"):
         try:
@@ -67,7 +69,8 @@ def _posted(request):
                           int(days) if days else None))
         except (KeyError, ValueError, InvalidOperation):
             continue
-    return [item for item in items if item[3] is None or 1 <= item[3] <= 7]
+    good = [item for item in items if item[3] is None or 1 <= item[3] <= 7]
+    return good, len(items) - len(good)
 
 
 @login_required
@@ -75,13 +78,17 @@ def _posted(request):
 @require_POST
 def confirm(request):
     """Confirm one row or all shown. Each row arrives with the figures the
-    page drew; one whose figures have changed since is skipped."""
-    confirmed, skipped = profiles.confirm_allowances(request.user, _posted(request))
+    page drew; one whose figures have changed since, that is no longer
+    waiting, that is not the viewer's to confirm, or that came with days
+    per week outside 1 to 7 is not confirmed, and counted."""
+    items, bad_days = _posted(request)
+    confirmed, skipped = profiles.confirm_allowances(request.user, items)
+    skipped += bad_days
     if confirmed:
         messages.success(request, f"{confirmed} allowance{'' if confirmed == 1 else 's'} confirmed.")
     if skipped:
-        messages.warning(request, f"{skipped} skipped: {'its' if skipped == 1 else 'their'} figures changed after this page was drawn. "
-                                  "Check what is listed now.")
+        messages.warning(request, f"{skipped} not confirmed: changed since this page was drawn, already confirmed, "
+                                  "not yours to confirm, or days per week not from 1 to 7. Check what is listed now.")
     return _back(request)
 
 

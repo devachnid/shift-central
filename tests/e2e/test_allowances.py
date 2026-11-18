@@ -7,6 +7,7 @@ from decimal import Decimal
 import pytest
 from playwright.sync_api import expect
 
+from people.models import Person
 from tests import clock
 from tests.factories import make_bank_holiday, make_contract, make_person, make_team, make_team_manager, make_user_for
 
@@ -43,6 +44,10 @@ def test_confirm_a_worked_out_figure_and_change_another(page, live_server, manag
     nina.get_by_role("button", name="Confirm").click()
     expect(page.locator(".flash")).to_have_text("1 allowance confirmed.")
     expect(page.locator("#to-check ~ table").first.locator("tr:has-text('Nina Patel')")).to_have_count(0)
+    nina_pk = Person.objects.get(first_name="Nina").pk
+    page.goto(f"{live_server.url}/staff/{nina_pk}/profile/?tab=hours")         # and her profile says who checked it
+    expect(page.locator("tr:has-text('1 Jan 2027')").first).to_contain_text("worked out, checked by Lead Patel on")
+    page.goto(f"{live_server.url}/staff/allowances/")
 
     omar = page.locator("tr:has-text('Omar Patel')")
     omar.get_by_role("link", name="Change…").click()

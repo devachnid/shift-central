@@ -265,3 +265,44 @@ def test_add_hours_change_still_works_where_allowances_are_typed(boss):
     plain = make_person(weekly_hours=D("37.5"), days_per_week=5)                   # no copied contract: exactly as before
     make_allowance(plain, Y27, D("172.5"), 60)
     assert profiles.add_hours_change(boss, plain, JUNE, D("30"), 4, 138, 48, "part time").weekly_hours == D("30")
+
+
+# --- the final review's fixes -----------------------------------------------------------------------
+
+def test_change_refuses_new_figures_for_a_leave_year_that_has_ended(boss, today):
+    part = make_person(first_name="Part", start_date=date(2025, 6, 1), weekly_hours=D("22.5"), days_per_week=3)
+    make_contract(part, "22.5", steps=RECEPTION, to_day=date(2027, 5, 31))
+    make_contract(part, "30", steps=RECEPTION, from_day=JUNE)
+    dated = _worked_out(part, from_day=JUNE)
+    first = Allowance.objects.get(person=part, leave_year=Y27, from_day=Y27)
+    today(date(2028, 1, 4))
+    with pytest.raises(ValueError, match="^That leave year has ended; correct it with an adjustment$"):
+        profiles.change_allowance(boss, first, D("150"), D("36"), "a late correction")
+    first.refresh_from_db()
+    assert (first.annual_hours, first.source) == (D("103.5"), "worked_out")
+    profiles.change_allowance(boss, dated, dated.annual_hours, dated.bank_holiday_hours, "works four days", days_per_week=4)
+    dated.refresh_from_db()
+    assert (dated.days_per_week, dated.source, dated.annual_hours) == (4, "worked_out", D("138"))      # the days alone still change
+    profiles.confirm_allowance(boss, first)                                                        # and Confirm still works
+    first.refresh_from_db()
+    assert not first.needs_checking
+
+
+def test_a_worked_out_row_whose_contract_has_gone_can_be_taken_over_as_typed(boss):
+    sam = _sam()
+    row = _worked_out(sam)
+    sam.contracts.all().delete()
+    with pytest.raises(ValueError, match="reason"):
+        profiles.change_allowance(boss, row, D("172.50"), D("60.00"), "")
+    entries = profiles.change_allowance(boss, row, D("172.50"), D("60.00"), "contract being re-entered in Practice HR")
+    row.refresh_from_db()
+    assert (row.annual_hours, row.source, row.checked_at) == (D("172.5"), "typed", None)
+    assert {(e.field, e.before, e.after) for e in entries} == {("source", "worked_out", "typed")}
+
+
+def test_the_same_figures_on_a_worked_out_year_are_still_no_change(boss):
+    sam = _sam()
+    row = _worked_out(sam)
+    assert profiles.change_allowance(boss, row, D("172.50"), D("60.00"), "nothing new") == []
+    row.refresh_from_db()
+    assert row.source == "worked_out"

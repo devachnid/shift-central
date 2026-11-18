@@ -96,7 +96,7 @@ def test_confirm_one_row(world):
 def test_nobody_confirms_their_own_or_another_teams(world):
     for person in (world["lead"], world["rec"]):
         r = world["c_lead"].post(URL + "confirm/", _post(_row(person)), follow=True)
-        assert "1 skipped" in r.content.decode() and _row(person).needs_checking
+        assert "1 not confirmed: " in r.content.decode() and _row(person).needs_checking
 
 
 def test_confirm_all_shown_skips_a_row_that_changed_after_the_page_was_drawn(world):
@@ -108,7 +108,7 @@ def test_confirm_all_shown_skips_a_row_that_changed_after_the_page_was_drawn(wor
     Allowance.objects.filter(pk=_row(world["rec"]).pk).update(annual_hours=D("150"))       # a contract changed meanwhile
     r = world["c_boss"].post(URL + "confirm/", data, follow=True)
     body = r.content.decode()
-    assert "5 allowances confirmed." in body and "1 skipped: its figures changed after this page was drawn." in body
+    assert "5 allowances confirmed." in body and "1 not confirmed: changed since this page was drawn, already confirmed, " in body
     assert _row(world["rec"]).needs_checking and not _row(world["nina"]).needs_checking
     assert "Confirm all shown (1)" in body
 
@@ -253,3 +253,60 @@ def test_the_health_card_shows_zeros_before_practice_hr_sends_any_contract():
                  "Bank holidays not entered<strong>0</strong>", "Contracts to look at in Practice HR<strong>0</strong>"):
         assert line in body, line
     assert "/staff/allowances/#" not in body
+
+
+# --- the final review's fixes -----------------------------------------------------------------------
+
+def _all_shown(client):
+    body = client.get(URL).content.decode()
+    form = body.split("Confirm all shown")[0].rsplit("<form", 1)[1]
+    data = dict(re.findall(r'name="((?:annual|bank_holiday)_\d+)" value="([^"]+)"', form))
+    data["row"] = re.findall(r'name="row" value="(\d+)"', form)
+    return data
+
+
+def test_the_skipped_message_is_true_whatever_the_cause(world):
+    data = _all_shown(world["c_boss"])
+    Allowance.objects.filter(pk=_row(world["rec"]).pk).update(annual_hours=D("150"))
+    nina = _row(world["nina"])
+    data[f"days_{nina.pk}"] = "9"                                           # not a days per week: not confirmed, and counted
+    body = world["c_boss"].post(URL + "confirm/", data, follow=True).content.decode()
+    assert "4 allowances confirmed." in body
+    assert ("2 not confirmed: changed since this page was drawn, already confirmed, not yours to confirm, "
+            "or days per week not from 1 to 7. Check what is listed now.") in body
+    assert _row(world["nina"]).needs_checking and _row(world["rec"]).needs_checking
+
+
+def test_a_gp_row_at_four_places_is_confirmed_with_confirm_all_shown(world):
+    doc = make_person(first_name="Riley", is_gp=True, start_date=date(2020, 1, 6))
+    make_contract(doc, "8", "6", unit="sessions")
+    entitlement.refresh()
+    row = _row(doc)
+    assert row.bank_holiday_hours == D("66.6667")
+    data = _all_shown(world["c_boss"])
+    assert data[f"bank_holiday_{row.pk}"] == "66.6667"
+    body = world["c_boss"].post(URL + "confirm/", data, follow=True).content.decode()
+    assert "8 allowances confirmed." in body
+    assert not _row(doc).needs_checking and not _row(doc, Y28).needs_checking
+
+
+def test_no_change_link_on_a_row_of_a_leave_year_that_has_ended(world, today):
+    row = _row(world["nina"])
+    today(date(2028, 1, 10))
+    body = client_for(world["boss"]).get(URL).content.decode()            # signed in again: the old session has expired by then
+    assert f'name="row" value="{row.pk}"' in body                          # still to confirm
+    assert f'href="/staff/allowances/{row.pk}/change/"' not in body
+    assert f'href="/staff/allowances/{_row(world["nina"], Y28).pk}/change/"' in body
+
+
+def test_the_health_card_counts_only_what_the_viewer_can_act_on(world):
+    from people.services import profiles
+    lead = world["lead"]
+    for row in world["nina"].allowances.all():
+        profiles.confirm_allowance(lead.user, row)                       # only her own rows are left waiting
+    a = health.figures(lead.user)["allowances"]
+    assert (len(a.to_check), len(a.differ)) == (0, 0)
+    body = world["c_lead"].get("/staff/").content.decode()
+    assert "Allowances to check<strong>0</strong>" in body
+    page = world["c_lead"].get(URL).content.decode()
+    assert "Lead Patel" in page.split('id="differ"')[0] and f'name="row" value="{_row(lead).pk}"' not in page

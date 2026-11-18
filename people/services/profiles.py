@@ -169,21 +169,54 @@ def _change(actor, row, annual_hours, bank_holiday_hours, note):
                            note=note.strip())
 
 
+ENDED = "That leave year has ended; correct it with an adjustment"
+
+
+def _ended(row):
+    return years.year_end(row.leave_year) < timezone.localdate()
+
+
+def _two(figure):
+    return Decimal(figure).quantize(TWO_PLACES)
+
+
 def change_allowance(actor, row, annual_hours, bank_holiday_hours, note, days_per_week=None):
     """Allowance spec, 7.7 Change: type both figures of any row, the
     year's first or a dated one, with a reason; the row becomes typed. On
     a dated row that carries hours the days per week can be changed too,
     at any time: changing only them leaves the figures, the source and the
-    check as they are. Either change needs the reason."""
+    check as they are. Either change needs the reason. The figures of a
+    leave year that has ended are not changed: an adjustment corrects it.
+    A worked-out row in a year the contracts no longer give a figure for
+    is taken over as typed with its own figures and a reason; anywhere
+    else the same figures are no change."""
     _check_manager(actor, row.person)
     new_days = days_per_week is not None and takes_days(row) and days_per_week != row.days_per_week
+    new_figures = (_two(row.annual_hours), _two(row.bank_holiday_hours)) != (_two(annual_hours), _two(bank_holiday_hours))
+    if new_figures and _ended(row):
+        raise ValueError(ENDED)
     with transaction.atomic():
         entries = _change(actor, row, annual_hours, bank_holiday_hours, note)
+        if not new_figures and _orphaned(row):
+            if not (note or "").strip():
+                raise ValueError("A reason is needed to change an allowance that is already set")
+            entries += write_allowance(actor, row, {"source": Source.TYPED, "checked_at": None, "checked_by": None},
+                                       note=note.strip())
         if new_days:
             if not (note or "").strip():
                 raise ValueError("A reason is needed to change an allowance that is already set")
             entries += _correct_days(actor, row, days_per_week, note.strip())
     return entries
+
+
+def _orphaned(row):
+    """A worked-out row in a leave year its contracts no longer give a
+    figure for (terms removed, contract ended or gone). Refresh leaves it
+    as it is; a manager can take it over."""
+    if row.source != Source.WORKED_OUT:
+        return False
+    from leave.services import entitlement       # people → leave at call time, as in hr_sync
+    return not entitlement.worked_for(row.person, row.leave_year).ok
 
 
 def takes_days(row):
@@ -230,16 +263,17 @@ def confirm_allowances(actor, items):
     gone, is no longer waiting, is not the actor's to manage, or whose
     figures have changed since the page was drawn is skipped. Returns
     (confirmed, skipped)."""
-    rows = {r.pk: r for r in Allowance.objects.filter(pk__in=[item[0] for item in items]).select_related("person__team")}
     confirmed = skipped = 0
-    for pk, annual_hours, bank_holiday_hours, days_per_week in items:
-        row = rows.get(pk)
-        if (row is None or not row.needs_checking or not access.can_manage(actor, row.person)
-                or (row.annual_hours, row.bank_holiday_hours) != (annual_hours, bank_holiday_hours)):
-            skipped += 1
-            continue
-        confirm_allowance(actor, row, days_per_week)
-        confirmed += 1
+    with transaction.atomic():      # judged and confirmed in one go: a row cannot change in between
+        rows = {r.pk: r for r in Allowance.objects.filter(pk__in=[item[0] for item in items]).select_related("person__team")}
+        for pk, annual_hours, bank_holiday_hours, days_per_week in items:
+            row = rows.get(pk)
+            if (row is None or not row.needs_checking or not access.can_manage(actor, row.person)
+                    or (row.annual_hours, row.bank_holiday_hours) != (annual_hours, bank_holiday_hours)):
+                skipped += 1
+                continue
+            confirm_allowance(actor, row, days_per_week)
+            confirmed += 1
     return confirmed, skipped
 
 

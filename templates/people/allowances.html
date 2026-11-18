@@ -21,7 +21,7 @@
         {% if i.shown.takes_days %}<label>Days per week <input type="number" name="days_{{ r.pk }}" min="1" max="7" value="{{ r.days_per_week|default_if_none:'' }}"></label>{% endif %}
         <button class="btn btn-quiet" aria-label="Confirm {{ i.person.name }}, {{ r.from_day|date:'j M Y' }}">Confirm</button>
       </form>
-      <a href="{% url 'allowance-change' r.pk %}" data-dialog>Change…</a>
+      {% if not i.shown.ended %}<a href="{% url 'allowance-change' r.pk %}" data-dialog>Change…</a>{% endif %}
     {% endif %}</td>
     {% endwith %}{% else %}
     <td colspan="4">{{ i.text }}</td>

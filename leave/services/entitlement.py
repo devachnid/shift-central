@@ -32,6 +32,7 @@ from people.services import contracts as held
 log = logging.getLogger("leave.entitlement")
 
 FOUR_PLACES = Decimal("0.0001")
+TWO_PLACES = Decimal("0.01")
 HALF = Fraction(1, 2)
 SESSION_HOURS = Fraction(hours.GP_SESSION, 3600)      # 4 h 10 min
 
@@ -298,7 +299,7 @@ def refresh(today=None):
     people = list(current_and_starting(Person.objects.all(), today))
     data = load(people)
     need_check = leave_settings.get().allowances_need_checking
-    copying = held.any_copied()
+    copying = held.in_use()
     written = failed = 0
     for person in people:
         try:
@@ -313,8 +314,9 @@ def refresh(today=None):
 
 
 def _refresh_person(person, today, data, need_check, copying):
-    """`copying` is off until Practice HR has sent anyone a contract: before
-    that nothing is worked out and nothing is copied, exactly as it was."""
+    """`copying` is off until Practice HR has sent anyone a contract or a
+    figure has been worked out: before that nothing is worked out and
+    nothing is copied, exactly as it was."""
     this, following = years.years_for(person, today)
     written = 0
     for year in covered(person, today):
@@ -334,16 +336,29 @@ def _days_in_force(person, rows, day):
     return earlier[-1] if earlier else person.days_per_week
 
 
+def same(row, period):
+    """Whether a row holds the figures a period gives. A typed row is read
+    at two places, as a manager types it: a GP's 66.67 is the contract's
+    66.6667. Every other row is compared exactly."""
+    figures = (Decimal(row.annual_hours), Decimal(row.bank_holiday_hours))
+    rule = (period.annual, period.bank_holiday)
+    if row.source == Source.TYPED:
+        return tuple(f.quantize(TWO_PLACES) for f in figures) == tuple(f.quantize(TWO_PLACES) for f in rule)
+    return figures == rule
+
+
 def _reconcile(person, year, result, rows, need_check):
     """The table in spec 7.2. `rows` is the year's rows, oldest first, kept
-    in step with what is written."""
+    in step with what is written. A dated row that is created or rewritten
+    always waits for a manager, whatever the setting (spec 7.6): the
+    contract cannot give its days per week."""
     now = timezone.now()
-    checked_at = None if need_check else now
     by_day = {r.from_day: r for r in rows}
     written = 0
     for period in result.periods:
         row = by_day.get(period.from_day)
         dated = period.from_day != year
+        checked_at = None if need_check or dated else now
         if row is None:
             extra = {"weekly_hours": period.weekly_hours, "days_per_week": _days_in_force(person, rows, period.from_day),
                      "hours_applied": True} if dated else {}
@@ -352,12 +367,15 @@ def _reconcile(person, year, result, rows, need_check):
             rows.sort(key=lambda r: r.from_day)
             written += 1
             continue
-        same = (row.annual_hours, row.bank_holiday_hours) == (period.annual, period.bank_holiday)
+        matches = same(row, period)
         if row.source == Source.TYPED:
-            if same:        # the manager typed what the contract gives: it follows the contract from now on
-                profiles.write_allowance(None, row, {"source": Source.WORKED_OUT, "checked_at": now, "checked_by": None}, note(period))
+            if matches:     # the manager typed what the contract gives: it follows the contract from now on, at its exact figures
+                fields = {"source": Source.WORKED_OUT, "checked_at": now, "checked_by": None}
+                if (row.annual_hours, row.bank_holiday_hours) != (period.annual, period.bank_holiday):
+                    fields.update(annual_hours=period.annual, bank_holiday_hours=period.bank_holiday)
+                profiles.write_allowance(None, row, fields, note(period))
                 written += 1
-        elif same:
+        elif matches:
             if row.source == Source.COPIED:     # last year's figures turned out to be the contract's: its check is left as it is
                 profiles.write_allowance(None, row, {"source": Source.WORKED_OUT}, note(period))
                 written += 1
@@ -427,13 +445,19 @@ class Shown:
     def differs(self):
         return self.rule is not None or self.orphan
 
+    @property
+    def ended(self):
+        """The row's leave year has ended: its figures are not changed, an
+        adjustment puts it right."""
+        return years.year_end(self.row.leave_year) < timezone.localdate()
+
 
 def _shown(row, result):
     out = Shown(row, state(row))
     if not result.ok:
         return out
     period = next((p for p in result.periods if p.from_day == row.from_day), None)
-    if period is not None and (row.annual_hours, row.bank_holiday_hours) == (period.annual, period.bank_holiday):
+    if period is not None and same(row, period):
         out.working = period.working
     elif row.source == Source.TYPED:
         out.rule, out.orphan = period, period is None and out.dated
@@ -478,11 +502,11 @@ def review(user, team=None, today=None):
         people = people.filter(team=team)
     people = list(people.select_related("team").order_by("name"))
     data = load(people)
-    listing_contracts = held.any_copied()       # the last two lists stay empty until Practice HR has sent a contract
+    listing_contracts = held.in_use()           # the last two lists stay empty until anything comes from Practice HR
     out, empty = Review([], [], [], []), set()
     for person in people:
         can_act = access.can_manage(user, person)
-        look = ""
+        look = stale = ""
         for year in covered(person, today):
             result = worked(person, year, data)
             rows = data.rows.get((person.pk, year), [])
@@ -503,12 +527,17 @@ def review(user, team=None, today=None):
                 look = BAD_TERMS
             if not look and result.gaps:
                 look = f"no contract from {result.gaps[0]:%-d %B %Y}"
+            if (not stale and not result.ok and result.reason != NOT_EMPLOYED
+                    and any(r.source == Source.WORKED_OUT for r in rows)):
+                stale = (f"the {years.label(year)} allowance was worked out, but the contracts no longer give a figure "
+                         f"({result.reason})")
         previous = years.previous_year(years.year_of(person, today))
         if years.year_end(previous) >= LAUNCH:
             result, rows = worked(person, previous, data), data.rows.get((person.pk, previous), [])
             out.to_check += [Item(person, previous, state(row), can_act, Shown(row, state(row))) for row in rows if row.needs_checking]
-            if result.ok and rows and ({(r.from_day, r.annual_hours, r.bank_holiday_hours) for r in rows}
-                                       != {(p.from_day, p.annual, p.bank_holiday) for p in result.periods}):
+            starts = {p.from_day: p for p in result.periods}
+            if result.ok and rows and ({r.from_day for r in rows} != set(starts)
+                                       or not all(same(r, starts[r.from_day]) for r in rows)):
                 out.differ.append(Item(person, previous, FINISHED, can_act))
         if listing_contracts:
             mine = data.contracts.get(person.pk, [])
@@ -516,6 +545,7 @@ def review(user, team=None, today=None):
                 look = NO_CONTRACT
             elif not held.in_force(mine, max(today, person.start_date)):
                 look = "no contract in force today" if person.start_date <= today else "no contract in force on the start date"
+            look = stale or look
             if look:
                 out.contracts.append(Item(person, None, look))
     out.bank_holidays = sorted(empty) if listing_contracts else []

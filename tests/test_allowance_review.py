@@ -189,3 +189,31 @@ def test_the_review_costs_the_same_queries_however_many_people(boss, django_asse
     entitlement.refresh()
     with django_assert_max_num_queries(8):
         assert len(entitlement.review(boss).to_check) == 24
+
+
+# --- the final review's fixes -----------------------------------------------------------------------
+
+def test_the_lists_stay_on_when_every_contract_has_gone(boss):
+    from people.models import Contract
+    _sam(first_name="Sam")
+    _sam(first_name="Kim")
+    entitlement.refresh()
+    for item in entitlement.review(boss).to_check:
+        profiles.confirm_allowance(boss, item.shown.row)
+    Contract.objects.all().delete()
+    BankHoliday.objects.filter(day__year=2028).delete()
+    r = entitlement.review(boss)
+    assert r.bank_holidays == [Y28]
+    assert {i.person.first_name for i in r.contracts} == {"Sam", "Kim"}
+
+
+def test_a_worked_out_year_the_contract_no_longer_gives_a_figure_for_is_a_contract_to_look_at(boss):
+    sam = _sam()
+    entitlement.refresh()
+    contract = sam.contracts.get()
+    contract.leave_base, contract.leave_steps = None, []                # the terms were removed in Practice HR
+    contract.save()
+    entitlement.refresh()
+    assert sam.allowances.filter(source="worked_out").count() == 2      # left as they were
+    assert _lines(entitlement.review(boss).contracts) == [
+        ("Sam", None, "the 2027 allowance was worked out, but the contracts no longer give a figure (a contract with no leave terms)")]

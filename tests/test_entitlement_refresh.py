@@ -397,3 +397,147 @@ def test_refresh_runs_before_the_due_hours_changes(monkeypatch):
     monkeypatch.setattr(profiles, "apply_due_hours_changes", lambda today=None: order.append("hours"))
     hr_sync.sync(Feed())
     assert order == ["allowances", "hours"]
+
+
+# --- the final review's fixes -----------------------------------------------------------------------
+
+def _setting_off():
+    setting = leave_settings.get()
+    setting.allowances_need_checking = False
+    setting.save()
+
+
+def test_with_the_setting_off_a_dated_row_still_waits_for_its_days_per_week(all_teams_user):
+    _setting_off()
+    sam, _, new = _part_time_then_30_from_june()
+    entitlement.refresh()
+    first, dated = _rows(sam)
+    assert not first.needs_checking                                       # the year's first row follows the setting
+    assert dated.needs_checking and dated.checked_at is None             # the contract cannot give the days per week
+    _check(dated, all_teams_user)
+    new.weekly_amount = D("32")                                           # rewritten: it waits again
+    new.save()
+    entitlement.refresh()
+    first, dated = _rows(sam)
+    assert not first.needs_checking and dated.needs_checking and dated.weekly_hours == D("32")
+
+
+def _gp(sessions="8"):
+    """A salaried GP since 2020: 6 weeks of 8 sessions is 48 sessions, 200 h;
+    eight bank holidays × 2 sessions is 16 sessions, 66.6667 h."""
+    doc = make_person(first_name="Riley", is_gp=True, start_date=date(2020, 1, 6))
+    make_contract(doc, sessions, "6", unit="sessions")
+    return doc
+
+
+def test_a_gp_figure_typed_to_two_places_is_adopted_at_the_contracts_exact_figure(all_teams_user):
+    doc = _gp()
+    make_allowance(doc, Y27, D("200.00"), D("66.67"))
+    assert entitlement.refresh().written == 1
+    (row,) = _rows(doc)
+    assert (row.annual_hours, row.bank_holiday_hours, row.source, row.checked_by) == (D("200"), D("66.6667"), "worked_out", None)
+    assert not row.needs_checking
+    from leave.services import hours
+    assert hours.from_hours(row.bank_holiday_hours) % hours.GP_SESSION == 0         # 16 whole sessions
+    assert _audit(row)["bank_holiday_hours"] == ("66.67", "66.6667")
+    assert entitlement.review(all_teams_user).differ == []
+
+
+def test_a_gp_figure_typed_that_is_not_the_contracts_at_two_places_is_kept(all_teams_user):
+    doc = _gp()
+    make_allowance(doc, Y27, D("200.00"), D("66.50"))
+    assert entitlement.refresh().written == 0
+    assert _figures(doc) == [(Y27, D("200"), D("66.5"), "typed", False)]
+    (item,) = entitlement.review(all_teams_user).differ
+    assert item.shown.rule.bank_holiday == D("66.6667")
+
+
+def test_a_worked_out_row_whose_contract_has_gone_stays_as_it_was(all_teams_user):
+    sam = _sam()
+    entitlement.refresh()
+    _check(_rows(sam)[0], all_teams_user)
+    sam.contracts.all().delete()
+    assert entitlement.refresh().written == 0
+    (row,) = _rows(sam)
+    assert (row.annual_hours, row.source, row.checked_by) == (D("172.5"), "worked_out", all_teams_user)
+
+
+def test_a_dated_rows_weekly_hours_follow_the_contracts_weekly_amount():
+    sam, _, new = _part_time_then_30_from_june()
+    entitlement.refresh()
+    new.weekly_amount = D("32")
+    new.save()
+    entitlement.refresh()
+    dated = _rows(sam)[1]
+    assert (dated.from_day, dated.weekly_hours, dated.annual_hours, dated.source) == (JUNE, D("32"), D("147"), "worked_out")
+
+
+def test_refresh_leaves_typed_rows_and_bookings_alone_and_lists_the_typed_figure_that_differs(all_teams_user, today):
+    from datetime import time
+
+    from leave.models import BookingDay
+    from tests.factories import make_booking, make_entry
+    today(date(2027, 2, 1))
+    sam, _, _ = _part_time_then_30_from_june()
+    first = make_allowance(sam, Y27, 110, 36)                                         # not the contract's 103.5
+    dated = make_allowance(sam, Y27, 140, 48, from_day=JUNE, weekly_hours=D("30"), days_per_week=4)
+    make_entry(sam, date(2027, 3, 2), start=time(9), finish=time(17), break_minutes=30)
+    booking = make_booking(sam, date(2027, 3, 2))
+    BookingDay.objects.create(booking=booking, day=date(2027, 3, 2), cost_seconds=27000, account="annual", source="rota")
+    days = list(BookingDay.objects.values_list("pk", "day", "cost_seconds", "account"))
+    entitlement.refresh()
+    for row in (first, dated):
+        kept = Allowance.objects.get(pk=row.pk)
+        assert (kept.annual_hours, kept.bank_holiday_hours, kept.source, kept.weekly_hours, kept.days_per_week) == (
+            row.annual_hours, row.bank_holiday_hours, "typed", row.weekly_hours, row.days_per_week)
+    assert list(BookingDay.objects.values_list("pk", "day", "cost_seconds", "account")) == days
+    assert not AuditEntry.objects.filter(model="people.allowance", object_id__in=[first.pk, dated.pk]).exists()
+    differ = {(i.year, i.shown.row.pk) for i in entitlement.review(all_teams_user).differ}
+    assert {(Y27, first.pk), (Y27, dated.pk)} <= differ
+
+
+def test_every_contract_emptied_then_restored_rewrites_nothing_and_keeps_the_checks(all_teams_user):
+    feed = json.loads(SAMPLE.read_text())["people"]
+
+    class Sent:
+        def __init__(self, records):
+            self.records = records
+
+        def people(self):
+            return self.records
+    assert hr_sync.sync(Sent(feed)).ok
+    for row in Allowance.objects.all():
+        _check(row, all_teams_user)
+    before = list(Allowance.objects.order_by("pk").values_list("pk", "annual_hours", "bank_holiday_hours", "source", "checked_at", "checked_by"))
+    audited = AuditEntry.objects.filter(model="people.allowance").count()
+    emptied = [{**record, "contracts": []} for record in feed]
+    assert hr_sync.sync(Sent(emptied)).ok
+    assert not hr_sync.Contract.objects.exists()
+    r = entitlement.review(all_teams_user)
+    assert len(r.contracts) == 5 and r.to_check == []                     # the lists stay on: everyone has no contract now
+    assert hr_sync.sync(Sent(feed)).ok
+    assert list(Allowance.objects.order_by("pk").values_list("pk", "annual_hours", "bank_holiday_hours", "source", "checked_at", "checked_by")) == before
+    assert AuditEntry.objects.filter(model="people.allowance").count() == audited
+
+
+def test_a_leave_year_from_1_april_counts_the_bank_holidays_in_that_year(today):
+    for row in BankHoliday.objects.filter(day__year=2027):
+        make_bank_holiday(row.day.replace(year=2028), row.name)
+    sam = _sam(leave_year_start="04-01")
+    entitlement.refresh()
+    april = date(2026, 4, 1)
+    in_year = BankHoliday.objects.filter(day__gte=april, day__lte=date(2027, 3, 31)).count()
+    rows = _rows(sam, april)
+    assert [r.from_day for r in rows] == [april]                          # 2026/27 ends after launch, so it is worked out
+    assert rows[0].bank_holiday_hours == D(in_year) * D("7.5")
+    assert rows[0].annual_hours == D("165")                               # no complete year on 1 April 2026: 22 days
+    (nxt,) = _rows(sam, date(2027, 4, 1))
+    assert nxt.bank_holiday_hours == D(BankHoliday.objects.filter(day__gte=date(2027, 4, 1), day__lte=date(2028, 3, 31)).count()) * D("7.5")
+
+
+def test_a_contract_that_changes_on_the_leave_years_first_day_gives_one_period():
+    sam = make_person(start_date=date(2025, 6, 1), weekly_hours=D("22.5"), days_per_week=3)
+    make_contract(sam, "22.5", steps=RECEPTION, to_day=date(2026, 12, 31))
+    make_contract(sam, "30", steps=RECEPTION, from_day=Y27)
+    entitlement.refresh()
+    assert _figures(sam) == [(Y27, D("138"), D("48"), "worked_out", False)]

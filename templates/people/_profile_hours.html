@@ -78,7 +78,7 @@
         <button class="btn btn-quiet">{% if f.rule %}Use the worked-out figure{% else %}Remove this change{% endif %}</button>
       </form>
       {% endif %}
-      <a href="{% url 'allowance-change' r.pk %}" data-dialog>Change…</a>
+      {% if not f.ended %}<a href="{% url 'allowance-change' r.pk %}" data-dialog>Change…</a>{% endif %}
     </td>
   </tr>
   {% endwith %}{% endfor %}

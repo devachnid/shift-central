@@ -4,7 +4,7 @@ the sync's weekly hours and leave's entitlement service read them here."""
 
 from django.utils import timezone
 
-from people.models import Contract
+from people.models import Allowance, Contract
 
 
 def in_force(contracts, day):
@@ -32,3 +32,11 @@ def any_copied():
     """Whether Practice HR has sent anyone a contract yet. Until it has,
     nothing is copied forward and nobody is listed for a missing contract."""
     return Contract.objects.exists()
+
+
+def in_use():
+    """Whether anything has come from Practice HR yet: a copied contract,
+    or a figure worked out from one (which stays after its contract has
+    gone). Until then nothing is copied forward, and the lists of missing
+    contracts and bank holidays stay empty, exactly as before this release."""
+    return any_copied() or Allowance.objects.filter(source=Allowance.Source.WORKED_OUT).exists()
