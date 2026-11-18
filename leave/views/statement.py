@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 
 from leave.forms import AdjustForm, HoursChangeForm
-from leave.services import adjustments, balances, leavers, notify, sickness, years
+from leave.services import adjustments, balances, entitlement, leavers, notify, sickness, years
 from people.models import Person
 from people.services import access, profiles
 
@@ -39,7 +39,16 @@ def statement_context(person, year_text, manages=False, in_dialog=False):
     """What _statement.html needs: the statement and the years to switch
     between (last year's too, which an adjustment can still correct)."""
     n = len(sickness.instances(person))
-    return {"statement": _statement_for(person, year_text), "person": person, "manages": manages, "in_dialog": in_dialog,
+    statement = _statement_for(person, year_text)
+    # Managers only (allowance spec, sections 7.3 and 8): the working behind each full-year figure the
+    # contracts give, and no Add hours change for a year that is worked out from them.
+    workings, from_contract = [], False
+    if manages:
+        data = entitlement.load([person])
+        workings = [(s.row.from_day, *s.working) for s in entitlement.shown(person, [statement.year], data) if s.working]
+        from_contract = entitlement.worked(person, statement.year, data).ok
+    return {"statement": statement, "workings": workings, "hours_from_contract": from_contract,
+            "person": person, "manages": manages, "in_dialog": in_dialog,
             "leaver_text": leavers.figure_text(leavers.figure(person)[1]) if person.end_date else "",
             "leaver_past": person.end_date is not None and person.end_date < timezone.localdate(),
             "sickness_count": n, "sickness_label": sickness.level_label(sickness.level(n)),

@@ -107,7 +107,10 @@ early December 2026, so it is the dependency with a date.
    managers of each team do their own team; an all-teams manager does the managers
    themselves, since nobody sets their own. Allowances can be entered without a
    reason the first time, but a reason is demanded for every later change, so
-   check them as you enter them.
+   check them as you enter them. **For anyone whose contract and leave terms are already in
+   Practice HR**, the weekly hours and both allowances are filled in for you: type only the
+   days per week, then check the figures on Staff › Allowances
+   ([Leave](leave.md#allowances-worked-out-from-the-contract)).
 
 10. **Set the departments' colours** on the Departments page so that each is
     distinct (see [Departments](departments.md)), and archive any the practice
@@ -260,6 +263,45 @@ Allowances already typed stand as they were. The leave pages start empty; before
 asked to request 2027 leave, check that everyone has a 2027 allowance: the Health card's
 *Needs hours and allowances* box lists anyone without hours or without an allowance for the
 current or the next leave year.
+
+**The allowances release (November 2026)** needs no new environment variable, unit or timer (it
+ships one Leave setting, *Allowances worked out from a contract*, which starts as *Wait for a
+manager to check them*): `git pull`,
+`deploy/manage migrate` (it adds the copy of Practice HR's contracts, marks every allowance
+already held as typed, and widens the two figures to four decimal places without changing any
+of them), `deploy/manage collectstatic --noinput`, `systemctl restart shift-central`.
+
+**Before it goes on the production box, Practice HR must hold the practice's real contracts
+and none of its dummy data.** From the first read after the release, anyone with a contract
+for fixed hours in Practice HR has their weekly hours set from it, so a dummy contract would overwrite hours
+a manager typed, and its leave terms would be worked into allowances. Set each contract
+type's usual leave terms in Practice HR before loading staff, and leave GP trainee blank.
+The first run, step by step:
+
+1. Confirm that Practice HR holds the practice's real contracts and none of its dummy data.
+2. Stop the sync, so nothing reads Practice HR while you work:
+   `systemctl stop shift-central-hr-sync.timer`.
+3. Take a backup now: `systemctl start shift-central-backup.service` (the nightly backup's
+   unit, [Backups](../../README.md#backups) in the README), and check that today's
+   `db-YYYY-MM-DD.sqlite3` is in `/var/lib/shift-central/backups/`.
+4. Deploy: the four commands above.
+5. Run `deploy/manage hr_sync --dry-run` and read the counts: people in the feed, people
+   whose weekly hours would be set from a contract, and allowance rows that would be
+   created, changed, taken over from typed, and removed. It changes nothing
+   ([Sync](sync.md#a-dry-run)).
+6. If the counts are what you expect, run `deploy/manage hr_sync`, then open Staff ›
+   Allowances and check the four lists.
+7. Start the sync again: `systemctl start shift-central-hr-sync.timer`.
+
+**To back out**, stop `shift-central-hr-sync.timer` and restore the backup taken in step 3
+as the README's [Restore](../../README.md#restore) section says. Leave the sync timer stopped
+(the Restore steps start it) until the contracts in Practice HR are right, or the next read
+does the same again.
+
+**Enter next leave year's bank holidays before 1 January.** Next year's allowances are
+worked out from the [Bank holidays](leave.md#bank-holidays) list; with none on it for that
+year, its bank holiday allowance is 0 until they are entered, after which those figures are
+worked out again and go back to "not yet checked".
 
 ## Backups
 

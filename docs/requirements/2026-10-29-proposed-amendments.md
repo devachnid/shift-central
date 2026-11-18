@@ -163,3 +163,32 @@ Built as the pack asks (spec 5), with these choices for you to know about:
   hour). Staff by hour counts people working at any point in each hour, takes
   no breaks off and leaves out GPs; if the FindMyShift screenshots show
   something different, tell us.
+
+## Postscript, 18 November 2026 (developers), allowances
+
+Built on your written answers of November 2026 (spec of 18 November):
+contracted hours, sessions and annual leave terms are typed once, on the
+contract in Practice HR, and Shift Central works both allowances out for
+this leave year and the next. This changes LEAVE-01, PAT-06 and PAT-07, and
+LEAVE-10 to 12 for GPs; the decisions are D-34 to D-39. What to know:
+
+- **A worked-out figure counts straight away** and is listed on Staff ›
+  Allowances until a manager confirms it. A figure a manager typed is
+  never overwritten: if it differs from the contract it is listed with
+  both figures, which is the comparison of the December figures you asked
+  for.
+- **A GP's allowance is always whole sessions**, including for a GP who
+  starts or leaves in the year, as you confirmed on 18 November.
+- **GP trainees, bank staff and anyone whose contract has no leave terms
+  are typed as before**, and next year starts with a copy of this year's
+  figures for a manager to check.
+- **Days per week are still typed in Shift Central.** Weekly hours come
+  from the contract once it is in Practice HR; bank staff, whose contract
+  is for no fixed hours, keep the hours a manager types.
+- **Before this goes live, Practice HR must hold the real contracts and
+  none of its dummy data**, because hours are taken from it from the
+  first read.
+- One question, not blocking: a GP's bank holiday figure that is not a
+  whole number of sessions (11.25 for a 5-session GP in a year with nine
+  bank holidays) is rounded to the nearest session, 11. Say if it should
+  always round up.

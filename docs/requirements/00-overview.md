@@ -64,8 +64,8 @@
 | **Shift** | Clock times on a day, with an optional unpaid break and department tag |
 | **Session** | A GP half-day (AM or PM). Counts as **4 h 10 min** for leave |
 | **Scheduled hours** | A shift's length minus unpaid breaks, excluding overtime shifts |
-| **Annual leave allowance** | Full-year hours, typed in by a manager |
-| **Bank holiday allowance** | Separate full-year hours for bank holidays, typed in by a manager; any deficit or credit moves into annual leave |
+| **Annual leave allowance** | Full-year hours, typed in by a manager (amended November 2026: see LEAVE-01 and D-34) |
+| **Bank holiday allowance** | Separate full-year hours for bank holidays, typed in by a manager; any deficit or credit moves into annual leave (amended November 2026: see LEAVE-01 and D-34) |
 | **TOIL** | Time off in lieu — hours from shifts marked "overtime – TOIL", kept in a separate balance |
 | **Instance of absence** | One sickness entry (start date to end date) |
 | **Trigger 1 / 2 / 3+** | 3 / 4 / 5 or more instances of absence in a rolling 6 months |

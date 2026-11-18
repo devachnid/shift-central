@@ -245,6 +245,12 @@ class TypeForm(forms.Form):
 
 class SettingsForm(forms.Form):
     reminder_working_days = forms.IntegerField(min_value=1, max_value=30, label="Remind the managers when a request has waited this many working days")
+    # A choice, not a tick box: a post without the field (another manager's
+    # form, which does not offer it) leaves the setting as it is.
+    allowances_need_checking = forms.TypedChoiceField(
+        choices=[("yes", "Wait for a manager to check them"), ("no", "Count as checked straight away")],
+        coerce=lambda value: value == "yes", empty_value=None, required=False,
+        label="Allowances worked out from a contract")
 
 
 class YearEndForm(forms.Form):

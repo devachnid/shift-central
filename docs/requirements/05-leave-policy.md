@@ -4,9 +4,9 @@ These rules apply to **everyone**: all staff groups and all GPs (partners, salar
 
 ## Allowances
 
-**LEAVE-01** — Each person has two allowances, both **full-year figures in hours, typed in by a manager** from their contract: an **annual leave allowance** and a **bank holiday allowance**. The system does not work them out from service, role or contract.
-*Why:* entitlements vary by individual contract (e.g. 23 days for one person, 285 h for another).
-*Tests:* LV-01, LV-02, LV-03. *HR design:* **differs** — the HR design calculates entitlement as weeks × weekly hours with service steps.
+**LEAVE-01** — Each person has two allowances, both **full-year figures in hours**: an **annual leave allowance** and a **bank holiday allowance**. They are **worked out from the person's contract and its leave terms, held in Practice HR, and a manager checks them**; where a contract has no terms a manager types them. *(Amended November 2026; see D-34 to D-39.)*
+*Why:* entitlements vary by individual contract (e.g. 23 days for one person, 8 weeks for a partner), so the terms are entered once, with the contract, and the arithmetic is done the same way for everyone.
+*Tests:* LV-01, LV-02, LV-03. *HR design:* **differs** — Practice HR holds the terms; AMG Shift Central works out the hours and is the record of them.
 
 **LEAVE-02** — The unit is **hours for everyone, GPs included**. A GP session counts as 4 h 10 min.
 *Tests:* LV-19. *HR design:* **differs** — the HR design uses sessions for GPs.
@@ -36,14 +36,14 @@ These rules apply to **everyone**: all staff groups and all GPs (partners, salar
 
 ## Starters, leavers and hours changes
 
-**LEAVE-10** — For starters and leavers, each allowance = **full-year allowance ÷ 52 × weeks on contract in the leave year**. **A part week counts as a whole week.** The result is **rounded once, to the nearest 0.5 h**.
+**LEAVE-10** — For starters and leavers, each allowance = **full-year allowance ÷ 52 × weeks on contract in the leave year**. **A part week counts as a whole week.** The result is **rounded once, to the nearest 0.5 h**. For a GP the single rounding is to the nearest whole session (4 h 10 min), not the nearest half hour *(amended November 2026)*.
 *Why:* the practice's chosen rule; FindMyShift's day-based figure is what is wrong. A monthly rule was considered and rejected.
 *Tests:* LV-06a, LV-06b, LV-07a, LV-20. *HR design:* **differs** — the HR design accrues day by day.
 
-**LEAVE-11** — The **bank holiday allowance is pro-rated the same way** (LEAVE-10). Bank holidays falling in the person's period are then deducted as usual, and the deficit or credit moves into annual leave.
+**LEAVE-11** — The **bank holiday allowance is pro-rated the same way** (LEAVE-10), a GP's to the nearest whole session. Bank holidays falling in the person's period are then deducted as usual, and the deficit or credit moves into annual leave.
 *Tests:* LV-11a, LV-07b.
 
-**LEAVE-12** — When contracted hours change mid-year, each side of the change is pro-rated by LEAVE-10 using the old and new full-year allowances, **counting part weeks as whole on both sides** (so the week of the change is counted twice — a deliberate choice), and the **total is rounded once** to the nearest 0.5 h. Leave already booked after the change costs whatever the rota shows on the day.
+**LEAVE-12** — When contracted hours change mid-year, each side of the change is pro-rated by LEAVE-10 using the old and new full-year allowances, **counting part weeks as whole on both sides** (so the week of the change is counted twice — a deliberate choice), and the **total is rounded once** to the nearest 0.5 h, or for a GP to the nearest whole session (4 h 10 min). Leave already booked after the change costs whatever the rota shows on the day.
 *Tests:* LV-08a, LV-08b.
 
 **LEAVE-13** — Someone employed for the whole leave year gets **exactly** the full allowance, never more.
@@ -153,7 +153,7 @@ These rules apply to **everyone**: all staff groups and all GPs (partners, salar
 | HR design decision | Practice's choice |
 |---|---|
 | Unit per contract type: sessions for GPs | Hours for everyone; session = 4 h 10 min |
-| Entitlement = weeks × weekly hours; service steps | Full-year hours typed in by manager; no service steps |
+| Entitlement = weeks × weekly hours; service steps | Full-year hours typed in by manager; no service steps (amended November 2026: see LEAVE-01 and D-34) |
 | Accrues day by day | Weeks on contract ÷ 52, part week = whole week, round to 0.5 h |
 | Booking costs the dated weekly pattern | Costs scheduled rota hours that day |
 | Bank holiday: three options | Separate pro-rata allowance (matches one option) |

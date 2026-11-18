@@ -18,6 +18,7 @@ def figures(user):
     Setup is hours, days and an allowance: someone with an allowance for
     neither this leave year nor the next still needs a manager. Whatever day
     a person's leave year starts, those two years begin within a year of today."""
+    from leave.services import entitlement
     from payroll.services import runs
     from messaging.services import push
     from shifts.services import gp_sync, notify
@@ -32,6 +33,10 @@ def figures(user):
     gp_unmatched = gp_sync.unmatched()
     leave = _leave(user, people, today)
     push_status = push.status() if access.is_all_teams(user) else None
+    allowances = entitlement.review(user, today=today)
+    # The card counts what the viewer can act on; the page lists their own rows too, without buttons.
+    allowances.to_check = [i for i in allowances.to_check if i.can_act]
+    allowances.differ = [i for i in allowances.differ if i.can_act]
     return {
         "last_run": hr_sync.last_run(),
         "gp_configured": gp_sync.configured(),
@@ -44,6 +49,7 @@ def figures(user):
         "leaving_soon": _leaving(people, today),
         "payroll_unsent": runs.unsent_due(user, today),
         "push": push_status,
+        "allowances": allowances,
         **leave,
     }
 
@@ -81,7 +87,7 @@ def _leave(user, people, today):
     candidates |= set(Adjustment.objects.filter(person__in=people, account__in=drawing, seconds__lt=0,
                                                 leave_year__range=window).values_list("person", flat=True))
     negative = []
-    for p in people.filter(pk__in=candidates, is_gp=False).order_by("name"):
+    for p in people.filter(pk__in=candidates).order_by("name"):
         statements = (balances.statement(p, year) for year in years.years_for(p, today))
         # A year with no allowance set is "needs hours and allowances", not a deficit.
         if any(not s.missing and s.annual_remaining < 0 for s in statements):

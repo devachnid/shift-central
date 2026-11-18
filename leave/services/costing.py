@@ -53,9 +53,14 @@ def is_placeholder(person, day):
 def placeholder_seconds(person, day):
     """Weekly hours ÷ days per week from the Allowance row in force that day
     when it carries hours, else the person's figures; (0, False) when
-    neither is set, so the caller can say so."""
+    neither is set, so the caller can say so. A row with hours but no days
+    per week (one refresh made, not yet confirmed with its days) takes the
+    person's days."""
     row = prorata.row_in_force(person, day)
-    weekly, days = (row.weekly_hours, row.days_per_week) if row and row.weekly_hours is not None else (person.weekly_hours, person.days_per_week)
+    if row and row.weekly_hours is not None:
+        weekly, days = row.weekly_hours, row.days_per_week or person.days_per_week
+    else:
+        weekly, days = person.weekly_hours, person.days_per_week
     if weekly is None or not days:
         return 0, False
     return hours.from_hours(weekly) // days, True

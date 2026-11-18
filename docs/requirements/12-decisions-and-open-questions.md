@@ -1,6 +1,6 @@
 # 12 — Decisions and open questions
 
-All decisions were made by the practice manager during the interview on **29 October 2026**.
+All decisions were made by the practice manager during the interview on **29 October 2026**, except D-34 to D-39, from her written answers of **November 2026** to "Hours and leave allowances: questions for the practice manager". Those six replace D-10 and D-12 where they differ.
 
 ## Decisions
 
@@ -15,9 +15,9 @@ All decisions were made by the practice manager during the interview on **29 Oct
 | D-07 | GP rotas built in the new grid; two-way sync with the GP rota app; clashes flagged | Need GPs for leave, hours, training | ROTA-GP-01–04 |
 | D-08 | Rota changes saved quietly; staff told on "notify staff" | Avoid flooding staff while planning ahead | ROTA-09 |
 | D-09 | Adding time off removes (or shortens) the shift | No overlap of shifts and leave | ROTA-10 |
-| D-10 | Staff details typed into the new system; new system is master for hours and leave; Practice HR leave design not used | Practice manager's preference | PAT-07 |
+| D-10 | Staff details typed into the new system; new system is master for hours and leave; Practice HR leave design not used (amended November 2026: see LEAVE-01 and D-34) | Practice manager's preference | PAT-07 |
 | D-11 | Leave in **hours** for everyone; GP session = 4 h 10 min | One unit for all | LEAVE-02 |
-| D-12 | Allowances typed in by managers as full-year hours (annual + separate bank holiday) | Entitlements vary by contract | LEAVE-01 |
+| D-12 | Allowances typed in by managers as full-year hours (annual + separate bank holiday) (amended November 2026: see LEAVE-01 and D-34) | Entitlements vary by contract | LEAVE-01 |
 | D-13 | A day costs **scheduled rota hours**, excluding overtime; average day only as placeholder | Reflects individual working patterns | LEAVE-05, 06 |
 | D-14 | Starter/leaver: **weeks ÷ 52, part week = whole week, round once to 0.5 h**. Monthly rule and FindMyShift's daily rule rejected | Practice's chosen formula | LEAVE-10 |
 | D-15 | Hours change: part weeks whole on both sides (53 weeks counted) | Consistent with starter rule | LEAVE-12 |
@@ -39,6 +39,12 @@ All decisions were made by the practice manager during the interview on **29 Oct
 | D-31 | Visuals and functionality very close to FindMyShift, screen by screen; AMG Shift Central name and logo | Staff know it; no training; stated failure measure | FMS-00 |
 | D-33 | System named **AMG Shift Central**; the **dark logo** chosen as the main logo (described in `00`) | Practice manager's choice | `00` |
 | D-32 | All documents and worked examples (incl. LV-22 to LV-25) approved by the practice manager | Review complete | All |
+| D-34 | Annual leave terms are held **per contract**, in Practice HR: **days** a year (weeks for a GP), with steps for complete years of service counted **from the start date**; continuous service is not recognised | Terms differ by contract; one place to type | LEAVE-01, PAT-07 |
+| D-35 | A step up in entitlement applies **from the next leave year** | Practice manager's answer | LEAVE-01 |
+| D-36 | Bank holidays: **one day each**, any additional bank holiday included; for a GP **2 sessions each**, pro rata on a full-time week of **8 sessions** | Practice manager's answer | LEAVE-01, 11 |
+| D-37 | A worked-out allowance **counts at once** and is listed until a manager has checked it; checking can be made automatic later by a setting | Staff can book straight away; a manager sees every figure in the first year | LEAVE-01 |
+| D-38 | **Next year's allowance exists from the first day of this year** | Leave can be booked ahead at any time | LEAVE-01 |
+| D-39 | A GP's allowances are **whole sessions**, part-year figures included | Half-hour rounding would leave a GP minutes short of a session | LEAVE-10–12 |
 
 ## Open questions
 

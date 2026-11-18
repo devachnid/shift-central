@@ -24,10 +24,12 @@ class HoursForm(forms.Form):
                                         label="Leave year starts (MM-DD)", error_messages={"invalid": "Type the month and day as MM-DD, e.g. 04-01"})
     note = forms.CharField(max_length=300, required=False, label="Reason for the change")
 
-    def __init__(self, *args, years, is_gp=False, **kwargs):
+    def __init__(self, *args, years, is_gp=False, hours_from_hr=False, **kwargs):
         super().__init__(*args, **kwargs)
         if is_gp:
             del self.fields["weekly_hours"], self.fields["days_per_week"]
+        elif hours_from_hr:      # weekly hours are Practice HR's: shown, not typed
+            del self.fields["weekly_hours"]
         self.years = years
         for year in years:
             # A year that starts after 1 January is named by its first day.
@@ -55,6 +57,21 @@ class HoursForm(forms.Form):
     def year_fields(self):
         """[(annual field, bank holiday field)] per year, for the template."""
         return [(self[f"annual_{y.year}"], self[f"bank_holiday_{y.year}"]) for y in self.years]
+
+
+class AllowanceChangeForm(forms.Form):
+    """A manager's own figures for one allowance row, the year's first or a
+    dated one (allowance spec, 7.7 Change). A dated row that carries hours
+    also offers its days per week."""
+    annual_hours = forms.DecimalField(max_digits=6, decimal_places=2, min_value=0, label="Annual leave allowance (full year, hours)")
+    bank_holiday_hours = forms.DecimalField(max_digits=6, decimal_places=2, min_value=0, label="Bank holiday allowance (full year, hours)")
+    days_per_week = forms.IntegerField(min_value=1, max_value=7, required=False, label="Days per week from this day")
+    note = forms.CharField(max_length=300, label="Reason for the change")
+
+    def __init__(self, *args, with_days=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not with_days:
+            del self.fields["days_per_week"]
 
 
 class NotesForm(forms.Form):
