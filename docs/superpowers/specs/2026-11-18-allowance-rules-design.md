@@ -128,7 +128,7 @@ A row **needs checking** when its source is `worked_out` or `copied` and `checke
 
 ### 5.4 Weekly hours
 
-For a person with at least one copied contract, `Person.weekly_hours` is an HR field: the sync sets it to the sum of their hours contracts in force today (on the start date for a starter), audited "from Practice HR", and nothing else writes it. The profile shows it read-only with "from Practice HR". `apply_due_hours_changes` copies only days per week for such a person. A GP's weekly hours stay empty, as now. A person with no copied contract is typed exactly as today.
+For a person whose hours contracts in force today (on the start date for a starter) add up to more than 0, `Person.weekly_hours` is an HR field: the sync sets it to that sum, audited "from Practice HR", and nothing else writes it. The profile shows it read-only with "from Practice HR". `apply_due_hours_changes` copies only days per week for such a person. A GP's weekly hours stay empty, as now. A person with no copied contract, or whose only contracts in force are for 0 hours (bank staff), is typed exactly as today.
 
 ## 6. The arithmetic (`leave/services/entitlement.py`)
 
@@ -197,7 +197,8 @@ Each period is matched to the Allowance row with the same `from_day`:
 | Row | What refresh does |
 |---|---|
 | None | Creates it, `worked_out`. A period after the first carries the new weekly hours and the days per week then in force. |
-| `worked_out` or `copied`, same figures | Nothing. |
+| `worked_out`, same figures | Nothing. |
+| `copied`, same figures | Sets `worked_out`; its check is left as it is. |
 | `worked_out` or `copied`, different figures | Writes the new figures, sets `worked_out`, clears `checked_at` and `checked_by`. |
 | `typed`, same figures | Sets `worked_out`, checked. It follows the contract from now on. |
 | `typed`, different figures | Nothing. It is listed (section 8). |
@@ -208,7 +209,7 @@ Every write is audited with no actor and the note "from Practice HR" followed by
 
 ### 7.3 Changes during the year
 
-A new contract or a change of weekly hours or sessions is a new period from the contract's start date (answer 12), which refresh adds as a dated row: what a manager does by hand today with "Add hours change". Pro-rata does the rest, part weeks whole on both sides. For a person whose year is worked out, "Add hours change" is refused with "Enter the new contract in Practice HR".
+A new contract or a change of weekly hours or sessions is a new period from the contract's start date (answer 12), which refresh adds as a dated row: what a manager does by hand today with "Add hours change". Pro-rata does the rest, part weeks whole on both sides. For a person whose year is worked out, "Add hours change" is not offered (the statement says "Hours changes come from Practice HR.") and the service refuses it with "Enter the new contract in Practice HR".
 
 A change to the terms alone alters the figures of every period in each year refresh covers, and they go back to "not yet checked".
 
@@ -218,7 +219,7 @@ Refresh never writes to a leave year that has ended. A contract change dated ins
 
 ### 7.5 A person whose year is not worked out
 
-- If this year has allowance rows and next year has none, next year's first row is created with the full-year figures of this year's last row, `copied`. It needs checking.
+- If this year has allowance rows and next year has none, next year's first row is created with the full-year figures of this year's last row, `copied`. It needs checking. Nothing is copied forward until at least one person has a copied contract, so an app that Practice HR sends no contracts to behaves exactly as today.
 - Nothing else is written. A change of contract inside the year is listed, for a manager to add the hours change by hand.
 - GP trainees, anyone whose contract is "Not worked out", and anyone not yet in Practice HR with a contract are all this case.
 
@@ -231,9 +232,9 @@ While `allowances_need_checking` is on, a row refresh creates or changes needs c
 Whoever can manage the person (`access.can_manage`; no one manages themselves):
 
 - **Confirm**: sets `checked_at` and `checked_by`. Audited.
-- **Change**: types both figures with a reason, as an allowance change needs today. The row becomes `typed`.
+- **Change**: types both figures with a reason, as an allowance change needs today. The row becomes `typed`. On a dated row, Change also takes days per week, at any time; changing only the days per week leaves the figures, the source and the check as they are.
 - **Use the worked-out figure**, on a typed row that differs: writes the worked-out figures, `worked_out`, checked by that manager. On a typed dated row the contracts have no change for, it removes the row.
-- **Days per week** can be corrected as a dated row is confirmed.
+- **Days per week** can also be corrected as a dated row is confirmed.
 
 ## 8. The lists, and the Health card
 
@@ -243,7 +244,7 @@ Whoever can manage the person (`access.can_manage`; no one manages themselves):
 |---|---|
 | **Allowances to check** | Rows that need checking. Also a not-worked-out person with a contract change in the year and no row from that day ("hours changed on 1 June; add the hours change"). |
 | **Allowances that differ from the contract** | Typed rows in a worked-out year whose figures are not the rule's, both shown; a typed dated row on a day the contracts do not change; a finished previous year whose rows are not what the contracts now give. |
-| **Bank holidays not entered** | A leave year refresh covers with no bank holiday in the list. |
+| **Bank holidays not entered** | A leave year refresh covers with no bank holiday in the list. Empty, like the fourth list, until at least one person has a copied contract. |
 | **Contracts to look at in Practice HR** | A current person or starter with no copied contract in force today, or none from a day in the year ("no contract from 1 July"); a person whose contract has steps that do not rise (5.1). Not shown until at least one person has a copied contract, so it stays empty before Practice HR sends any. |
 
 **The page** `/staff/allowances/` (managers) has the four lists, a Team box (the report filters' partial), and for each row: the person, year, from-day, the two figures, the working, and the buttons of section 7.7. "Confirm all shown" confirms every row on the "to check" list as filtered. It posts each row's id and figures; a row whose figures have changed since the page was drawn is skipped and the page says how many.
