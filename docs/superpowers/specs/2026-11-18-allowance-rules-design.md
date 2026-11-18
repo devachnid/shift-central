@@ -3,7 +3,7 @@
 **Date:** 2026-11-18
 **Status:** approved in conversation, section by section; written spec awaiting review
 **Repositories:** `devachnid/practice-hr` (part A) and `devachnid/shift-central` (part B). This file is the one copy of the design; each repository gets its own plan.
-**Requirements:** `docs/requirements/` as amended. This spec changes LEAVE-01, PAT-06 and PAT-07 (section 12) on the practice manager's written answers of November 2026 to "Hours and leave allowances: questions for the practice manager". It builds on the Foundation and leave specs (`2026-10-29-foundation-design.md`, `2026-10-31-leave-design.md`) and on Practice HR's foundation spec, whose constraints, access rules, audit and conventions it reuses unchanged unless this spec says so.
+**Requirements:** `docs/requirements/` as amended. This spec changes LEAVE-01, LEAVE-10 to 12 (for GPs only), PAT-06 and PAT-07 (section 12) on the practice manager's written answers of November 2026 to "Hours and leave allowances: questions for the practice manager". It builds on the Foundation and leave specs (`2026-10-29-foundation-design.md`, `2026-10-31-leave-design.md`) and on Practice HR's foundation spec, whose constraints, access rules, audit and conventions it reuses unchanged unless this spec says so.
 
 Today a manager types every person's two full-year allowances into Shift Central, each year, and types them again when hours change. Contracted hours are typed twice, once in each app. After this spec the contract is entered once, in Practice HR, with its leave terms; Shift Central reads it and works the allowances out, for this leave year and the next, and keeps them in step when the contract changes. A manager checks the figures instead of calculating them.
 
@@ -34,7 +34,7 @@ Today a manager types every person's two full-year allowances into Shift Central
 | **A contract takes its terms from its contract type unless it has its own**, or is marked not worked out. Nothing is pre-filled. | Most contracts of a type share terms; some differ; GP trainees are told theirs by NWSSP. |
 | **A worked-out figure counts straight away**, is marked "not yet checked" and is listed for a manager until confirmed or changed. | Staff can book at once; a manager still sees every figure in the first year (answer 10). |
 | **A typed figure is kept**, and listed while it differs from the contract. | A manager's decision is never silently overwritten; the list is also answer 14's comparison. |
-| **GP figures are whole sessions, not rounded to the half hour.** | A session is 4 h 10 min. Rounding 64 sessions (266 h 40 min) to 266 h 30 min would leave a partner ten minutes short of the last one. |
+| **GP figures are whole sessions, not rounded to the half hour**, full-year and part-year alike. | A session is 4 h 10 min. Rounding 64 sessions (266 h 40 min) to 266 h 30 min would leave a partner ten minutes short of the last one. The practice manager confirmed whole sessions for a GP who starts or leaves in the year (18 November 2026). |
 | **Days per week stays typed in Shift Central.** | It is used only for the leave placeholder (PAT-05); deriving it from Practice HR's working patterns is a larger change no one asked for. |
 | **No email about figures to check.** The Health card carries them. | It is setup work a manager does when they choose, as "needs hours and allowances" is today. |
 
@@ -46,7 +46,7 @@ Practice HR                                   Shift Central
 ContractType: usual leave terms               people.Contract (a copy of the feed)
 Contract: weekly amount, dates, terms   -->   entitlement service: full-year figures per period
 GET /api/v1/people (adds "contracts")         Allowance rows: worked out / typed / copied, checked or not
-                                              existing pro-rata, statements, bookings: unchanged
+                                              existing pro-rata (GPs to whole sessions), statements, bookings
 ```
 
 - **Practice HR** owns: who is employed, each contract's dates, weekly hours or sessions, its type's full-time week, and its leave terms.
@@ -132,7 +132,7 @@ For a person with at least one copied contract, `Person.weekly_hours` is an HR f
 
 ## 6. The arithmetic (`leave/services/entitlement.py`)
 
-Pure functions over a person's copied contracts, their start date and the bank holiday list. All figures are **full-year**; pro-rata for starters, leavers and changes stays in `prorata.py`, unchanged.
+Pure functions over a person's copied contracts, their start date and the bank holiday list. All figures are **full-year**; pro-rata for starters, leavers and changes stays in `prorata.py`, with the one change in section 6.1.
 
 **Service.** Complete years from the person's start date to the first day of the leave year (a year the person starts in has none). The annual leave figure is the base, or the total of the highest step whose `after_years` is not more than the service. It is fixed for the whole leave year, so a step always starts with a leave year (answer 7).
 
@@ -162,6 +162,19 @@ Pure functions over a person's copied contracts, their start date and the bank h
 | Salaried GP, 5 sessions, 9 bank holidays | 6 weeks | 30 sessions, 125 h | 11.25, rounded to 11 sessions, 45 h 50 min |
 
 Service: a start date of 1 June 2025 is 1 complete year on 1 January 2027, so 2027 is at the 1-year step all year; 3 years are reached on 1 June 2028 and a 3-year step applies from 1 January 2029.
+
+### 6.1 Part-year figures for a GP
+
+LEAVE-10 to 12 round a pro-rated allowance once, to the nearest half hour. For a GP (`Person.is_gp`) `prorata.allowance` rounds it once to the nearest **whole session** instead (4 h 10 min, a half session rounding up), for both allowances and whether the full-year figure was worked out or typed. Everything else in the rule is as it is: part weeks count whole, the week of a change counts on both sides, and the total is capped at the largest full-year figure, so a GP employed all year still gets exactly the full allowance.
+
+A salaried GP on 8 sessions (200 h and 66 h 40 min) who starts on 1 July 2027 is on contract for 27 weeks:
+
+| Allowance | 27 ÷ 52 of the full year | Today | After this spec |
+|---|---|---|---|
+| Annual leave | 103 h 51 min, 24.92 sessions | 104 h | 25 sessions, 104 h 10 min |
+| Bank holidays | 34 h 37 min, 8.31 sessions | 34 h 30 min | 8 sessions, 33 h 20 min |
+
+Staff on hours contracts are not affected.
 
 **The working.** Each figure comes with a line of text, for example "23 days (1 complete year on 1 Jan 2027) × 37.5 h ÷ 5 = 172 h 30 min" or "8 bank holidays × 2 sessions × 6 ÷ 8 = 12 sessions = 50 h". It is shown beside the figure and is the note on the audit entry when the figure is written.
 
@@ -195,7 +208,7 @@ Every write is audited with no actor and the note "from Practice HR" followed by
 
 ### 7.3 Changes during the year
 
-A new contract or a change of weekly hours or sessions is a new period from the contract's start date (answer 12), which refresh adds as a dated row: what a manager does by hand today with "Add hours change". The existing pro-rata does the rest, part weeks whole on both sides. For a person whose year is worked out, "Add hours change" is refused with "Enter the new contract in Practice HR".
+A new contract or a change of weekly hours or sessions is a new period from the contract's start date (answer 12), which refresh adds as a dated row: what a manager does by hand today with "Add hours change". Pro-rata does the rest, part weeks whole on both sides. For a person whose year is worked out, "Add hours change" is refused with "Enter the new contract in Practice HR".
 
 A change to the terms alone alters the figures of every period in each year refresh covers, and they go back to "not yet checked".
 
@@ -258,12 +271,12 @@ Log lines carry ids and counts, never names, figures or terms.
 
 ## 10. Testing
 
-- **Arithmetic**: the table in section 6, the service example, rounding at the quarter hour, a fractional session count, two contracts in force together, and each "not worked out" reason.
+- **Arithmetic**: the table in section 6, the service example, rounding at the quarter hour, a fractional session count, the GP part-year table in 6.1 (and an hours person's part-year figure unchanged), two contracts in force together, and each "not worked out" reason.
 - **The feed**: both repositories hold the same file, `tests/data/people_feed.json`. Practice HR tests that a fixed set of people produces it exactly; Shift Central tests that it reads it. A change to the feed changes the file in both.
 - **Refresh**: each row of the table in 7.2; a mid-year contract; a corrected contract date; terms changed; the setting off; a finished year untouched; copy-forward; pinned clocks across 1 January for both years.
 - **Practice HR**: the validation rules of 4.2, `resolved()` for each choice, the admin pages, the 9 to 8 migration, audit entries.
 - **Screens**: the Health card counts, the page's permissions (a team manager sees only their teams; no one confirms their own), "Confirm all shown" skipping a changed row, and one browser test that confirms a figure.
-- **Unchanged behaviour**: with no copied contracts every existing test passes untouched.
+- **Unchanged behaviour**: with no copied contracts every existing test passes untouched, except any that pins a GP's part-year figure to the half hour.
 
 ## 11. Order of work
 
@@ -276,20 +289,20 @@ Nothing needs switching on. Shift Central starts working figures out for a perso
 ## 12. Requirement changes
 
 - **LEAVE-01** becomes: each person has two full-year allowances in hours. They are worked out from the person's contract and its leave terms, held in Practice HR, and a manager checks them; where a contract has no terms a manager types them.
+- **LEAVE-10, 11 and 12** gain: for a GP the single rounding is to the nearest whole session (4 h 10 min), not the nearest half hour.
 - **PAT-06** becomes: a change of hours is entered as a new contract in Practice HR from its date; Shift Central works out the new allowances from that date. Where allowances are typed, the manager adds the hours change as now.
 - **PAT-07** becomes: Practice HR is the master for contracts, weekly hours or sessions, and leave terms. Shift Central is the master for days per week, allowances, leave and balances. Practice HR's built-in leave design is not used.
-- **New decisions** D-34 to D-38 in `12-decisions-and-open-questions.md`: terms per contract in days or weeks with service steps from the start date; a step applies from the next leave year; bank holidays one day each, 2 sessions for a GP on a full-time week of 8; a worked-out figure counts at once and is checked by a manager, automatic later by a setting; next year's allowance exists from the start of this year.
+- **New decisions** D-34 to D-39 in `12-decisions-and-open-questions.md`: terms per contract in days or weeks with service steps from the start date; a step applies from the next leave year; bank holidays one day each, 2 sessions for a GP on a full-time week of 8; a worked-out figure counts at once and is checked by a manager, automatic later by a setting; next year's allowance exists from the start of this year; a GP's allowances are whole sessions, part-year included.
 - A postscript in `2026-10-29-proposed-amendments.md` records the change for the practice manager.
 
-## 13. Questions for the practice manager, not blocking
+## 13. A question for the practice manager, not blocking
 
-1. **A GP who starts or leaves part way through a year.** LEAVE-10 rounds the part-year figure to the nearest half hour for everyone, which for a GP is not a whole number of sessions (a salaried GP on 8 sessions starting 1 July gets 104 h, which is 24 sessions and 4 hours over). This spec does not change that. Should a GP's part-year figure be rounded to whole sessions instead?
-2. **A GP bank holiday figure that is not a whole number of sessions** (a 5-session GP in a year with 9 bank holidays, 11.25) is rounded to the nearest whole session here. Say if it should round up.
+**A GP bank holiday figure that is not a whole number of sessions** (a 5-session GP in a year with 9 bank holidays, 11.25) is rounded to the nearest whole session here, as a part-year figure is (6.1). Say if it should always round up.
 
 ## 14. Not in this spec
 
 - Deriving days per week from Practice HR's working patterns.
-- Any change to pro-rata, costing, carry-over or year end.
+- Any change to pro-rata beyond 6.1, or to costing, carry-over or year end.
 - Recognising continuous service, or a service date other than the start date.
 - Practice HR's own leave policies, pots and ledger: left as they are, switched off.
 - Matching GPs between the apps by employee id instead of email.
