@@ -6,7 +6,9 @@ which the Health card reads.
 Each record's `contracts` (allowance spec, 5.1) are copied to
 people.Contract, replacing the person's rows; a record without the key
 leaves the copy alone. A person whose hours contracts in force add up to
-more than 0 has their weekly hours from them (5.4)."""
+more than 0 has their weekly hours from them (5.4). After a good run the
+allowances are worked out from the copies
+(leave.services.entitlement.refresh)."""
 
 import logging
 from datetime import date, timedelta
@@ -214,7 +216,7 @@ def sync(client=None):
         run.finished_at = timezone.now()
         run.save()
     if run.ok:
-        from leave.services import leavers       # people → leave only here, at call time
+        from leave.services import entitlement, leavers       # people → leave only here, at call time
         flag_failed = False
         for person in leaving:
             try:
@@ -225,6 +227,15 @@ def sync(client=None):
         if flag_failed:
             # Shown on the Health card's sync line: the date is not "changed" on the next sync, so nothing retries it.
             run.message = (run.message + "; " if run.message else "") + "leaver flag failed; see the journal"
+            run.save(update_fields=["message"])
+        try:
+            with transaction.atomic():      # allowance spec, section 7: before the due hours changes, so today's new rows are seen
+                allowances_failed = entitlement.refresh().failed > 0
+        except Exception:
+            log.exception("allowances failed")
+            allowances_failed = True
+        if allowances_failed:
+            run.message = (run.message + "; " if run.message else "") + "allowances failed; see the journal"
             run.save(update_fields=["message"])
         try:
             with transaction.atomic():

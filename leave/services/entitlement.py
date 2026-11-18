@@ -11,17 +11,25 @@ starters, leavers and changes are pro-rated in prorata.py as before.
 refresh() keeps the Allowance rows in step after each read of Practice HR;
 review() builds the lists a manager works through. Nothing extra is stored."""
 
+import logging
 import math
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from fractions import Fraction
 
+from django.db import transaction
+from django.utils import timezone
+
 from leave.models import BankHoliday
 from leave.services import hours, years
+from leave.services import settings as leave_settings
 from leave.services.yearend import LAUNCH
-from people.models import Allowance, Contract
+from people.models import Allowance, Contract, Person
+from people.services import audit, profiles
 from people.services import contracts as held
+
+log = logging.getLogger("leave.entitlement")
 
 FOUR_PLACES = Decimal("0.0001")
 HALF = Fraction(1, 2)
@@ -35,6 +43,8 @@ MIXED = "hours and sessions contracts in the same leave year"
 NO_TERMS = "a contract with no leave terms"
 NO_HOURS = "a contract with no fixed weekly amount"       # bank staff: typed, and nobody's mistake
 BAD_TERMS = "leave terms that cannot be worked out"       # steps that do not rise: a contract to look at
+
+Source = Allowance.Source
 
 
 @dataclass(frozen=True)
@@ -258,3 +268,123 @@ def covered(person, today=None):
     """The leave years refresh keeps in step: the person's current one and
     the next, less a year that ended before launch (2026 is never worked out)."""
     return [year for year in years.years_for(person, today) if years.year_end(year) >= LAUNCH]
+
+
+# --- refresh (spec section 7) -----------------------------------------------------
+
+def note(period, prefix=audit.SYNC_NOTE):
+    """The audit note for a figure written from a period: where it came
+    from, then the working."""
+    return f"{prefix}: {period.working[0]}; {period.working[1]}"[:300]
+
+
+def current_and_starting(people, today):
+    """Current people and starters, as the Health card counts them."""
+    return (people.current(on=today) | people.filter(start_date__gt=today)).distinct()
+
+
+@dataclass(frozen=True)
+class Refreshed:
+    written: int
+    failed: int
+
+
+def refresh(today=None):
+    """Bring every current person's and starter's allowance rows into step
+    with their contracts (spec section 7). Run by hr_sync after each good
+    read, inside a transaction of the caller's. One person's failure is
+    logged by id and skipped; `failed` counts them."""
+    today = today or timezone.localdate()
+    people = list(current_and_starting(Person.objects.all(), today))
+    data = load(people)
+    need_check = leave_settings.get().allowances_need_checking
+    copying = held.any_copied()
+    written = failed = 0
+    for person in people:
+        try:
+            with transaction.atomic():
+                written += _refresh_person(person, today, data, need_check, copying)
+        except Exception:
+            log.exception("allowances: person %s", person.pk)
+            failed += 1
+    if written or failed:
+        log.info("allowances: %s rows written, %s people skipped", written, failed)
+    return Refreshed(written, failed)
+
+
+def _refresh_person(person, today, data, need_check, copying):
+    """`copying` is off until Practice HR has sent anyone a contract: before
+    that nothing is worked out and nothing is copied, exactly as it was."""
+    this, following = years.years_for(person, today)
+    written = 0
+    for year in covered(person, today):
+        result = worked(person, year, data)
+        rows = data.rows.setdefault((person.pk, year), [])
+        if result.ok:
+            written += _reconcile(person, year, result, rows, need_check)
+        elif copying and year == following and not rows and result.reason != NOT_EMPLOYED:
+            written += _copy_forward(person, this, following, data, need_check)
+    return written
+
+
+def _days_in_force(person, rows, day):
+    """The days per week in force just before `day`: the latest earlier row
+    of the year that carries them, else the person's."""
+    earlier = [r.days_per_week for r in rows if r.from_day < day and r.days_per_week]
+    return earlier[-1] if earlier else person.days_per_week
+
+
+def _reconcile(person, year, result, rows, need_check):
+    """The table in spec 7.2. `rows` is the year's rows, oldest first, kept
+    in step with what is written."""
+    now = timezone.now()
+    checked_at = None if need_check else now
+    by_day = {r.from_day: r for r in rows}
+    written = 0
+    for period in result.periods:
+        row = by_day.get(period.from_day)
+        dated = period.from_day != year
+        if row is None:
+            extra = {"weekly_hours": period.weekly_hours, "days_per_week": _days_in_force(person, rows, period.from_day),
+                     "hours_applied": True} if dated else {}
+            rows.append(profiles.add_allowance(None, person, year, period.from_day, period.annual, period.bank_holiday,
+                                               Source.WORKED_OUT, note(period), checked_at=checked_at, **extra))
+            rows.sort(key=lambda r: r.from_day)
+            written += 1
+            continue
+        same = (row.annual_hours, row.bank_holiday_hours) == (period.annual, period.bank_holiday)
+        if row.source == Source.TYPED:
+            if same:        # the manager typed what the contract gives: it follows the contract from now on
+                profiles.write_allowance(None, row, {"source": Source.WORKED_OUT, "checked_at": now, "checked_by": None}, note(period))
+                written += 1
+        elif same:
+            if row.source == Source.COPIED:     # last year's figures turned out to be the contract's: its check is left as it is
+                profiles.write_allowance(None, row, {"source": Source.WORKED_OUT}, note(period))
+                written += 1
+        else:
+            fields = {"annual_hours": period.annual, "bank_holiday_hours": period.bank_holiday, "source": Source.WORKED_OUT,
+                      "checked_at": checked_at, "checked_by": None}
+            if dated:
+                fields["weekly_hours"] = period.weekly_hours
+            profiles.write_allowance(None, row, fields, note(period))
+            written += 1
+    starts = {period.from_day for period in result.periods}
+    for row in [r for r in rows if r.from_day != year and r.source == Source.WORKED_OUT and r.from_day not in starts]:
+        profiles.remove_allowance(None, row, f"{audit.SYNC_NOTE}: the contracts no longer change on this day")
+        rows.remove(row)
+        written += 1
+    return written
+
+
+def _copy_forward(person, this, following, data, need_check):
+    """Spec 7.5: a year that is not worked out and has no rows yet starts
+    with the full-year figures of this year's last row, to be checked."""
+    earlier = data.rows.get((person.pk, this), [])
+    if not earlier:
+        return 0
+    last = earlier[-1]
+    row = profiles.add_allowance(None, person, following, following, last.annual_hours, last.bank_holiday_hours, Source.COPIED,
+                                 f"{audit.SYNC_NOTE}: copied from {years.label(this)}",
+                                 checked_at=None if need_check else timezone.now())
+    data.rows[(person.pk, following)].append(row)
+    return 1

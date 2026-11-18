@@ -26,3 +26,9 @@ def hours_from_hr(person, today=None):
     hours, someone between contracts, and a GP."""
     today = today or timezone.localdate()
     return bool(weekly_hours_on(list(person.contracts.all()), max(today, person.start_date)))
+
+
+def any_copied():
+    """Whether Practice HR has sent anyone a contract yet. Until it has,
+    nothing is copied forward and nobody is listed for a missing contract."""
+    return Contract.objects.exists()

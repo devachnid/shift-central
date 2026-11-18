@@ -1,6 +1,13 @@
 """Every write to a person's typed fields and allowances (spec, sections 3
 and 6). Each change is audited per field; an allowance that already
-exists needs a typed reason to change (LEAVE-31)."""
+exists needs a typed reason to change (LEAVE-31).
+
+Allowance spec 2026-11-18: an allowance row is typed, worked out from the
+person's contract or copied from last year's (Allowance.source), and the
+last two wait for a manager's check. write_allowance, add_allowance and
+remove_allowance are the only writers of a row's figures, source and check:
+the manager's actions below use them, and so does leave's entitlement
+service when it keeps the figures in step with Practice HR."""
 
 from decimal import Decimal
 
@@ -96,6 +103,56 @@ def set_allowance(actor, person, leave_year, annual_hours, bank_holiday_hours, n
         setattr(allowance, field, after)
     allowance.save(update_fields=list(changes))
     return audit.record(actor, allowance, changes, note=note.strip())
+
+
+# --- an allowance row's figures, source and check (allowance spec, 5.2 and 7) ----
+
+def checked_text(row):
+    """How a row's check reads in the audit trail."""
+    if row.checked_at is None:
+        return ""
+    return f"by {row.checked_by.email}" if row.checked_by_id else "automatically"
+
+
+def _audited(row):
+    return {"annual_hours": hours.plain(row.annual_hours), "bank_holiday_hours": hours.plain(row.bank_holiday_hours),
+            "weekly_hours": None if row.weekly_hours is None else str(Decimal(row.weekly_hours).quantize(TWO_PLACES)),
+            "days_per_week": row.days_per_week,
+            "source": row.source, "checked": checked_text(row)}
+
+
+def write_allowance(actor, row, fields, note=""):
+    """Set fields on an Allowance row and audit what changed. `actor` None
+    is the app, keeping the figures in step with Practice HR."""
+    before = _audited(row)
+    for name, value in fields.items():
+        setattr(row, name, value)
+    row.save(update_fields=list(fields))
+    after = _audited(row)
+    return audit.record(actor, row, {name: (before[name], after[name]) for name in after}, note=note)
+
+
+def add_allowance(actor, person, leave_year, from_day, annual_hours, bank_holiday_hours, source, note, **fields):
+    """A new Allowance row that is not a manager's typing: worked out from
+    a contract, or copied from last year's. `fields` are the row's others
+    (checked_at, weekly_hours, days_per_week, hours_applied)."""
+    row = Allowance.objects.create(person=person, leave_year=leave_year, from_day=from_day, annual_hours=annual_hours,
+                                   bank_holiday_hours=bank_holiday_hours, source=source, **fields)
+    after = _audited(row)
+    after["from_day"] = from_day.isoformat() if from_day != leave_year else ""
+    audit.record(actor, row, {name: ("", value) for name, value in after.items()}, note=note)
+    return row
+
+
+def remove_allowance(actor, row, note):
+    """Delete a dated row. Audited against the person, so the line stays in
+    their History after the row has gone."""
+    if row.from_day == row.leave_year:
+        raise ValueError("The year's first allowance is changed, not removed")
+    gone = f"{hours.plain(row.annual_hours)} h and {hours.plain(row.bank_holiday_hours)} h"
+    entries = audit.record(actor, row.person, {f"allowance from {row.from_day:%-d %b %Y}": (gone, "")}, note=note)
+    row.delete()
+    return entries
 
 
 NOTES_BEFORE = "(notes)"
