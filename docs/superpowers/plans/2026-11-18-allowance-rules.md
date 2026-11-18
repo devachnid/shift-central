@@ -4,7 +4,7 @@
 
 **Goal:** AMG Shift Central reads each person's contracts and leave terms from Practice HR's staff feed, works their two full-year leave allowances out for this leave year and the next, keeps them in step when a contract changes, and gives managers a page to check the figures on.
 
-**Architecture:** The sync copies each feed record's `contracts` into a new `people.Contract` table and owns `Person.weekly_hours` for anyone who has one. A new service, `leave/services/entitlement.py`, holds the arithmetic as pure functions over prefetched data, a `refresh()` that reconciles `people.Allowance` rows after every good sync, and a `review()` that builds the manager's four lists on demand. `Allowance` rows gain a source (typed, worked out, copied) and a check, every write to one goes through `people/services/profiles.py` and is audited, and pro-rata is untouched except that a GP's single rounding is to the whole session.
+**Architecture:** The sync copies each feed record's `contracts` into a new `people.Contract` table and owns `Person.weekly_hours` for anyone whose hours contracts in force add up to more than 0. A new service, `leave/services/entitlement.py`, holds the arithmetic as pure functions over prefetched data, a `refresh()` that reconciles `people.Allowance` rows after every good sync, and a `review()` that builds the manager's four lists on demand. `Allowance` rows gain a source (typed, worked out, copied) and a check, every write to one goes through `people/services/profiles.py` and is audited, and pro-rata is untouched except that a GP's single rounding is to the whole session.
 
 **Tech Stack:** Django 5.2, Python 3.13, SQLite, pytest-django, Playwright for one browser test. Server-rendered templates with `static/js/modal.js` for pop-ups; no new JavaScript. Lint is `ruff check .` (pyflakes rules only).
 
@@ -20,6 +20,7 @@
 - With no copied contract anywhere the app behaves exactly as today: nothing is worked out, nothing is copied forward, the four new Health lines read 0. Every existing test passes untouched. (A trial run of the whole suite with this plan applied passed with no existing test edited; no existing test pins a GP's part-year figure to the half hour.)
 - A full-year figure for an hours contract is rounded to the nearest half hour, a quarter hour rounding up. For a sessions contract it is rounded to the nearest whole session, a half rounding up, and stored as sessions × 25 ÷ 6 hours to 4 decimal places. A GP session is 15 000 seconds (`leave.services.hours.GP_SESSION`); `hours.from_hours(Decimal("266.6667"))` is exactly 960 000.
 - `Allowance.annual_hours` and `bank_holiday_hours` are `max_digits=8, decimal_places=4`. What a manager types stays at 2 places (the forms and `set_allowance` quantise to 0.01). Show a figure with `hours.plain()` (2 places unless it needs 4) or as hours and minutes with `hours.fmt()`.
+- A person's weekly hours are Practice HR's only while their hours contracts in force today (on the start date, for a starter) add up to more than 0: `contracts.hours_from_hr(person)`. Everyone else is typed as today: no copied contract, bank staff on a 0-hour contract, someone between contracts. A GP has no weekly hours.
 - A row **needs checking** when `source in ("worked_out", "copied") and checked_at is None`. `checked_at` set with `checked_by` null means the app checked it itself.
 - A leave year is named by its first day (`Allowance.leave_year`); the year's first row has `from_day == leave_year`, for a starter in the year too. Refresh covers `years.years_for(person)` less any year that ended before `leave.services.yearend.LAUNCH` (1 January 2027), and never writes to a year that has ended.
 - Permissions: a manager action needs `access.can_manage(actor, person)` (nobody manages themselves). Only `access.is_all_teams` changes `LeaveSetting.allowances_need_checking`.
@@ -42,7 +43,7 @@
 | `leave/services/hours.py`, `leave/templatetags/leave_extras.py` | modify | `plain()`; the `plain_hours` and `hours_hm` filters. |
 | `leave/services/prorata.py`, `leave/services/balances.py` | modify | A GP's part-year rounding to the whole session; the statement's wording. |
 | `people/services/contracts.py` | create | Which copied contracts are in force on a day and what they add up to. |
-| `people/services/hr_sync.py` | modify | Reads `contracts`; owns weekly hours; calls `entitlement.refresh()`. |
+| `people/services/hr_sync.py` | modify | Reads `contracts`; owns weekly hours where a contract gives them; calls `entitlement.refresh()`. |
 | `people/services/profiles.py` | modify | Weekly hours rule; the row writers; confirm, change, use the worked-out figure. |
 | `leave/services/entitlement.py` | create | The arithmetic, `load`, `refresh`, `review`, `shown`, `state`. |
 | `leave/services/settings.py`, `leave/forms.py`, `leave/views/settings.py`, `templates/leave/settings.html` | modify | The Leave settings switch. |
@@ -51,7 +52,7 @@
 | `templates/people/allowances.html`, `_allowance_confirm_fields.html`, `allowance_change_dialog.html` | create | The page, the hidden fields a confirm posts, the Change pop-up. |
 | `ui/context_processors.py` | modify | "Allowances" under Staff in the side panel, for managers. |
 | `people/views/profile.py`, `templates/people/_profile_hours.html` | modify | Read-only weekly hours; each row's state, working and buttons. |
-| `leave/views/statement.py`, `templates/leave/_statement.html` | modify | The working under the statement, for managers. |
+| `leave/views/statement.py`, `templates/leave/_statement.html` | modify | The working under the statement, for managers; no Add hours change for a worked-out year. |
 | `tests/factories.py` | modify | `make_contract`. |
 | `tests/data/people_feed.json` | create | The sample feed, byte for byte the same as Practice HR's. |
 | `tests/test_allowance_models.py`, `test_leave_prorata_gp.py`, `test_hr_sync_contracts.py`, `test_entitlement.py`, `test_entitlement_refresh.py`, `test_allowance_actions.py`, `test_allowance_review.py`, `test_allowances_page.py`, `test_allowance_profile.py`, `tests/e2e/test_allowances.py` | create | One file per task. |
@@ -819,12 +820,12 @@ git commit -m "Leave: a GP's part-year allowance is rounded to the whole session
 **Interfaces:**
 - Consumes: `Contract`, `make_contract` (Task 1); `audit.record`, `audit.SYNC_NOTE` ("from Practice HR").
 - Produces:
-  - `people.services.contracts.in_force(contracts, day) -> list`; `weekly_hours_on(contracts, day) -> Decimal | None`; `from_hr(person) -> bool`.
-  - `hr_sync.sync(client=None) -> SyncRun` now copies each record's `contracts` and sets weekly hours. A malformed contract raises `BadRecord("record N in the feed: missing or bad contracts")`.
-  - `profiles.update_hours(actor, person, weekly_hours, days_per_week, note="")` ignores `weekly_hours` for a person with a copied contract; `profiles.set_weekly_hours_from_hr(person, weekly_hours) -> list[AuditEntry]`.
+  - `people.services.contracts.in_force(contracts, day) -> list`; `weekly_hours_on(contracts, day) -> Decimal | None`; `hours_from_hr(person, today=None) -> bool`: whether the person's hours contracts in force today (on the start date, for a starter) add up to more than 0.
+  - `hr_sync.sync(client=None) -> SyncRun` now copies each record's `contracts` and sets weekly hours where `hours_from_hr`. A malformed contract raises `BadRecord("record N in the feed: missing or bad contracts")`.
+  - `profiles.update_hours(actor, person, weekly_hours, days_per_week, note="")` ignores `weekly_hours` for a person whose hours are Practice HR's (`hours_from_hr`); `profiles.set_weekly_hours_from_hr(person, weekly_hours) -> list[AuditEntry]`.
   - `tests/data/people_feed.json`: five records, used again in Task 5.
 
-Spec 5.1 and 5.4. The sample file is Practice HR's `tests/data/people_feed.json`, byte for byte: that repository tests that a fixed set of people produces it, this one that the sync reads it. Whoever changes the feed changes the file in both, and the hash in the test here.
+Spec 5.1 and 5.4. The rule for weekly hours is one function, `contracts.hours_from_hr`: they are Practice HR's while the person's hours contracts in force add up to more than 0, and typed exactly as today otherwise. So bank staff on a contract for 0 hours, someone between contracts and someone with no copied contract keep the weekly hours a manager types, and the sync never writes them. The sample file is Practice HR's `tests/data/people_feed.json`, byte for byte: that repository tests that a fixed set of people produces it, this one that the sync reads it. Whoever changes the feed changes the file in both, and the hash in the test here.
 
 - [ ] **Step 1: Add the sample feed**
 
@@ -891,7 +892,7 @@ Create `tests/test_hr_sync_contracts.py`:
 ```python
 """Allowance spec 2026-11-18, sections 5.1 and 5.4: the sync copies each
 person's contracts from Practice HR's feed and, for a person with a copied
-contract, owns their weekly hours. tests/data/people_feed.json is the same
+contract with fixed hours, owns their weekly hours. tests/data/people_feed.json is the same
 file, byte for byte, as Practice HR's: that app tests that it produces it,
 this one that it reads it."""
 
@@ -1033,11 +1034,10 @@ def test_a_bank_contract_and_steps_that_do_not_rise_are_copied_as_sent():
     feed[2]["contracts"][0]["leave"]["steps"] = [{"after_years": 10, "total": "20.00"}]      # falls
     assert hr_sync.sync(Feed(feed)).ok
     assert _person(101).contracts.get(hr_id=42).weekly_amount == 0
-    assert _person(101).weekly_hours == 0                                                    # what the contract in force says
     assert _person(103).contracts.get().leave_steps == [[10, "20.00"]]
 
 
-# --- weekly hours are Practice HR's once it has sent a contract (5.4) -----------------------------
+# --- weekly hours are Practice HR's while the hours contracts in force add up to more than 0 (5.4) ---
 
 def test_weekly_hours_are_the_hours_contracts_in_force_today_audited_as_practice_hr():
     hr_sync.sync(Feed(_sample()))                            # the suite's clock: 2 November 2026
@@ -1088,6 +1088,23 @@ def test_a_day_between_contracts_keeps_the_hours_the_person_had():
     assert _person(101).weekly_hours == D("22.5")
 
 
+def test_bank_staff_keep_the_weekly_hours_typed_here(all_teams_user):
+    feed = _sample()
+    feed[0]["contracts"][1]["weekly_amount"] = "0.00"            # Sam's only contract in force is for 0 hours
+    hr_sync.sync(Feed(feed))
+    sam = _person(101)
+    assert sam.weekly_hours is None and not contracts.hours_from_hr(sam)
+    assert not AuditEntry.objects.filter(model="people.person", object_id=sam.pk, field="weekly_hours").exists()
+    profiles.update_hours(all_teams_user, sam, D("12"), 2)       # typed, exactly as before this release
+    hr_sync.sync(Feed(feed))
+    sam.refresh_from_db()
+    assert (sam.weekly_hours, sam.days_per_week) == (D("12"), 2)
+    feed[0]["contracts"].append({**copy.deepcopy(feed[0]["contracts"][1]), "id": 51, "from": "2026-10-01", "weekly_amount": "15.00"})
+    hr_sync.sync(Feed(feed))                                     # a fixed contract beside it: 0 + 15 is more than 0
+    sam.refresh_from_db()
+    assert sam.weekly_hours == D("15") and contracts.hours_from_hr(sam)
+
+
 def test_in_force_and_weekly_hours_on_a_day():
     sam = make_person(start_date=date(2025, 6, 1))
     old = make_contract(sam, "22.5", to_day=date(2026, 8, 31))
@@ -1098,10 +1115,15 @@ def test_in_force_and_weekly_hours_on_a_day():
     assert contracts.weekly_hours_on(held, date(2026, 9, 1)) == D("30") and contracts.weekly_hours_on(held, date(2025, 5, 31)) is None
     doc = make_person(is_gp=True)
     assert contracts.weekly_hours_on([make_contract(doc, 6, 8, unit="sessions")], date(2026, 9, 1)) is None
-    assert contracts.from_hr(sam) and not contracts.from_hr(make_person())
+    assert contracts.hours_from_hr(sam) and not contracts.hours_from_hr(make_person())
+    assert contracts.hours_from_hr(sam, date(2025, 5, 31))                # before day one they are read on the start date
+    assert not contracts.hours_from_hr(doc)                               # a GP has no weekly hours
+    bank = make_person(first_name="Bank")
+    make_contract(bank, 0)
+    assert contracts.weekly_hours_on(list(bank.contracts.all()), date(2026, 9, 1)) == 0 and not contracts.hours_from_hr(bank)
 
 
-def test_nothing_else_writes_the_weekly_hours_of_a_person_with_a_copied_contract(all_teams_user):
+def test_nothing_else_writes_the_weekly_hours_of_a_person_whose_contract_gives_them(all_teams_user):
     sam = make_person(weekly_hours=D("30"), days_per_week=4)
     make_contract(sam, "30")
     rows = profiles.update_hours(all_teams_user, sam, D("37.5"), 5)
@@ -1138,6 +1160,8 @@ Create `people/services/contracts.py`:
 force on a day and what they add up to. The sync writes them; the profile,
 the sync's weekly hours and leave's entitlement service read them here."""
 
+from django.utils import timezone
+
 from people.models import Contract
 
 
@@ -1152,13 +1176,17 @@ def weekly_hours_on(contracts, day):
     return sum(amounts) if amounts else None
 
 
-def from_hr(person):
-    """Whether Practice HR has sent a contract for this person. Their
-    weekly hours are then HR's and are not typed here (allowance spec, 5.4)."""
-    return person.contracts.exists()
+def hours_from_hr(person, today=None):
+    """Whether the person's weekly hours are Practice HR's (allowance spec,
+    5.4): their hours contracts in force today (on the start date, for a
+    starter) add up to more than 0. Everyone else is typed here as before:
+    no copied contract, bank staff whose only contract in force is for 0
+    hours, someone between contracts, and a GP."""
+    today = today or timezone.localdate()
+    return bool(weekly_hours_on(list(person.contracts.all()), max(today, person.start_date)))
 ```
 
-- [ ] **Step 5: Weekly hours are Practice HR's for a person with a copied contract**
+- [ ] **Step 5: Weekly hours are Practice HR's where a contract gives them**
 
 In `people/services/profiles.py`, replace:
 
@@ -1199,20 +1227,22 @@ with:
 
 ```python
 def update_hours(actor, person, weekly_hours, days_per_week, note=""):
-    """Weekly hours and days per week, as typed. Once Practice HR has sent
-    a contract for the person their weekly hours are HR's (allowance spec,
-    5.4): only the days per week are written, whatever is passed."""
+    """Weekly hours and days per week, as typed. While the person's hours
+    contracts in Practice HR add up to more than 0 their weekly hours are
+    HR's (allowance spec, 5.4): only the days per week are written,
+    whatever is passed."""
     if person.is_gp:
         raise ValueError("a GP's sessions come from the GP rota")
-    if contracts.from_hr(person):
+    if contracts.hours_from_hr(person):
         return _apply(actor, person, {"days_per_week": days_per_week}, note=note)
     weekly_hours = Decimal(weekly_hours).quantize(Decimal("0.01")) if weekly_hours is not None else None
     return _apply(actor, person, {"weekly_hours": weekly_hours, "days_per_week": days_per_week}, note=note)
 
 
 def set_weekly_hours_from_hr(person, weekly_hours):
-    """The sync's write of a person's weekly hours: the sum of their hours
-    contracts in Practice HR. Nothing else writes them for such a person."""
+    """The sync's write of a person's weekly hours: the sum, more than 0,
+    of their hours contracts in force in Practice HR. Nothing else writes
+    them for such a person."""
     return _apply(None, person, {"weekly_hours": Decimal(weekly_hours).quantize(TWO_PLACES)}, note=audit.SYNC_NOTE)
 ```
 
@@ -1229,7 +1259,7 @@ with:
 
 ```python
         with transaction.atomic():
-            if contracts.from_hr(person):       # weekly hours are Practice HR's: only the days are copied
+            if contracts.hours_from_hr(person, today):       # weekly hours are Practice HR's: only the days are copied
                 differs = latest.days_per_week is not None and person.days_per_week != latest.days_per_week
             else:
                 differs = person.weekly_hours != latest.weekly_hours or person.days_per_week != latest.days_per_week
@@ -1264,8 +1294,8 @@ which the Health card reads.
 
 Each record's `contracts` (allowance spec, 5.1) are copied to
 people.Contract, replacing the person's rows; a record without the key
-leaves the copy alone. For a person with a copied contract the weekly
-hours are HR's too (5.4)."""
+leaves the copy alone. A person whose hours contracts in force add up to
+more than 0 has their weekly hours from them (5.4)."""
 
 import logging
 from datetime import date, timedelta
@@ -1361,14 +1391,14 @@ def _copy_contracts(person, rows):
 
 
 def _own_weekly_hours(person, today):
-    """Allowance spec, 5.4: once Practice HR has sent a contract, the
-    person's weekly hours are the sum of their hours contracts in force
-    today (on the start date for a starter). A GP has none; a day between
-    contracts keeps the hours the person had."""
+    """Allowance spec, 5.4: a person whose hours contracts in force today
+    (on the start date, for a starter) add up to more than 0 has that sum
+    as their weekly hours. A GP has none. Bank staff on a 0-hour contract
+    and someone between contracts keep the hours typed here."""
     if person.is_gp:
         return
     weekly = contracts.weekly_hours_on(list(person.contracts.all()), max(today, person.start_date))
-    if weekly is not None:
+    if weekly:
         profiles.set_weekly_hours_from_hr(person, weekly)
 ```
 
@@ -1431,7 +1461,7 @@ Expected: nothing reported.
 
 ```bash
 git add people/services/contracts.py people/services/hr_sync.py people/services/profiles.py tests/data/people_feed.json tests/test_hr_sync_contracts.py
-git commit -m "People: the sync copies each person's contracts and owns the weekly hours they give"
+git commit -m "People: the sync copies each person's contracts and sets the weekly hours they give"
 ```
 
 ---
@@ -2069,9 +2099,10 @@ git commit -m "Leave: full-year allowances worked out from a person's contracts"
 
 Spec section 7. Audit fields written for an allowance row: `annual_hours`, `bank_holiday_hours`, `weekly_hours`, `days_per_week`, `source`, `checked` and, for a new dated row, `from_day`. The note is `from Practice HR: <annual working>; <bank holiday working>`.
 
-Three choices the spec leaves open, all tested below:
+Two rows of 7.2 to read carefully. A `copied` row whose figures are what the contract now gives becomes `worked_out` and its check is left exactly as it is (still waiting, or still checked by whoever checked it). A `typed` row with the same figures becomes `worked_out` and is checked by the app. And 7.5: nothing is copied forward until Practice HR has sent someone a contract (`contracts.any_copied()`); from then it applies to everyone whose year is not worked out, people with no contract included.
 
-- **Nothing is copied forward (7.5) until Practice HR has sent someone a contract.** Section 3 says a Practice HR that does not send `contracts` leaves Shift Central exactly as it is today; copying everyone's figures into next year on 1 January would not be that. From the first copied contract, 7.5 applies to everyone whose year is not worked out, people with no contract included.
+Two choices the spec leaves open, both tested below:
+
 - **A dated row made by refresh is marked `hours_applied`.** Its weekly hours are Practice HR's and its days per week are a copy of those in force, so there is nothing for `apply_due_hours_changes` to copy; left unmarked, it would put a stale copy of the days back over a later edit to the profile.
 - **A removed dated row is audited against the person** (`allowance from 1 Jun 2027`), so the line stays in their History after the row has gone.
 
@@ -2177,11 +2208,18 @@ def test_a_copied_row_with_different_figures_becomes_worked_out():
     assert _figures(sam) == [(Y27, D("172.5"), D("60"), "worked_out", False)]
 
 
-def test_a_copied_row_with_the_same_figures_is_left_alone():
-    sam = _sam()
-    make_allowance(sam, Y27, D("172.5"), 60, source="copied")
+def test_a_copied_row_with_the_same_figures_becomes_worked_out_and_its_check_is_left_as_it_is(all_teams_user):
+    waiting = _sam(first_name="Waiting")
+    row = make_allowance(waiting, Y27, D("172.5"), 60, source="copied")
+    checked = _sam(first_name="Checked")
+    _check(make_allowance(checked, Y27, D("172.5"), 60, source="copied"), all_teams_user)
+    AuditEntry.objects.all().delete()
+    assert entitlement.refresh().written == 2
+    assert _figures(waiting) == [(Y27, D("172.5"), D("60"), "worked_out", False)]         # still "not yet checked"
+    assert _audit(row) == {"source": ("copied", "worked_out")}
+    (kept,) = _rows(checked)
+    assert (kept.source, kept.checked_by) == ("worked_out", all_teams_user) and not kept.needs_checking
     assert entitlement.refresh().written == 0
-    assert _figures(sam) == [(Y27, D("172.5"), D("60"), "copied", False)]
 
 
 def test_a_typed_row_with_the_same_figures_follows_the_contract_from_now_on():
@@ -2716,7 +2754,11 @@ def _reconcile(person, year, result, rows, need_check):
             if same:        # the manager typed what the contract gives: it follows the contract from now on
                 profiles.write_allowance(None, row, {"source": Source.WORKED_OUT, "checked_at": now, "checked_by": None}, note(period))
                 written += 1
-        elif not same:
+        elif same:
+            if row.source == Source.COPIED:     # last year's figures turned out to be the contract's: its check is left as it is
+                profiles.write_allowance(None, row, {"source": Source.WORKED_OUT}, note(period))
+                written += 1
+        else:
             fields = {"annual_hours": period.annual, "bank_holiday_hours": period.bank_holiday, "source": Source.WORKED_OUT,
                       "checked_at": checked_at, "checked_by": None}
             if dated:
@@ -2752,16 +2794,17 @@ Each person is refreshed inside their own `transaction.atomic()`, a savepoint of
 In `people/services/hr_sync.py`, replace:
 
 ```python
-leaves the copy alone. For a person with a copied contract the weekly
-hours are HR's too (5.4)."""
+leaves the copy alone. A person whose hours contracts in force add up to
+more than 0 has their weekly hours from them (5.4)."""
 ```
 
 with:
 
 ```python
-leaves the copy alone. For a person with a copied contract the weekly
-hours are HR's too (5.4). After a good run the allowances are worked out
-from the copies (leave.services.entitlement.refresh)."""
+leaves the copy alone. A person whose hours contracts in force add up to
+more than 0 has their weekly hours from them (5.4). After a good run the
+allowances are worked out from the copies
+(leave.services.entitlement.refresh)."""
 ```
 
 In `people/services/hr_sync.py`, replace:
@@ -2831,12 +2874,13 @@ git commit -m "Leave: allowances are kept in step with the contracts after each 
 - Produces, all in `people.services.profiles`, all raising `PermissionDenied` unless `access.can_manage(actor, row.person)`:
   - `confirm_allowance(actor, row, days_per_week=None) -> list[AuditEntry]`.
   - `confirm_allowances(actor, items) -> (confirmed: int, skipped: int)`; `items` is a list of `(row_id: int, annual_hours: Decimal, bank_holiday_hours: Decimal, days_per_week: int | None)`.
-  - `change_allowance(actor, row, annual_hours, bank_holiday_hours, note) -> list[AuditEntry]`; `ValueError` without a reason.
+  - `change_allowance(actor, row, annual_hours, bank_holiday_hours, note, days_per_week=None) -> list[AuditEntry]`; `ValueError` without a reason. Changed figures make the row `typed`; changed days per week alone leave the figures, the source and the check as they are.
+  - `takes_days(row) -> bool` (no permission check): a dated row that carries weekly hours, the only kind whose days per week can be corrected.
   - `use_worked_out(actor, row) -> list[AuditEntry]`; `ValueError` when the year is not worked out or has ended.
   - `set_allowance(...)`, unchanged in signature, now makes an existing row `typed` when its figures change, and treats figures equal at two places as no change.
   - `add_hours_change(...)` raises `ValueError("Enter the new contract in Practice HR")` for a year that is worked out.
 
-Spec 7.7 and 7.3. Until this task `set_allowance` could only change the year's first row; `change_allowance` takes any row.
+Spec 7.7 and 7.3. Until this task `set_allowance` could only change the year's first row; `change_allowance` takes any row. Days per week on a dated row can be corrected in two places: beside Confirm, and with Change at any time afterwards. Either way the same helper writes them (`_correct_days`): the row's figures, source and check are not touched, the change is audited with the reason, and the days go onto the person at once if the row's day has come and no later change is in force, or on the day otherwise.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3000,6 +3044,36 @@ def test_change_works_on_a_dated_row(boss):
     assert (row.annual_hours, row.source, row.from_day) == (D("140"), "typed", JUNE)
 
 
+def test_days_per_week_change_at_any_time_and_leave_a_worked_out_row_worked_out(boss):
+    sam, row = _dated()
+    profiles.confirm_allowance(boss, row)                               # checked weeks ago; the days turn out wrong
+    with pytest.raises(ValueError, match="reason"):
+        profiles.change_allowance(boss, row, row.annual_hours, row.bank_holiday_hours, "", days_per_week=4)
+    entries = profiles.change_allowance(boss, row, D("138.00"), D("48.00"), "works four days from June", days_per_week=4)
+    row.refresh_from_db()
+    assert (row.days_per_week, row.source, row.checked_by, row.annual_hours) == (4, "worked_out", boss, D("138"))
+    assert [(e.field, e.before, e.after, e.note) for e in entries] == [("days_per_week", "3", "4", "works four days from June")]
+    assert entitlement.refresh().written == 0                           # still what the contract gives
+    assert profiles.change_allowance(boss, row, D("138"), D("48"), "again", days_per_week=4) == []
+
+
+def test_days_per_week_and_figures_changed_together_make_the_row_typed(boss):
+    _, row = _dated()
+    entries = profiles.change_allowance(boss, row, D("140"), D("48"), "agreed", days_per_week=4)
+    row.refresh_from_db()
+    assert (row.annual_hours, row.days_per_week, row.source) == (D("140"), 4, "typed")
+    assert {e.field for e in entries} == {"annual_hours", "source", "days_per_week"}
+
+
+def test_days_per_week_are_not_taken_by_change_for_a_years_first_row(boss):
+    sam, _ = _dated()
+    first = Allowance.objects.get(person=sam, leave_year=Y27, from_day=Y27)
+    assert not profiles.takes_days(first)
+    assert profiles.change_allowance(boss, first, first.annual_hours, first.bank_holiday_hours, "x", days_per_week=4) == []
+    first.refresh_from_db()
+    assert first.days_per_week is None
+
+
 def test_the_same_figures_to_two_places_are_no_change(boss):
     doc = make_person(is_gp=True, start_date=date(2022, 9, 1))
     make_contract(doc, 8, 6, unit="sessions")
@@ -3085,7 +3159,7 @@ def test_add_hours_change_still_works_where_allowances_are_typed(boss):
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `.venv/bin/python -m pytest tests/test_allowance_actions.py -q`
-Expected: 15 failed, 2 passed, most failures `AttributeError: module 'people.services.profiles' has no attribute 'confirm_allowance'`. (`test_add_hours_change_still_works_where_allowances_are_typed` and `test_the_years_first_row_is_never_removed` already pass.)
+Expected: 18 failed, 2 passed, most failures `AttributeError: module 'people.services.profiles' has no attribute 'confirm_allowance'`. (`test_add_hours_change_still_works_where_allowances_are_typed` and `test_the_years_first_row_is_never_removed` already pass.)
 
 - [ ] **Step 3: The actions**
 
@@ -3154,26 +3228,43 @@ def _change(actor, row, annual_hours, bank_holiday_hours, note):
                            note=note.strip())
 
 
-def change_allowance(actor, row, annual_hours, bank_holiday_hours, note):
+def change_allowance(actor, row, annual_hours, bank_holiday_hours, note, days_per_week=None):
     """Allowance spec, 7.7 Change: type both figures of any row, the
-    year's first or a dated one, with a reason."""
+    year's first or a dated one, with a reason; the row becomes typed. On
+    a dated row that carries hours the days per week can be changed too,
+    at any time: changing only them leaves the figures, the source and the
+    check as they are. Either change needs the reason."""
     _check_manager(actor, row.person)
-    return _change(actor, row, annual_hours, bank_holiday_hours, note)
+    new_days = days_per_week is not None and takes_days(row) and days_per_week != row.days_per_week
+    with transaction.atomic():
+        entries = _change(actor, row, annual_hours, bank_holiday_hours, note)
+        if new_days:
+            if not (note or "").strip():
+                raise ValueError("A reason is needed to change an allowance that is already set")
+            entries += _correct_days(actor, row, days_per_week, note.strip())
+    return entries
 
 
-def _correct_days(actor, row, days_per_week):
-    """The days per week on a dated row, corrected as it is confirmed. When
-    the row's day has come they go on the person now, unless a later change
-    is already in force; before it, the sync copies them on the day."""
+def takes_days(row):
+    """Whether a row carries days per week that can be corrected: a dated
+    row with weekly hours (costing reads its average day from such a row)."""
+    return row.from_day != row.leave_year and row.weekly_hours is not None
+
+
+def _correct_days(actor, row, days_per_week, note="days per week corrected"):
+    """The days per week on a dated row, corrected as it is confirmed or
+    with Change. The figures, the source and the check are not touched.
+    When the row's day has come the days go on the person now, unless a
+    later change is already in force; before it, the sync copies them on
+    the day."""
     today = timezone.localdate()
     person = row.person
     due = row.from_day <= today
     superseded = due and Allowance.objects.filter(person=person, weekly_hours__isnull=False,
                                                   from_day__gt=row.from_day, from_day__lte=today).exists()
-    entries = write_allowance(actor, row, {"days_per_week": days_per_week, "hours_applied": due},
-                              note="days per week corrected")
+    entries = write_allowance(actor, row, {"days_per_week": days_per_week, "hours_applied": due}, note=note)
     if due and not superseded and not person.is_gp:
-        entries += _apply(actor, person, {"days_per_week": days_per_week}, note="days per week corrected")
+        entries += _apply(actor, person, {"days_per_week": days_per_week}, note=note)
     return entries
 
 
@@ -3187,8 +3278,7 @@ def confirm_allowance(actor, row, days_per_week=None):
         if row.needs_checking:
             entries += write_allowance(actor, row, {"checked_at": timezone.now(), "checked_by": actor},
                                        note="allowance checked")
-        if (days_per_week is not None and row.from_day != row.leave_year and row.weekly_hours is not None
-                and days_per_week != row.days_per_week):
+        if days_per_week is not None and takes_days(row) and days_per_week != row.days_per_week:
             entries += _correct_days(actor, row, days_per_week)
     return entries
 
@@ -3276,15 +3366,15 @@ git commit -m "People: confirm an allowance, change it, or take the worked-out f
 - Test: `tests/test_allowance_review.py`
 
 **Interfaces:**
-- Consumes: `entitlement.load`, `worked`, `covered`, `current_and_starting`, the reasons, `LAUNCH` (Tasks 4 and 5); `contracts.any_copied`, `contracts.in_force`; `access.managed_people(user)`, `access.can_manage(user, person)`; `profiles.confirm_allowance`, `use_worked_out`, `add_hours_change` (in the tests).
+- Consumes: `entitlement.load`, `worked`, `covered`, `current_and_starting`, the reasons, `LAUNCH` (Tasks 4 and 5); `contracts.any_copied`, `contracts.in_force`; `profiles.takes_days(row)` (Task 6); `access.managed_people(user)`, `access.can_manage(user, person)`; `profiles.confirm_allowance`, `use_worked_out`, `add_hours_change` (in the tests).
 - Produces, all in `leave.services.entitlement`:
   - `state(row) -> str`: "typed", "worked out, not yet checked", "worked out, checked by Lead Patel on 1 Feb 2027", "worked out, checked automatically on 1 Feb 2027", "copied from last year, not yet checked".
-  - `Shown(row, state, working, rule, orphan)` with properties `dated` and `differs`. `working` is `(annual line, bank holiday line)` when the row's figures are what the contracts give; `rule` is the `Period` the contracts give when the row is typed and differs; `orphan` is a typed dated row on a day the contracts do not change.
+  - `Shown(row, state, working, rule, orphan)` with properties `dated`, `takes_days` (`profiles.takes_days(row)`) and `differs`. `working` is `(annual line, bank holiday line)` when the row's figures are what the contracts give; `rule` is the `Period` the contracts give when the row is typed and differs; `orphan` is a typed dated row on a day the contracts do not change.
   - `shown(person, year_list, data=None) -> list[Shown]`.
   - `Item(person, year, text, can_act, shown)`; `Review(to_check, differ, bank_holidays, contracts)`: three lists of `Item` and a list of leave years (dates).
   - `review(user, team=None, today=None) -> Review`; `FINISHED` (the text for a finished year).
 
-Spec section 8. Nothing is stored: the lists are built from the rows and the copied contracts each time. One person appears at most once on "Contracts to look at in Practice HR", with the first thing wrong: no contract at all, none in force today (on the start date, for a starter), "no contract from 1 July 2027", or steps that do not rise. A contract with no terms (a GP trainee) or with no fixed hours (bank staff) is not something to look at.
+Spec section 8. Nothing is stored: the lists are built from the rows and the copied contracts each time. "Bank holidays not entered" and "Contracts to look at in Practice HR" are both empty until Practice HR has sent someone a contract, and the first two can hold nothing before then, so with no copied contract anywhere all four are empty. One person appears at most once on "Contracts to look at in Practice HR", with the first thing wrong: no contract at all, none in force today (on the start date, for a starter), "no contract from 1 July 2027", or steps that do not rise. A contract with no terms (a GP trainee) or with no fixed hours (bank staff) is not something to look at.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3336,6 +3426,7 @@ def _lines(items):
 def test_with_no_contracts_anywhere_every_list_is_empty(boss):
     plain = make_person(weekly_hours=D("30"), days_per_week=4)
     make_allowance(plain, Y27, 138, 48)
+    BankHoliday.objects.filter(day__year=2028).delete()                # a year with none is not news either, yet
     entitlement.refresh()
     r = entitlement.review(boss)
     assert (r.to_check, r.differ, r.bank_holidays, r.contracts) == ([], [], [], [])
@@ -3535,6 +3626,10 @@ class Shown:
         return self.row.from_day != self.row.leave_year
 
     @property
+    def takes_days(self):
+        return profiles.takes_days(self.row)
+
+    @property
     def differs(self):
         return self.rule is not None or self.orphan
 
@@ -3589,7 +3684,7 @@ def review(user, team=None, today=None):
         people = people.filter(team=team)
     people = list(people.select_related("team").order_by("name"))
     data = load(people)
-    listing_contracts = held.any_copied()
+    listing_contracts = held.any_copied()       # the last two lists stay empty until Practice HR has sent a contract
     out, empty = Review([], [], [], []), set()
     for person in people:
         can_act = access.can_manage(user, person)
@@ -3629,7 +3724,7 @@ def review(user, team=None, today=None):
                 look = "no contract in force today" if person.start_date <= today else "no contract in force on the start date"
             if look:
                 out.contracts.append(Item(person, None, look))
-    out.bank_holidays = sorted(empty)
+    out.bank_holidays = sorted(empty) if listing_contracts else []
     return out
 ```
 
@@ -3655,16 +3750,16 @@ git commit -m "Leave: the lists of allowances to check, figures that differ and 
 - Test: `tests/test_allowances_page.py`
 
 **Interfaces:**
-- Consumes: `entitlement.review(user, team)`, `entitlement.state(row)`, `Item`, `Shown` (Task 7); `profiles.confirm_allowances`, `use_worked_out`, `change_allowance` (Task 6); `access.manager_required`, `access.managed_teams`, `access.can_manage`; `filters.chosen(request, choices, "team")`, `filters.query(team=team)`; `templates/ui/_team_filter.html` (needs `team_choices` and `team`); `templates/ui/_field.html`; the `plain_hours` filter (Task 1).
+- Consumes: `entitlement.review(user, team)`, `entitlement.state(row)`, `Item`, `Shown` (Task 7); `profiles.confirm_allowances`, `use_worked_out`, `change_allowance(actor, row, annual_hours, bank_holiday_hours, note, days_per_week=None)`, `takes_days(row)` (Task 6); `access.manager_required`, `access.managed_teams`, `access.can_manage`; `filters.chosen(request, choices, "team")`, `filters.query(team=team)`; `templates/ui/_team_filter.html` (needs `team_choices` and `team`); `templates/ui/_field.html`; the `plain_hours` filter (Task 1).
 - Produces:
   - URLs: `allowances` (`/staff/allowances/`), `allowances-confirm` (`/staff/allowances/confirm/`, POST), `allowance-use` (`/staff/allowances/<pk>/use/`, POST), `allowance-change` (`/staff/allowances/<pk>/change/`, a pop-up).
   - The confirm post: one `row` field per row with `annual_<id>` and `bank_holiday_<id>` (the figures as drawn, from `plain_hours`) and optionally `days_<id>`.
-  - `people.forms.AllowanceChangeForm` (`annual_hours`, `bank_holiday_hours`, `note`).
+  - `people.forms.AllowanceChangeForm(..., with_days=False)`: `annual_hours`, `bank_holiday_hours`, `note`, and `days_per_week` (optional) only when `with_days`.
   - Template filter `hours_hm` (Decimal hours to "172 h 30 min").
   - `health.figures(user)["allowances"]`, a `Review`.
   - Anchors on the page: `#to-check`, `#differ`, `#bank-holidays`, `#contracts`.
 
-Spec section 8. The page's buttons are ordinary forms that post and redirect back, as the Bank holidays and Blackouts pages do; only Change… is a pop-up. The forms post to `…?team=<id>` so that the Team box survives the redirect. The Health lines come in this task because each links to the page.
+Spec section 8. The page's buttons are ordinary forms that post and redirect back, as the Bank holidays and Blackouts pages do; only Change… is a pop-up. On a dated row that carries hours the pop-up also offers the days per week, whether or not the row has been confirmed. The forms post to `…?team=<id>` so that the Team box survives the redirect. The Health lines come in this task because each links to the page.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -3864,6 +3959,27 @@ def test_the_change_dialog_types_both_figures_with_a_reason(world):
     assert world["c_rec"].get(url).status_code == 403
 
 
+def test_the_change_dialog_takes_days_per_week_on_a_dated_row_at_any_time(world):
+    part = make_person(first_name="Part", start_date=date(2025, 6, 1), weekly_hours=D("22.5"), days_per_week=3)
+    make_contract(part, "22.5", steps=RECEPTION, to_day=date(2027, 5, 31))
+    make_contract(part, "30", steps=RECEPTION, from_day=JUNE)
+    entitlement.refresh()
+    row = _row(part, from_day=JUNE)
+    world["c_boss"].post(URL + "confirm/", _post(row))                   # already checked: Change is still there
+    assert 'name="days_per_week"' not in world["c_boss"].get(f"{URL}{_row(part).pk}/change/").content.decode()
+    url = f"{URL}{row.pk}/change/"
+    body = world["c_boss"].get(url).content.decode()
+    assert 'name="days_per_week" value="3"' in body and "Changing only the days per week leaves the figures as they are." in body
+    figures = {"annual_hours": "138.00", "bank_holiday_hours": "48.00"}
+    r = world["c_boss"].post(url, {**figures, "days_per_week": "4", "note": ""})
+    assert r.status_code == 200 and "field-error" in r.content.decode()
+    assert world["c_boss"].post(url, {**figures, "days_per_week": "8", "note": "x"}).status_code == 200
+    r = world["c_boss"].post(url, {**figures, "days_per_week": "4", "note": "works four days from June"})
+    assert r.json() == {"refresh": True}
+    row.refresh_from_db()
+    assert (row.days_per_week, row.source, row.needs_checking) == (4, "worked_out", False)
+
+
 def test_the_other_lists_and_their_empty_states(world):
     body = world["c_boss"].get(URL).content.decode()
     assert "Every typed figure is what its contract gives." in body and "Nothing to look at." in body
@@ -3899,6 +4015,7 @@ def test_the_health_card_counts_the_four_lists_and_links_to_the_page(all_teams_u
 
 def test_the_health_card_shows_zeros_before_practice_hr_sends_any_contract():
     make_allowance(make_person(weekly_hours=D("30"), days_per_week=4), Y27, 138, 48)
+    BankHoliday.objects.filter(day__year=2028).delete()
     body = client_for(make_person(first_name="Boss"), is_all_teams_manager=True).get("/staff/").content.decode()
     for line in ("Allowances to check<strong>0</strong>", "Allowances that differ from the contract<strong>0</strong>",
                  "Bank holidays not entered<strong>0</strong>", "Contracts to look at in Practice HR<strong>0</strong>"):
@@ -3909,7 +4026,7 @@ def test_the_health_card_shows_zeros_before_practice_hr_sends_any_contract():
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `.venv/bin/python -m pytest tests/test_allowances_page.py -q`
-Expected: 17 failed: the page's tests on a 404, the Health tests on `KeyError: 'allowances'` or a missing line.
+Expected: 18 failed: the page's tests on a 404, the Health tests on `KeyError: 'allowances'` or a missing line.
 
 - [ ] **Step 3: The filter and the form**
 
@@ -3938,10 +4055,17 @@ In `people/forms.py`, add before the line `class NotesForm(forms.Form):`:
 ```python
 class AllowanceChangeForm(forms.Form):
     """A manager's own figures for one allowance row, the year's first or a
-    dated one (allowance spec, 7.7 Change)."""
+    dated one (allowance spec, 7.7 Change). A dated row that carries hours
+    also offers its days per week."""
     annual_hours = forms.DecimalField(max_digits=6, decimal_places=2, min_value=0, label="Annual leave allowance (full year, hours)")
     bank_holiday_hours = forms.DecimalField(max_digits=6, decimal_places=2, min_value=0, label="Bank holiday allowance (full year, hours)")
+    days_per_week = forms.IntegerField(min_value=1, max_value=7, required=False, label="Days per week from this day")
     note = forms.CharField(max_length=300, label="Reason for the change")
+
+    def __init__(self, *args, with_days=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not with_days:
+            del self.fields["days_per_week"]
 ```
 
 - [ ] **Step 4: The views and their addresses**
@@ -4054,12 +4178,13 @@ def use(request, pk):
 @access.manager_required
 def change(request, pk):
     row = _row(request, pk)
-    form = AllowanceChangeForm(request.POST or None, initial={
-        "annual_hours": row.annual_hours.quantize(Decimal("0.01")), "bank_holiday_hours": row.bank_holiday_hours.quantize(Decimal("0.01"))})
+    form = AllowanceChangeForm(request.POST or None, with_days=profiles.takes_days(row), initial={
+        "annual_hours": row.annual_hours.quantize(Decimal("0.01")), "bank_holiday_hours": row.bank_holiday_hours.quantize(Decimal("0.01")),
+        "days_per_week": row.days_per_week})
     if request.method == "POST" and form.is_valid():
         d = form.cleaned_data
         try:
-            profiles.change_allowance(request.user, row, d["annual_hours"], d["bank_holiday_hours"], d["note"])
+            profiles.change_allowance(request.user, row, d["annual_hours"], d["bank_holiday_hours"], d["note"], d.get("days_per_week"))
             return JsonResponse(REFRESH)
         except ValueError as e:
             form.add_error(None, str(e))
@@ -4118,7 +4243,7 @@ Create `templates/people/allowances.html`:
     <td>{% if i.can_act %}
       <form method="post" action="{% url 'allowances-confirm' %}{{ back_query }}" class="inline-form">{% csrf_token %}
         {% include "people/_allowance_confirm_fields.html" %}
-        {% if i.shown.dated and r.weekly_hours != None %}<label>Days per week <input type="number" name="days_{{ r.pk }}" min="1" max="7" value="{{ r.days_per_week|default_if_none:'' }}"></label>{% endif %}
+        {% if i.shown.takes_days %}<label>Days per week <input type="number" name="days_{{ r.pk }}" min="1" max="7" value="{{ r.days_per_week|default_if_none:'' }}"></label>{% endif %}
         <button class="btn btn-quiet" aria-label="Confirm {{ i.person.name }}, {{ r.from_day|date:'j M Y' }}">Confirm</button>
       </form>
       <a href="{% url 'allowance-change' r.pk %}" data-dialog>Change…</a>
@@ -4190,7 +4315,7 @@ Create `templates/people/allowance_change_dialog.html`:
 <form method="post" action="{% url 'allowance-change' row.pk %}" data-dialog-form>
   {% csrf_token %}
   {% for e in form.non_field_errors %}<p class="flash flash-error">{{ e }}</p>{% endfor %}
-  <p class="field-help">Leave year {{ row.leave_year|year_label }}, from {{ row.from_day|date:"j M Y" }}: {{ state }}. Figures typed here are kept as typed, and are listed while they differ from what the contract gives.</p>
+  <p class="field-help">Leave year {{ row.leave_year|year_label }}, from {{ row.from_day|date:"j M Y" }}: {{ state }}. Figures typed here are kept as typed, and are listed while they differ from what the contract gives.{% if form.days_per_week %} Changing only the days per week leaves the figures as they are.{% endif %}</p>
   {% for f in form %}{% include "ui/_field.html" with field=f %}{% endfor %}
   <button class="btn btn-dark">Change allowance</button>
 </form>
@@ -4296,14 +4421,14 @@ git commit -m "People: the Allowances page, and its four lines on the Health car
 - Test: `tests/test_allowance_profile.py`
 
 **Interfaces:**
-- Consumes: `entitlement.shown(person, year_list) -> list[Shown]` (Task 7); `profiles.confirm_allowance`, `use_worked_out` (Task 6); `contracts.from_hr(person)` (Task 3); the `allowance-change` pop-up and the `hours_hm` filter (Task 8); `access.is_all_teams(user)`; the template context's `is_all_teams` (from `ui.context_processors.shell`).
+- Consumes: `entitlement.shown(person, year_list, data=None) -> list[Shown]`, `entitlement.load`, `entitlement.worked` (Tasks 4 and 7); `profiles.confirm_allowance`, `use_worked_out` (Task 6); `contracts.hours_from_hr(person)` (Task 3); the `allowance-change` pop-up and the `hours_hm` filter (Task 8); `access.is_all_teams(user)`; the template context's `is_all_teams` (from `ui.context_processors.shell`).
 - Produces:
   - The Pay & time off tab accepts a second kind of post: `allowance_action` (`confirm` or `use`), `row` (an Allowance id of that person) and optionally `days_per_week`.
   - `HoursForm(..., hours_from_hr=False)`: with it on, the form has no `weekly_hours` field.
-  - `statement_context(...)` adds `workings`: `[(from_day, annual line, bank holiday line)]`, empty unless `manages`.
+  - `statement_context(...)` adds `workings`: `[(from_day, annual line, bank holiday line)]`, empty unless `manages`; and `hours_from_contract` (bool, False unless `manages`): the statement's year is worked out from the person's contracts.
   - `leave.services.settings.update(user, reminder_working_days, allowances_need_checking=None) -> LeaveSetting`; `SettingsForm.allowances_need_checking` (a choice, "yes" or "no", cleaned to True, False or None).
 
-Spec section 8 "The profile", 5.4 and 7.6. Two things found in the existing tab are put right here because worked-out rows would trip over them. The year boxes took their starting values from the year's **last** row while saving to its **first**, so someone with an hours change could not save the tab untouched; they now show the first row. And the setting is a choice, not a tick box, so that a post without it (a team manager's form, which does not offer it) leaves it as it is.
+Spec section 8 "The profile", 5.4, 7.3 and 7.6. Where the statement's leave year is worked out, managers are not offered "Add hours change…": in its place the statement says "Hours changes come from Practice HR." The service's refusal (Task 6) stays as the backstop and stays tested. Weekly hours are read-only "from Practice HR" exactly where `contracts.hours_from_hr(person)` says so; bank staff and people with no contract in force keep the box. Two things found in the existing tab are put right here because worked-out rows would trip over them. The year boxes took their starting values from the year's **last** row while saving to its **first**, so someone with an hours change could not save the tab untouched; they now show the first row. And the setting is a choice, not a tick box, so that a post without it (a team manager's form, which does not offer it) leaves it as it is.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -4435,6 +4560,16 @@ def test_weekly_hours_are_read_only_from_practice_hr_and_days_stay_typed(world):
     assert (nina.weekly_hours, nina.days_per_week) == (D("37.5"), 4)
 
 
+def test_bank_staff_on_a_contract_for_no_hours_are_typed_exactly_as_before(world):
+    bank = make_person(first_name="Bank", team=world["nina"].team)
+    make_contract(bank, 0, steps=RECEPTION)
+    body = _tab(world["c_lead"], bank)
+    assert 'name="weekly_hours"' in body and "from Practice HR" not in body
+    world["c_lead"].post(f"/staff/{bank.pk}/profile/?tab=hours", {"weekly_hours": "12", "days_per_week": "2"})
+    bank.refresh_from_db()
+    assert (bank.weekly_hours, bank.days_per_week) == (D("12"), 2)
+
+
 def test_someone_with_no_copied_contract_is_typed_exactly_as_before(world):
     plain = make_person(first_name="Plain", team=world["nina"].team)
     body = _tab(world["c_lead"], plain)
@@ -4485,7 +4620,18 @@ def test_the_statement_gains_the_working_for_managers_only(world):
     assert "Annual leave allowance" in mine and "Full-year figures" not in mine and WORKING not in mine
 
 
-def test_add_hours_change_is_refused_in_the_dialog(world):
+def test_add_hours_change_is_not_offered_for_a_year_that_is_worked_out(world):
+    nina = world["nina"]
+    body = _tab(world["c_lead"], nina)
+    assert "Hours changes come from Practice HR." in body and "Add hours change" not in body and "Adjust…" in body
+    plain = make_person(first_name="Plain", team=nina.team)
+    make_allowance(plain, Y27, 138, 48)
+    body = _tab(world["c_lead"], plain)
+    assert f'href="/staff/{plain.pk}/leave/hours-change/"' in body and "Hours changes come from Practice HR." not in body
+    assert "Hours changes come from Practice HR." not in _tab(world["c_nina"], nina)      # staff never had the link
+
+
+def test_add_hours_change_is_still_refused_by_its_dialog(world):
     nina = world["nina"]
     r = world["c_lead"].post(f"/staff/{nina.pk}/leave/hours-change/", {
         "from_day": "2027-06-01", "weekly_hours": "30", "days_per_week": "4", "annual_hours": "138", "bank_holiday_hours": "48", "note": "x"})
@@ -4525,7 +4671,7 @@ def test_other_managers_see_the_setting_and_cannot_change_it(world):
 - [ ] **Step 2: Run them to see them fail**
 
 Run: `.venv/bin/python -m pytest tests/test_allowance_profile.py -q`
-Expected: 13 failed, 2 passed (the two that pass are about people and years nothing is worked out for, which already behave).
+Expected: 14 failed, 3 passed (the three that pass are about people nothing is worked out for and the refused dialog, which already behave).
 
 - [ ] **Step 3: The Pay & time off tab**
 
@@ -4619,7 +4765,7 @@ In `people/views/profile.py`, replace everything from the line `def _hours(reque
 ```python
 def _hours(request, person, context):
     year_list = leave_years.years_for(person)
-    from_hr = contracts.from_hr(person)
+    from_hr = contracts.hours_from_hr(person)
     form = None
     if request.method == "POST" and "allowance_action" in request.POST:
         _allowance_action(request, person, context)
@@ -4656,7 +4802,7 @@ def _hours(request, person, context):
     context.update(statement_context(person, request.GET.get("year"), manages=context["manages"], in_dialog=True))
 ```
 
-What changed in `_hours`: the `allowance_action` branch; `hours_from_hr` passed to each `HoursForm`; `cleaned_data.get("weekly_hours")`, because the field may be gone; and `hours_from_hr` and `figures` in the context. `profile()` already refuses any post from someone who does not manage the person.
+What changed in `_hours`: the `allowance_action` branch; `hours_from_hr` (from `contracts.hours_from_hr(person)`) passed to each `HoursForm`; `cleaned_data.get("weekly_hours")`, because the field may be gone; and `hours_from_hr` and `figures` in the context. `profile()` already refuses any post from someone who does not manage the person.
 
 In `templates/people/_profile_hours.html`, replace:
 
@@ -4715,7 +4861,7 @@ with:
       {% if r.needs_checking %}
       <form method="post" action="{% url 'profile' person.pk %}?tab=hours" data-dialog-form class="inline-form">{% csrf_token %}
         <input type="hidden" name="allowance_action" value="confirm"><input type="hidden" name="row" value="{{ r.pk }}">
-        {% if f.dated and r.weekly_hours != None %}<label>Days per week <input type="number" name="days_per_week" min="1" max="7" value="{{ r.days_per_week|default_if_none:'' }}"></label>{% endif %}
+        {% if f.takes_days %}<label>Days per week <input type="number" name="days_per_week" min="1" max="7" value="{{ r.days_per_week|default_if_none:'' }}"></label>{% endif %}
         <button class="btn btn-quiet" aria-label="Confirm the figures from {{ r.from_day|date:'j M Y' }}">Confirm</button>
       </form>
       {% endif %}
@@ -4762,9 +4908,27 @@ with:
 ```python
     n = len(sickness.instances(person))
     statement = _statement_for(person, year_text)
-    # Managers only (allowance spec, section 8): the working behind each full-year figure the contracts give.
-    workings = [(s.row.from_day, *s.working) for s in entitlement.shown(person, [statement.year]) if s.working] if manages else []
-    return {"statement": statement, "workings": workings, "person": person, "manages": manages, "in_dialog": in_dialog,
+    # Managers only (allowance spec, sections 7.3 and 8): the working behind each full-year figure the
+    # contracts give, and no Add hours change for a year that is worked out from them.
+    workings, from_contract = [], False
+    if manages:
+        data = entitlement.load([person])
+        workings = [(s.row.from_day, *s.working) for s in entitlement.shown(person, [statement.year], data) if s.working]
+        from_contract = entitlement.worked(person, statement.year, data).ok
+    return {"statement": statement, "workings": workings, "hours_from_contract": from_contract,
+            "person": person, "manages": manages, "in_dialog": in_dialog,
+```
+
+In `templates/leave/_statement.html`, replace:
+
+```html
+    <a href="{% url 'leave-hours-change' person.pk %}" data-dialog>Add hours change…</a>
+```
+
+with:
+
+```html
+    {% if hours_from_contract %}<span>Hours changes come from Practice HR.</span>{% else %}<a href="{% url 'leave-hours-change' person.pk %}" data-dialog>Add hours change…</a>{% endif %}
 ```
 
 In `templates/leave/_statement.html`, add before the line `  {% if s.no_allowance_lines %}`:
@@ -5040,9 +5204,9 @@ with:
 ```markdown
 **A change of hours part-way through a year**, for a person whose allowances are typed, is
 entered with **Add hours change…**, under the statement on the Pay & time off tab (managers;
-not for yourself). For a person whose year is worked out from their contract the dialog
-answers "Enter the new contract in Practice HR": the new contract there starts a new
-allowance from its date by itself.
+not for yourself). Where the leave year shown is worked out from the person's contract the
+link is not there: the statement says "Hours changes come from Practice HR." instead, because
+a new contract there starts a new allowance from its date by itself.
 ```
 
 In `docs/admin/leave.md`, add before the line `## What a day costs`:
@@ -5091,7 +5255,7 @@ complete year on 1 Jan 2027) × 37.5 h ÷ 5 = 172 h 30 min":
 
 | What happens in Practice HR | What Shift Central does |
 |---|---|
-| A new contract, or a change of weekly hours or sessions | Adds a new allowance from the contract's start date, with the new weekly hours. This is what **Add hours change…** does by hand. The days per week are copied from the ones in force; correct them in the box beside **Confirm** if the new contract changes them. |
+| A new contract, or a change of weekly hours or sessions | Adds a new allowance from the contract's start date, with the new weekly hours. This is what **Add hours change…** does by hand. The days per week are copied from the ones in force; if the new contract changes them, correct them in the box beside **Confirm**, or at any time afterwards with **Change…**. |
 | The leave terms change | Every figure in the two leave years is worked out again and goes back to "not yet checked". |
 | A contract's date is corrected | The allowance moves to the corrected date. |
 | A bank holiday is added or removed here | The bank holiday allowance is worked out again at the next read and goes back to "not yet checked". |
@@ -5113,15 +5277,17 @@ NWSSP tells the practice); when the contract has no fixed weekly hours (bank sta
 the person moves between hours and sessions inside the year. For these people a manager types
 the figures as before, and adds any hours change by hand. One thing is done for them: once
 this year has figures and next year has none, next year starts with a copy of this year's,
-marked "copied from last year, not yet checked".
+marked "copied from last year, not yet checked". If the person's contract later gains terms,
+a copied figure that is what the contract gives simply becomes "worked out" (checked or not,
+as it was), and one that is not is replaced by the worked-out figure.
 
 **The Allowances page** has a Team box and four lists, each also a box on the Health card:
 
 | List | Who is on it | What to do |
 |---|---|---|
-| **Allowances to check** | Every worked-out or copied figure nobody has checked. Also "hours changed on 1 June; add the hours change" for a typed person whose contract changed in the year. | Read the working. **Confirm** if it is right; **Change…** to type your own figures with a reason (the row becomes typed); **Add hours change…** for the second kind. **Confirm all shown** confirms every row listed, as filtered by the Team box. |
+| **Allowances to check** | Every worked-out or copied figure nobody has checked. Also "hours changed on 1 June; add the hours change" for a typed person whose contract changed in the year. | Read the working. **Confirm** if it is right; **Change…** to type your own figures with a reason (the row becomes typed), or, on an allowance from a later date, to correct only its days per week (the figures stay worked out); **Add hours change…** for the second kind. **Confirm all shown** confirms every row listed, as filtered by the Team box. |
 | **Allowances that differ from the contract** | Typed figures that are not what the contract gives, with both shown; a typed hours change on a day the contracts do not change; a finished year whose figures the contracts no longer give. | **Use the worked-out figure**, or **Remove this change**, or leave it: a typed figure is a manager's decision. For a finished year, an adjustment. |
-| **Bank holidays not entered** | A leave year being worked out with no bank holiday on the list. | Add them under Time off › Bank holidays. |
+| **Bank holidays not entered** | A leave year being worked out with no bank holiday on the list. Empty until Practice HR has sent its first contract. | Add them under Time off › Bank holidays. |
 | **Contracts to look at in Practice HR** | Someone with no contract in force today, or none from a day in the year ("no contract from 1 July 2027"), or whose steps do not rise. Empty until Practice HR has sent its first contract. | Put the contract right in Practice HR. Until then the earlier figures carry on. |
 
 - A team manager sees their own team. **Nobody confirms or changes their own figures**: a
@@ -5202,7 +5368,7 @@ In `docs/admin/people.md`, replace:
 with:
 
 ```markdown
-| **Weekly hours** | **Once the person's contract is in Practice HR this is read-only and says "from Practice HR"**: it is the hours of their contracts in force today (on the start date, for a starter), set at each sync, and is changed by entering a new contract there. Until then it is typed: contracted hours a week, to two decimal places, 0 to 999.99.
+| **Weekly hours** | **While the person has a contract with fixed hours in force in Practice HR this is read-only and says "from Practice HR"**: it is the hours of their contracts in force today (on the start date, for a starter), set at each sync, and is changed by entering a new contract there. For everyone else it is typed, as before: someone with no contract in Practice HR yet, bank staff whose contract is for 0 hours, and someone between contracts. Typed, it is contracted hours a week, to two decimal places, 0 to 999.99.
 ```
 
 In `docs/admin/people.md`, replace:
@@ -5231,7 +5397,7 @@ of the two leave years, the year's first and any from a later date, with its sta
 out, not yet checked", "worked out, checked by … on …", "typed" or "copied from last year, not
 yet checked"), the working, and the buttons **Confirm**, **Use the worked-out figure** and
 **Change…**. The boxes in the form are the year's first allowance; a later one is changed from
-this list. The person does not see this list. See
+this list, and its **Change…** also takes the days per week from that date, at any time. The person does not see this list. See
 [Leave](leave.md#allowances-worked-out-from-the-contract).
 
 **Below that is the person's leave statement**, which the person sees too:
@@ -5246,7 +5412,7 @@ In `docs/admin/people.md`, replace:
 with:
 
 ```markdown
-| Pay & time off | Reads their own hours, allowances and statement | Edits the form; confirms and changes allowance figures; Adjust and Add hours change | Cannot open |
+| Pay & time off | Reads their own hours, allowances and statement | Edits the form; confirms and changes allowance figures; Adjust, and Add hours change where the year is typed | Cannot open |
 ```
 
 - [ ] **Step 6: The guide, `docs/admin/sync.md`, `setup.md` and `README.md`**
@@ -5284,9 +5450,11 @@ with:
   that person. A feed that does not carry contracts (an older Practice HR) leaves the copy
   alone. The copy is not in the Activity log: Practice HR records who changed a contract,
   and every allowance figure that results is recorded here.
-- **A person with a copied contract has their weekly hours set from it**: the hours of the
-  contracts in force today, or on the start date for a starter. GPs have none. It is recorded
-  like any other change "from Practice HR". Days per week are still typed here.
+- **A person with a contract for fixed hours in force has their weekly hours set from it**:
+  the hours of the contracts in force today, or on the start date for a starter, when they
+  add up to more than 0. GPs have none. Bank staff on a contract for 0 hours, and someone
+  between contracts, keep the hours typed here. It is recorded like any other change "from
+  Practice HR". Days per week are still typed here.
 - The run is recorded: when it started and finished, whether it worked, how many
   people the feed held, and, if it failed, a message.
 
@@ -5336,9 +5504,8 @@ with:
 ```markdown
 **Allowances to check**, **Allowances that differ from the contract**, **Bank holidays not
 entered** and **Contracts to look at in Practice HR** are counts, each with a link to
-Staff › Allowances, where the lists themselves are. All four read 0 until Practice HR sends
-its first contract, except *Bank holidays not entered*, which counts any leave year in use
-with no bank holiday on the list.
+Staff › Allowances, where the lists themselves are. All four read 0, and link nowhere, until
+Practice HR sends its first contract.
 
 - *What to do:* open the page and work down it; what each list holds and what its buttons do
   is in [Leave](leave.md#allowances-worked-out-from-the-contract). None of them blocks
@@ -5374,7 +5541,7 @@ of them), `deploy/manage collectstatic --noinput`, `systemctl restart shift-cent
 
 **Before it goes on the production box, Practice HR must hold the practice's real contracts
 and none of its dummy data.** From the first read after the release, anyone with a contract
-in Practice HR has their weekly hours set from it, so a dummy contract would overwrite hours
+for fixed hours in Practice HR has their weekly hours set from it, so a dummy contract would overwrite hours
 a manager typed, and its leave terms would be worked into allowances. Check in Practice HR
 first; then, after the first sync, check the Health card's four allowance boxes and Staff ›
 Allowances. Set each contract type's usual leave terms in Practice HR before loading staff,
@@ -5556,7 +5723,8 @@ LEAVE-10 to 12 for GPs; the decisions are D-34 to D-39. What to know:
   are typed as before**, and next year starts with a copy of this year's
   figures for a manager to check.
 - **Days per week are still typed in Shift Central.** Weekly hours come
-  from the contract once it is in Practice HR.
+  from the contract once it is in Practice HR; bank staff, whose contract
+  is for no fixed hours, keep the hours a manager types.
 - **Before this goes live, Practice HR must hold the real contracts and
   none of its dummy data**, because hours are taken from it from the
   first read.
@@ -5577,14 +5745,13 @@ Add to the end of `docs/superpowers/specs/2026-11-18-allowance-rules-design.md`:
 Built as designed, with these choices where the text above left room or met the code.
 
 - **The year's first figures are always dated the leave year's first day** (6, Periods), for someone who starts later in the year too: the year's first Allowance row always is, and pro-rata cuts it to the start date. When no contract is in force on that first day (the start date, for a starter) the year is not worked out and the person is listed with "no contract from …".
-- **Nothing is copied forward (7.5) until Practice HR has sent someone a contract.** Section 3 promises that a Practice HR which does not send `contracts` leaves Shift Central exactly as it is; copying everyone's figures into the next year on 1 January would not be that. From the first copied contract, 7.5 applies to everyone whose year is not worked out, people with no contract included.
 - **A GP whose weekly shares already reach the largest full-year figure gets exactly that figure** (6.1). Without it a typed figure that is not a whole number of sessions (55 h is 13.2 sessions) would round down for someone employed all year, against LEAVE-13. A GP's stored figure is also read to the whole second before it is shared out, so 58.3333 h is the 14 sessions it stands for and half a session is a true tie.
-- **A dated row made by refresh is marked as already applied** (5.4, 7.2): its weekly hours are Practice HR's and its days per week are a copy, so `apply_due_hours_changes` has nothing to copy from it. Days corrected while confirming a dated row go onto the person at once if the row's day has come and no later change is in force, and on the day otherwise.
+- **A dated row made by refresh is marked as already applied** (5.4, 7.2): its weekly hours are Practice HR's and its days per week are a copy, so `apply_due_hours_changes` has nothing to copy from it. Days corrected on a dated row, beside Confirm or with Change, go onto the person at once if the row's day has come and no later change is in force, and on the day otherwise. Only a dated row that carries weekly hours takes days per week: costing reads its average day from such a row.
 - **A removed dated row is audited against the person**, as "allowance from 1 Jun 2027", so the line stays in their History.
-- **A weekly amount of 0 sets a non-GP's weekly hours to 0**, as the contract in force says (5.4); their year is not worked out and they are not listed.
+- **Weekly hours are typed whenever no hours contract is in force** (5.4), not only for bank staff: someone between contracts keeps the box too, and the sync leaves their hours alone until a contract for more than 0 hours is in force again.
+- **"Add hours change" is hidden by the leave year the statement is showing** (7.3): where that year is worked out the statement says "Hours changes come from Practice HR."; on a year that is not (a year typed before the contract arrived) the link is still offered, and the service refuses a day in a worked-out year whichever way it is reached.
 - **The profile's year boxes show the year's first row.** They used to start from the year's last row while saving to its first, which a refresh-made dated row would have tripped over. A stored four-place figure is shown to two places in the boxes, and saving it back untouched is no change.
 - **The setting is a choice, not a tick box** (7.6), so a post that does not carry it leaves it alone.
-- **"Bank holidays not entered" is not held back** until a contract arrives: it lists any leave year in use with no bank holiday, from 1 January 2027 for 2028.
 - **A finished year is compared, never written** (7.4): the previous leave year is listed when its rows are not the periods the contracts now give, and a row of it still waiting can still be confirmed. "Use the worked-out figure" is refused for a year that has ended.
 - **Order of tasks**: models before the GP rounding (its tests need 66.6667 stored), and the Health card's lines with the page they link to.
 ```
@@ -5607,7 +5774,7 @@ git commit -m "Docs: allowances worked out from the contract, the guide and the 
 - [ ] **Step 10: Run everything**
 
 Run in the background (about 2 minutes): `.venv/bin/python -m pytest -q -p no:cacheprovider`
-Expected: `1356 passed, 4 skipped`: the 1,189 from before this plan, none of them edited, and 167 new ones. Fix anything that fails before going on.
+Expected: `1363 passed, 4 skipped`: the 1,189 from before this plan, none of them edited, and 174 new ones. Fix anything that fails before going on.
 
 Run: `E2E=1 E2E_CHROMIUM=/opt/pw-browsers/chromium .venv/bin/python -m pytest -q tests/e2e`
 Expected: 19 passed (about 35 seconds).
@@ -5627,8 +5794,8 @@ git push -u origin claude/hopeful-keller-lankio
 Open a pull request against `main`, titled "Allowances worked out from contracts held in Practice HR". No pull request template exists in this repository. The body says, in this order:
 
 1. **What it does.** Shift Central reads each person's contracts and leave terms from Practice HR's feed (the `contracts` field Practice HR's own pull request added), works both full-year allowances out for this leave year and the next, keeps them in step, and lists them on Staff › Allowances for a manager to check. A GP's part-year allowance is now whole sessions.
-2. **Before this is deployed to production: Practice HR must hold the practice's real contracts and none of its dummy data.** From the first read, anyone with a copied contract has their weekly hours set from it, so a dummy contract would overwrite hours a manager typed. The same line is in `docs/admin/setup.md`, "Upgrading a box that runs an earlier release".
-3. **What does not change.** With no contracts in the feed nothing is worked out or copied and the four new Health lines read 0; every existing test passes unedited. Typed figures are never overwritten. No new setting, unit or timer; two migrations, neither changing a stored figure.
+2. **Before this is deployed to production: Practice HR must hold the practice's real contracts and none of its dummy data.** From the first read, anyone with a copied contract for fixed hours has their weekly hours set from it, so a dummy contract would overwrite hours a manager typed. The same line is in `docs/admin/setup.md`, "Upgrading a box that runs an earlier release".
+3. **What does not change.** With no contracts in the feed nothing is worked out or copied, the four new Health lines read 0 and link nowhere; every existing test passes unedited. Typed figures are never overwritten. No new setting, unit or timer; two migrations, neither changing a stored figure.
 4. **Choices made while building**, pointing at section 15 of the spec.
 5. **Tests.** The suite's count, the browser tests, `ruff`, `makemigrations --check`.
 
@@ -5640,9 +5807,9 @@ Merge commits are this repository's rule. Do not merge until asked.
 
 - **Spec 5.1 (the copy of contracts):** Tasks 1 and 3. **5.2 (source, check, four places):** Task 1. **5.3 (the setting):** Tasks 1 and 9. **5.4 (weekly hours):** Task 3 (the sync, `update_hours`, `apply_due_hours_changes`) and Task 9 (read-only on the profile).
 - **6 (the arithmetic, the working, periods, not worked out):** Task 4, with the table and the service example as tests. **6.1 (a GP's part-year figure):** Task 2, with its table as a test and an hours person unchanged.
-- **7 (refresh):** Task 5: 7.1 which years, 7.2 the table row by row, 7.3 a mid-year contract, a corrected date and changed terms, 7.4 a finished year, 7.5 copy-forward, 7.6 the setting; the sync wiring and its failure message. **7.3's refusal of Add hours change and 7.7 (confirm, change, use the worked-out figure, days per week):** Task 6.
+- **7 (refresh):** Task 5: 7.1 which years, 7.2 the table row by row, 7.3 a mid-year contract, a corrected date and changed terms, 7.4 a finished year, 7.5 copy-forward, 7.6 the setting; the sync wiring and its failure message. **7.3's refusal of Add hours change and 7.7 (confirm, change with days per week at any time, use the worked-out figure):** Task 6; the link not being offered, Task 9.
 - **8 (the lists, the Health card, the page, the profile, the statement, staff):** Task 7 (lists), Task 8 (page and Health card), Task 9 (profile, statement).
 - **9 (when things go wrong):** unreachable or bad feed, Task 3; no `contracts`, Tasks 3 and 5; no bank holidays, Tasks 4, 5 and 7; a contract ending with nothing after it, steps that do not rise, bank staff, hours to sessions in a year, Tasks 4 and 7; one person failing, Task 5. "A figure drops below what is booked" needs no code: nothing cancels, and the existing *Negative leave balances* line reads the same statement.
 - **10 (testing):** each line of the Shift Central list has its test file; "one browser test that confirms a figure" is Task 10. **11 step 2 and its production line:** Task 10, steps 6 and 11. **12 (requirement changes):** Task 10, step 7.
-- **Names used across tasks:** `Contract`, `Allowance.Source`, `needs_checking`, `hours.plain`, `make_contract` (1); `contracts.in_force / weekly_hours_on / from_hr`, `profiles.set_weekly_hours_from_hr` (3); `entitlement.periods / Period / Worked / load / worked / worked_for / covered` and the reasons (4); `profiles.write_allowance / add_allowance / remove_allowance / checked_text`, `contracts.any_copied`, `entitlement.refresh / Refreshed / note / current_and_starting` (5); `profiles.confirm_allowance / confirm_allowances / change_allowance / use_worked_out` (6); `entitlement.state / Shown / shown / Item / Review / review / FINISHED` (7); URL names `allowances`, `allowances-confirm`, `allowance-use`, `allowance-change`, `AllowanceChangeForm`, `hours_hm`, `health.figures()["allowances"]` (8); `HoursForm(hours_from_hr=)`, `statement_context()["workings"]`, `settings.update(user, reminder_working_days, allowances_need_checking=None)` (9).
+- **Names used across tasks:** `Contract`, `Allowance.Source`, `needs_checking`, `hours.plain`, `make_contract` (1); `contracts.in_force / weekly_hours_on / hours_from_hr`, `profiles.set_weekly_hours_from_hr` (3); `entitlement.periods / Period / Worked / load / worked / worked_for / covered` and the reasons (4); `profiles.write_allowance / add_allowance / remove_allowance / checked_text`, `contracts.any_copied`, `entitlement.refresh / Refreshed / note / current_and_starting` (5); `profiles.confirm_allowance / confirm_allowances / change_allowance / use_worked_out / takes_days` (6); `entitlement.state / Shown / shown / Item / Review / review / FINISHED` (7); URL names `allowances`, `allowances-confirm`, `allowance-use`, `allowance-change`, `AllowanceChangeForm`, `hours_hm`, `health.figures()["allowances"]` (8); `HoursForm(hours_from_hr=)`, `statement_context()["workings"]` and `["hours_from_contract"]`, `settings.update(user, reminder_working_days, allowances_need_checking=None)` (9).
 - **Not in this plan, by the spec:** anything in Practice HR (part A, built); deriving days per week from working patterns; any other change to pro-rata, costing, carry-over or year end; the go-live checklist line of section 11 step 3 beyond the upgrade note in `docs/admin/setup.md`.
