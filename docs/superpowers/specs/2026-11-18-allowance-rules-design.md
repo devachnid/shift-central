@@ -80,7 +80,7 @@ Bank holidays are not a term: the rule is the same for everyone of a unit (secti
 ### 4.3 Screens (the admin)
 
 - **Contract type** page: "Usual annual leave" (labelled days or weeks by the type's unit) and a steps table, "After (complete years)" and "Total becomes". Help text: used by AMG Shift Central to work out allowances; leave blank for a type whose allowances are typed there.
-- **Contract** (the inline on an employment): a "Leave terms" choice and a read-only "Leave terms in force" line, for example "Usual for Reception: 22 days; 23 after 1 year; 25 after 5 years", "Own: 25 days" or "Not worked out".
+- **Contract** (the inline on an employment): a read-only "Leave terms" line, for example "Usual for Reception: 22 days; 23 after 1 year; 25 after 5 years", "Own: 25 days" or "Not worked out", with a "Change leave terms" link. The choice itself is not in the inline: existing contracts there can only be ended, never edited.
 - **Contract's own page** (new, reached from the inline, as a working pattern's page is): the choice, the base and the steps table. HR admins only, as contracts are.
 - Nothing is added to what staff see. The leave screens switched off by `SHIFT_CENTRAL_URL` are not touched, and Practice HR's own leave policies ignore these terms whether or not that setting is on.
 
@@ -112,7 +112,7 @@ The practice's full-time GP week is 8 sessions, not 9. A data migration changes 
 - A feed record with no `contracts` key leaves the person's copy alone (an older Practice HR).
 - A record with an empty list empties it.
 - A contract that is malformed (a missing or unreadable date, amount or step) fails the record as any bad field does today: the run fails with "record N in the feed: missing or bad contracts", and the previous data stands.
-- A contract that is well formed but cannot be worked out (a weekly amount of 0, steps that do not rise) is copied as sent. Practice HR refuses to save such terms, so this is a guard, not a path anyone should reach; the person's year is then not worked out and they are listed (section 8).
+- A contract that is well formed but cannot be worked out is copied as sent. Two cases: steps that do not rise, which Practice HR refuses to save, so this is a guard and not a path anyone should reach; and a weekly amount of 0, which Practice HR allows (a bank contract with no fixed hours). Either way the year is not worked out. Only the first is listed (section 8); a bank worker's allowance is simply typed.
 
 ### 5.2 `people.Allowance` gains
 
@@ -178,9 +178,9 @@ Staff on hours contracts are not affected.
 
 **The working.** Each figure comes with a line of text, for example "23 days (1 complete year on 1 Jan 2027) × 37.5 h ÷ 5 = 172 h 30 min" or "8 bank holidays × 2 sessions × 6 ÷ 8 = 12 sessions = 50 h". It is shown beside the figure and is the note on the audit entry when the figure is written.
 
-**Periods.** `periods(person, year)` returns the year as a list of `(from_day, annual, bank_holiday, weekly_hours)`: the first from the contracts in force on the year's first day (the start date, for someone who starts in the year), then one from each later day in the year on which the contracts in force change (a contract starts, or the day after one ends), up to the person's end date. A period whose figures and weekly hours equal the one before is dropped. A day with no contract in force while the person is still employed starts no period: the earlier figures carry on and the person is listed (section 8).
+**Periods.** `periods(person, year)` returns the year as a list of `(from_day, annual, bank_holiday, weekly_hours)`: the first from the contracts in force on the year's first day (the start date, for someone who starts in the year), then one from each later day in the year on which the contracts in force change (a contract starts, or the day after one ends), up to the person's end date. A period whose figures and weekly hours equal the one before is dropped. A day with no contract in force while the person is still employed starts no period: the earlier figures carry on and the person is listed (section 8). A contract's dates are read within the person's start and end dates: Practice HR does not guarantee a contract sits inside its employment, so one that starts before the start date counts from the start date.
 
-**Not worked out.** `periods` returns nothing, with a reason, when: the person has no copied contract; a contract in force in the year has no terms, or terms that cannot be worked out (5.1); or the year holds both an hours and a sessions contract.
+**Not worked out.** `periods` returns nothing, with a reason, when: the person has no copied contract; a contract in force in the year has no terms, a weekly amount of 0, or steps that do not rise (5.1); or the year holds both an hours and a sessions contract.
 
 ## 7. How figures are created and kept in step
 
@@ -244,7 +244,7 @@ Whoever can manage the person (`access.can_manage`; no one manages themselves):
 | **Allowances to check** | Rows that need checking. Also a not-worked-out person with a contract change in the year and no row from that day ("hours changed on 1 June; add the hours change"). |
 | **Allowances that differ from the contract** | Typed rows in a worked-out year whose figures are not the rule's, both shown; a typed dated row on a day the contracts do not change; a finished previous year whose rows are not what the contracts now give. |
 | **Bank holidays not entered** | A leave year refresh covers with no bank holiday in the list. |
-| **Contracts to look at in Practice HR** | A current person or starter with no copied contract in force today, or none from a day in the year ("no contract from 1 July"); a person whose terms cannot be worked out (5.1). Not shown until at least one person has a copied contract, so it stays empty before Practice HR sends any. |
+| **Contracts to look at in Practice HR** | A current person or starter with no copied contract in force today, or none from a day in the year ("no contract from 1 July"); a person whose contract has steps that do not rise (5.1). Not shown until at least one person has a copied contract, so it stays empty before Practice HR sends any. |
 
 **The page** `/staff/allowances/` (managers) has the four lists, a Team box (the report filters' partial), and for each row: the person, year, from-day, the two figures, the working, and the buttons of section 7.7. "Confirm all shown" confirms every row on the "to check" list as filtered. It posts each row's id and figures; a row whose figures have changed since the page was drawn is skipped and the page says how many.
 
@@ -263,7 +263,8 @@ Whoever can manage the person (`access.can_manage`; no one manages themselves):
 | A year has no bank holidays entered | The bank holiday figure is 0, and nothing is deducted either; the Health card says so. Entering them changes the figure at the next read, and a confirmed row goes back to "not yet checked". |
 | A figure drops below what is booked | Nothing is cancelled. The person is on the Health card's existing "below zero" line. |
 | A contract ends with nothing after it, the person still employed | The earlier figures carry on; the person is on "Contracts to look at in Practice HR". |
-| Terms that cannot be worked out reach Shift Central | That person's year is not worked out and their rows are left alone; they are on "Contracts to look at in Practice HR". |
+| Steps that do not rise reach Shift Central | That person's year is not worked out and their rows are left alone; they are on "Contracts to look at in Practice HR". |
+| A contract with a weekly amount of 0 (bank staff) | That person's year is not worked out; their allowance is typed, and they are not listed. |
 | A person moves between hours and sessions inside a year | That year is not worked out; its rows stay as they are and are typed. |
 | Refresh fails for one person | That person is logged by id and skipped; the rest are done; the run's message says "allowances failed; see the journal". |
 
@@ -285,6 +286,8 @@ Log lines carry ids and counts, never names, figures or terms.
 3. **The go-live checklist** gains a line in stage 3: set each contract type's usual leave terms before loading staff, and leave GP trainee blank.
 
 Nothing needs switching on. Shift Central starts working figures out for a person at the first read after their contract and terms are in Practice HR.
+
+**Before part B is deployed to production**, Practice HR must hold the practice's real contracts and none of its dummy data. From the first read, anyone with a copied contract has their weekly hours set from it (5.4), so a dummy contract would overwrite hours a manager typed.
 
 ## 12. Requirement changes
 
