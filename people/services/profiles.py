@@ -22,6 +22,7 @@ from people.services import access, audit, contracts
 DISPLAY_FIELDS = ("job_title", "name_colour", "display_order", "display_on_rota",
                   "show_to_other_staff", "can_see_other_staff")
 TWO_PLACES = Decimal("0.01")
+Source = Allowance.Source
 
 
 def _apply(actor, person, fields, note=""):
@@ -90,19 +91,7 @@ def set_allowance(actor, person, leave_year, annual_hours, bank_holiday_hours, n
         return audit.record(actor, allowance, {"annual_hours": ("", str(annual_hours)),
                                                "bank_holiday_hours": ("", str(bank_holiday_hours))},
                             note=note or f"allowance set for {leave_year.year}")
-    changes = {}
-    for field, after in (("annual_hours", annual_hours), ("bank_holiday_hours", bank_holiday_hours)):
-        before = getattr(allowance, field)
-        if before != after:
-            changes[field] = (hours.plain(before), after)
-    if not changes:
-        return []
-    if not note.strip():
-        raise ValueError("A reason is needed to change an allowance that is already set")
-    for field, (_, after) in changes.items():
-        setattr(allowance, field, after)
-    allowance.save(update_fields=list(changes))
-    return audit.record(actor, allowance, changes, note=note.strip())
+    return _change(actor, allowance, annual_hours, bank_holiday_hours, note)
 
 
 # --- an allowance row's figures, source and check (allowance spec, 5.2 and 7) ----
@@ -153,6 +142,128 @@ def remove_allowance(actor, row, note):
     entries = audit.record(actor, row.person, {f"allowance from {row.from_day:%-d %b %Y}": (gone, "")}, note=note)
     row.delete()
     return entries
+
+
+def _check_manager(actor, person):
+    if not access.can_manage(actor, person):
+        raise PermissionDenied("you don't manage this person")
+
+
+def _change(actor, row, annual_hours, bank_holiday_hours, note):
+    """A manager's own figures on a row that exists: it becomes typed and
+    needs a reason. The boxes hold two decimal places, so figures equal to
+    the row's at two places are no change: a worked-out 266.6667 shown as
+    266.67 and saved untouched stays worked out."""
+    annual_hours = Decimal(annual_hours).quantize(TWO_PLACES)
+    bank_holiday_hours = Decimal(bank_holiday_hours).quantize(TWO_PLACES)
+    fields = {}
+    if Decimal(row.annual_hours).quantize(TWO_PLACES) != annual_hours:
+        fields["annual_hours"] = annual_hours
+    if Decimal(row.bank_holiday_hours).quantize(TWO_PLACES) != bank_holiday_hours:
+        fields["bank_holiday_hours"] = bank_holiday_hours
+    if not fields:
+        return []
+    if not (note or "").strip():
+        raise ValueError("A reason is needed to change an allowance that is already set")
+    return write_allowance(actor, row, {**fields, "source": Source.TYPED, "checked_at": None, "checked_by": None},
+                           note=note.strip())
+
+
+def change_allowance(actor, row, annual_hours, bank_holiday_hours, note, days_per_week=None):
+    """Allowance spec, 7.7 Change: type both figures of any row, the
+    year's first or a dated one, with a reason; the row becomes typed. On
+    a dated row that carries hours the days per week can be changed too,
+    at any time: changing only them leaves the figures, the source and the
+    check as they are. Either change needs the reason."""
+    _check_manager(actor, row.person)
+    new_days = days_per_week is not None and takes_days(row) and days_per_week != row.days_per_week
+    with transaction.atomic():
+        entries = _change(actor, row, annual_hours, bank_holiday_hours, note)
+        if new_days:
+            if not (note or "").strip():
+                raise ValueError("A reason is needed to change an allowance that is already set")
+            entries += _correct_days(actor, row, days_per_week, note.strip())
+    return entries
+
+
+def takes_days(row):
+    """Whether a row carries days per week that can be corrected: a dated
+    row with weekly hours (costing reads its average day from such a row)."""
+    return row.from_day != row.leave_year and row.weekly_hours is not None
+
+
+def _correct_days(actor, row, days_per_week, note="days per week corrected"):
+    """The days per week on a dated row, corrected as it is confirmed or
+    with Change. The figures, the source and the check are not touched.
+    When the row's day has come the days go on the person now, unless a
+    later change is already in force; before it, the sync copies them on
+    the day."""
+    today = timezone.localdate()
+    person = row.person
+    due = row.from_day <= today
+    superseded = due and Allowance.objects.filter(person=person, weekly_hours__isnull=False,
+                                                  from_day__gt=row.from_day, from_day__lte=today).exists()
+    entries = write_allowance(actor, row, {"days_per_week": days_per_week, "hours_applied": due}, note=note)
+    if due and not superseded and not person.is_gp:
+        entries += _apply(actor, person, {"days_per_week": days_per_week}, note=note)
+    return entries
+
+
+def confirm_allowance(actor, row, days_per_week=None):
+    """Allowance spec, 7.7 Confirm: the manager has checked a worked-out or
+    copied row. A row that is not waiting is left as it is. On a dated row
+    that carries hours the days per week can be corrected at the same time."""
+    _check_manager(actor, row.person)
+    entries = []
+    with transaction.atomic():
+        if row.needs_checking:
+            entries += write_allowance(actor, row, {"checked_at": timezone.now(), "checked_by": actor},
+                                       note="allowance checked")
+        if days_per_week is not None and takes_days(row) and days_per_week != row.days_per_week:
+            entries += _correct_days(actor, row, days_per_week)
+    return entries
+
+
+def confirm_allowances(actor, items):
+    """"Confirm all shown". `items` are (row id, annual hours, bank holiday
+    hours, days per week or None) as the page drew them. A row that has
+    gone, is no longer waiting, is not the actor's to manage, or whose
+    figures have changed since the page was drawn is skipped. Returns
+    (confirmed, skipped)."""
+    rows = {r.pk: r for r in Allowance.objects.filter(pk__in=[item[0] for item in items]).select_related("person__team")}
+    confirmed = skipped = 0
+    for pk, annual_hours, bank_holiday_hours, days_per_week in items:
+        row = rows.get(pk)
+        if (row is None or not row.needs_checking or not access.can_manage(actor, row.person)
+                or (row.annual_hours, row.bank_holiday_hours) != (annual_hours, bank_holiday_hours)):
+            skipped += 1
+            continue
+        confirm_allowance(actor, row, days_per_week)
+        confirmed += 1
+    return confirmed, skipped
+
+
+def use_worked_out(actor, row):
+    """Allowance spec, 7.7 Use the worked-out figure, on a typed row that
+    differs from what the contracts give: write those figures, worked out
+    and checked by this manager. A typed dated row on a day the contracts
+    do not change is removed instead."""
+    _check_manager(actor, row.person)
+    from leave.services import entitlement       # people → leave at call time, as in hr_sync
+    if years.year_end(row.leave_year) < timezone.localdate():
+        raise ValueError("That leave year has ended; put it right with an adjustment")
+    worked = entitlement.worked_for(row.person, row.leave_year)
+    if not worked.ok:
+        raise ValueError("This leave year is not worked out from a contract")
+    period = next((p for p in worked.periods if p.from_day == row.from_day), None)
+    with transaction.atomic():
+        if period is None:
+            return remove_allowance(actor, row, note="the contracts have no change on this day")
+        fields = {"annual_hours": period.annual, "bank_holiday_hours": period.bank_holiday, "source": Source.WORKED_OUT,
+                  "checked_at": timezone.now(), "checked_by": actor}
+        if row.from_day != row.leave_year:
+            fields["weekly_hours"] = period.weekly_hours
+        return write_allowance(actor, row, fields, note=entitlement.note(period, "worked-out figure used"))
 
 
 NOTES_BEFORE = "(notes)"
@@ -210,6 +321,9 @@ def add_hours_change(actor, person, from_day, weekly_hours, days_per_week, annua
     year = years.year_of(person, from_day)
     if year not in years.correctable(person):
         raise ValueError("An hours change can start in the previous leave year, this one or the next")
+    from leave.services import entitlement       # people → leave at call time, as in hr_sync
+    if entitlement.worked_for(person, year).ok:
+        raise ValueError("Enter the new contract in Practice HR")
     if from_day == year:
         raise ValueError("Set the year's allowance on the Pay & time off tab; a change starts after the year's first day")
     if not Allowance.objects.filter(person=person, leave_year=year, from_day=year).exists():
