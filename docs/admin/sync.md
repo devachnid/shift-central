@@ -10,7 +10,8 @@ other direction, GP leave served to the rota app, is
 
 **Shift Central does not hold people of its own; it keeps a copy of Practice HR's,
 refreshed every fifteen minutes.** HR is the master for who works at the practice,
-their name, email, team, start and finish dates and whether they are a GP. This
+their name, email, team, start and finish dates, whether they are a GP and, once
+contracts are entered there, their contracted hours or sessions and annual leave terms. This
 app adds what HR does not hold (see [People](people.md)). That way a leaving date is
 entered once, in one place, and a wrong leave figure cannot come from the two systems
 disagreeing about it.
@@ -41,11 +42,27 @@ One request goes to `PRACTICE_HR_URL` + `/api/v1/people` with the bearer token
   [Activity log](access.md#the-two-logs) with the actor `practice-hr` and the reason
   "from Practice HR", so you can see when a finish date arrived. A run that changes
   nothing writes nothing.
+- **Each record's contracts are copied**: dates, weekly hours or sessions, the type's
+  full-time week and the annual leave terms in force. The copy replaces what was held for
+  that person. A feed that does not carry contracts (an older Practice HR) leaves the copy
+  alone. The copy is not in the Activity log: Practice HR records who changed a contract,
+  and every allowance figure that results is recorded here.
+- **A person with a contract for fixed hours in force has their weekly hours set from it**:
+  the hours of the contracts in force today, or on the start date for a starter, when they
+  add up to more than 0. GPs have none. Bank staff on a contract for 0 hours, and someone
+  between contracts, keep the hours typed here. It is recorded like any other change "from
+  Practice HR". Days per week are still typed here.
 - The run is recorded: when it started and finished, whether it worked, how many
   people the feed held, and, if it failed, a message.
 
+After a good read, and outside that transaction, the sync **works the allowances out** for
+everyone whose contract carries leave terms
+([Leave](leave.md#allowances-worked-out-from-the-contract)), then copies any hours change that
+has fallen due. Either step failing leaves the people read as they were and adds a few words
+to the run's message.
+
 **Never fetched:** date of birth, gender, phone numbers, address, NI number, pay,
-patterns, contracts and absences. HR holds them; this app does not need them.
+patterns and absences. HR holds them; this app does not need them.
 
 New people arrive with the defaults: no hours, no allowances, navy name colour,
 display order 100, and the three display switches ticked.
@@ -66,7 +83,8 @@ a person's details.
 | `Practice HR unreachable` | A network failure, a wrong hostname, or Practice HR down. Open Practice HR's address in a browser; its tunnel hostname and its service must both be up. |
 | `PRACTICE_HR_URL is not https; the token was not sent` | The URL says `http://`. The token goes only over `https`, so use the public tunnel hostname, not `http://127.0.0.1:8322`. |
 | `Practice HR returned a non-JSON body for people` or `... has no 'people' list` | The address answers, but it is not the feed: a login page, a Cloudflare challenge, or the wrong site. |
-| `record N in the feed: missing or bad <field>` | The Nth person in Practice HR's feed lacks something this app requires, most often a **start date** (an employee with no employment start). Fix the record in Practice HR; until then **no one** is updated. It names the place and the field, never the value. |
+| `record N in the feed: missing or bad <field>` | The Nth person in Practice HR's feed lacks something this app requires, most often a **start date** (an employee with no employment start). Fix the record in Practice HR; until then **no one** is updated. It names the place and the field, never the value. `missing or bad contracts` is a contract of that person with a date, an amount or a leave step that cannot be read. |
+| `allowances failed; see the journal` (after a good read) | The people were read, but working the allowances out failed, for everyone or for one person, who is skipped. The figures already held stand. `journalctl -u shift-central-hr-sync` names the person by number, never by name. The next run tries again. |
 | `unexpected error; see the journal` | Something not foreseen. `journalctl -u shift-central-hr-sync` (or `-u shift-central` for Sync now) has the traceback. |
 
 The timer keeps trying every fifteen minutes, so a fault fixed in Practice HR clears
@@ -77,7 +95,7 @@ itself on the next run; the card goes back to green and shows the new count.
 Managers see it at the top of the Staff page. It is built from the people the
 viewer manages, so a team manager's card is about their team. Its boxes are described
 below: Practice HR, Needs hours and allowances, Not in Practice HR's feed, Leaving in the next
-30 days and the leave boxes (Requests waiting, Leave costs to check, Negative leave
+30 days, the four allowance boxes and the leave boxes (Requests waiting, Leave costs to check, Negative leave
 balances, Year-end decisions waiting and, when due, Payroll not yet sent). The GP rota's two are
 [under the GP sessions](#the-health-lines).
 
@@ -125,6 +143,15 @@ that date, and the number of bookings that run past it.
   figure and shorten or cancel any bookings after the date; nothing is cancelled for you. Their leave
   allowance is cut at that date automatically. A date that looks wrong is wrong in Practice HR; fix it
   there. See [Leavers](absence.md#leavers).
+
+**Allowances to check**, **Allowances that differ from the contract**, **Bank holidays not
+entered** and **Contracts to look at in Practice HR** are counts, each with a link to
+Staff › Allowances, where the lists themselves are. All four read 0, and link nowhere, until
+Practice HR sends its first contract.
+
+- *What to do:* open the page and work down it; what each list holds and what its buttons do
+  is in [Leave](leave.md#allowances-worked-out-from-the-contract). None of them blocks
+  anything: a figure waiting to be checked already counts.
 
 **Requests waiting** is the number of leave requests and cancellation requests waiting for a
 decision from the people the viewer manages, the viewer's own not counted (another manager

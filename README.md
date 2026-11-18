@@ -20,7 +20,9 @@ Health card), the rota grid release, leave, absence and payroll, and engagement:
   apart, downloadable).
 - **The GP feed**: GPs' sessions are read from the GP rota app every fifteen
   minutes, matched by work email, and drawn as read-only tiles.
-- **Leave**, in hours, for everyone (GPs included): allowances pro-rated by the weeks a
+- **Leave**, in hours, for everyone (GPs included): allowances worked out from each
+  person's contract and leave terms in Practice HR and checked by a manager (typed where a
+  contract has no terms), pro-rated by the weeks a
   person is employed, with dated changes of hours; what a day costs read from the rota
   (an average day where the week has no rota); requests, approvals, cancellations and
   manager bookings, whole days, half days or by the hour, for all fifteen leave types;
@@ -61,6 +63,8 @@ the absence and payroll release's, with its deviations, in
 [docs/superpowers/specs/2026-10-31-absence-payroll-design.md](docs/superpowers/specs/2026-10-31-absence-payroll-design.md);
 the engagement release's, with its deviations, in
 [docs/superpowers/specs/2026-11-01-engagement-design.md](docs/superpowers/specs/2026-11-01-engagement-design.md);
+allowances worked out from contracts, with what was decided while it was built, in
+[docs/superpowers/specs/2026-11-18-allowance-rules-design.md](docs/superpowers/specs/2026-11-18-allowance-rules-design.md);
 later specs and the plans go in `docs/superpowers/specs/` and
 `docs/superpowers/plans/`, as in the rota and HR repositories.
 

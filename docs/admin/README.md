@@ -25,9 +25,12 @@ This is the *reference* for what each setting means once you are in there.
 **Practice HR owns the person; Shift Central owns how they are scheduled.**
 Names, emails, teams, start and finish dates and whether someone is a GP arrive
 from Practice HR every fifteen minutes and cannot be edited here. Job title,
-colour, hours, days per week, leave allowances and notes are typed here and are
-never touched by the feed. A mistake in the first group is put right in
-Practice HR; a mistake in the second, on the profile.
+colour, days per week and notes are typed here and are never touched by the
+feed. Weekly hours and the leave allowances are typed here too until the
+person's contract is in Practice HR; from then the hours come from the contract
+and the allowances are worked out from it, for a manager to check. A mistake in
+what Practice HR owns is put right in Practice HR; a mistake in the rest, on
+the profile.
 
 **Nothing is deleted.** There is no delete button on any page. A leaver stays
 on the Staff list under *Left*; a department is archived; a manager's access is

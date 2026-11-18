@@ -107,7 +107,10 @@ early December 2026, so it is the dependency with a date.
    managers of each team do their own team; an all-teams manager does the managers
    themselves, since nobody sets their own. Allowances can be entered without a
    reason the first time, but a reason is demanded for every later change, so
-   check them as you enter them.
+   check them as you enter them. **For anyone whose contract and leave terms are already in
+   Practice HR**, the weekly hours and both allowances are filled in for you: type only the
+   days per week, then check the figures on Staff › Allowances
+   ([Leave](leave.md#allowances-worked-out-from-the-contract)).
 
 10. **Set the departments' colours** on the Departments page so that each is
     distinct (see [Departments](departments.md)), and archive any the practice
@@ -260,6 +263,19 @@ Allowances already typed stand as they were. The leave pages start empty; before
 asked to request 2027 leave, check that everyone has a 2027 allowance: the Health card's
 *Needs hours and allowances* box lists anyone without hours or without an allowance for the
 current or the next leave year.
+
+**The allowances release (November 2026)** needs no new setting, unit or timer: `git pull`,
+`deploy/manage migrate` (it adds the copy of Practice HR's contracts, marks every allowance
+already held as typed, and widens the two figures to four decimal places without changing any
+of them), `deploy/manage collectstatic --noinput`, `systemctl restart shift-central`.
+
+**Before it goes on the production box, Practice HR must hold the practice's real contracts
+and none of its dummy data.** From the first read after the release, anyone with a contract
+for fixed hours in Practice HR has their weekly hours set from it, so a dummy contract would overwrite hours
+a manager typed, and its leave terms would be worked into allowances. Check in Practice HR
+first; then, after the first sync, check the Health card's four allowance boxes and Staff ›
+Allowances. Set each contract type's usual leave terms in Practice HR before loading staff,
+and leave GP trainee blank.
 
 ## Backups
 

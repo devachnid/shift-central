@@ -310,3 +310,18 @@ Nothing needs switching on. Shift Central starts working figures out for a perso
 - Recognising continuous service, or a service date other than the start date.
 - Practice HR's own leave policies, pots and ledger: left as they are, switched off.
 - Matching GPs between the apps by employee id instead of email.
+
+## 15. As built (Shift Central, part B)
+
+Built as designed, with these choices where the text above left room or met the code.
+
+- **The year's first figures are always dated the leave year's first day** (6, Periods), for someone who starts later in the year too: the year's first Allowance row always is, and pro-rata cuts it to the start date. When no contract is in force on that first day (the start date, for a starter) the year is not worked out and the person is listed with "no contract from …".
+- **A GP whose weekly shares already reach the largest full-year figure gets exactly that figure** (6.1). Without it a typed figure that is not a whole number of sessions (55 h is 13.2 sessions) would round down for someone employed all year, against LEAVE-13. A GP's stored figure is also read to the whole second before it is shared out, so 58.3333 h is the 14 sessions it stands for and half a session is a true tie.
+- **A dated row made by refresh is marked as already applied** (5.4, 7.2): its weekly hours are Practice HR's and its days per week are a copy, so `apply_due_hours_changes` has nothing to copy from it. Days corrected on a dated row, beside Confirm or with Change, go onto the person at once if the row's day has come and no later change is in force, and on the day otherwise. Only a dated row that carries weekly hours takes days per week: costing reads its average day from such a row.
+- **A removed dated row is audited against the person**, as "allowance from 1 Jun 2027", so the line stays in their History.
+- **Weekly hours are typed whenever no hours contract is in force** (5.4), not only for bank staff: someone between contracts keeps the box too, and the sync leaves their hours alone until a contract for more than 0 hours is in force again.
+- **"Add hours change" is hidden by the leave year the statement is showing** (7.3): where that year is worked out the statement says "Hours changes come from Practice HR."; on a year that is not (a year typed before the contract arrived) the link is still offered, and the service refuses a day in a worked-out year whichever way it is reached.
+- **The profile's year boxes show the year's first row.** They used to start from the year's last row while saving to its first, which a refresh-made dated row would have tripped over. A stored four-place figure is shown to two places in the boxes, and saving it back untouched is no change.
+- **The setting is a choice, not a tick box** (7.6), so a post that does not carry it leaves it alone.
+- **A finished year is compared, never written** (7.4): the previous leave year is listed when its rows are not the periods the contracts now give, and a row of it still waiting can still be confirmed. "Use the worked-out figure" is refused for a year that has ended.
+- **Order of tasks**: models before the GP rounding (its tests need 66.6667 stored), and the Health card's lines with the page they link to.

@@ -1,6 +1,6 @@
 # 12 — Decisions and open questions
 
-All decisions were made by the practice manager during the interview on **29 October 2026**.
+All decisions were made by the practice manager during the interview on **29 October 2026**, except D-34 to D-39, from her written answers of **November 2026** to "Hours and leave allowances: questions for the practice manager". Those six replace D-10 and D-12 where they differ.
 
 ## Decisions
 
@@ -39,6 +39,12 @@ All decisions were made by the practice manager during the interview on **29 Oct
 | D-31 | Visuals and functionality very close to FindMyShift, screen by screen; AMG Shift Central name and logo | Staff know it; no training; stated failure measure | FMS-00 |
 | D-33 | System named **AMG Shift Central**; the **dark logo** chosen as the main logo (described in `00`) | Practice manager's choice | `00` |
 | D-32 | All documents and worked examples (incl. LV-22 to LV-25) approved by the practice manager | Review complete | All |
+| D-34 | Annual leave terms are held **per contract**, in Practice HR: **days** a year (weeks for a GP), with steps for complete years of service counted **from the start date**; continuous service is not recognised | Terms differ by contract; one place to type | LEAVE-01, PAT-07 |
+| D-35 | A step up in entitlement applies **from the next leave year** | Practice manager's answer | LEAVE-01 |
+| D-36 | Bank holidays: **one day each**, any additional bank holiday included; for a GP **2 sessions each**, pro rata on a full-time week of **8 sessions** | Practice manager's answer | LEAVE-01, 11 |
+| D-37 | A worked-out allowance **counts at once** and is listed until a manager has checked it; checking can be made automatic later by a setting | Staff can book straight away; a manager sees every figure in the first year | LEAVE-01 |
+| D-38 | **Next year's allowance exists from the first day of this year** | Leave can be booked ahead at any time | LEAVE-01 |
+| D-39 | A GP's allowances are **whole sessions**, part-year figures included | Half-hour rounding would leave a GP minutes short of a session | LEAVE-10–12 |
 
 ## Open questions
 
