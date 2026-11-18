@@ -26,7 +26,7 @@ from leave.services import hours, years
 from leave.services import settings as leave_settings
 from leave.services.yearend import LAUNCH
 from people.models import Allowance, Contract, Person
-from people.services import audit, profiles
+from people.services import access, audit, profiles
 from people.services import contracts as held
 
 log = logging.getLogger("leave.entitlement")
@@ -388,3 +388,135 @@ def _copy_forward(person, this, following, data, need_check):
                                  checked_at=None if need_check else timezone.now())
     data.rows[(person.pk, following)].append(row)
     return 1
+
+
+# --- what a manager is shown (spec section 8) -------------------------------------
+
+def state(row):
+    """How a row's figures came about, as the profile says it."""
+    if row.source == Source.TYPED:
+        return "typed"
+    what = row.get_source_display()
+    if row.checked_at is None:
+        return f"{what}, not yet checked"
+    on = f"{timezone.localtime(row.checked_at):%-d %b %Y}"
+    if row.checked_by_id is None:
+        return f"{what}, checked automatically on {on}"
+    who = getattr(getattr(row.checked_by, "person", None), "name", "") or row.checked_by.email
+    return f"{what}, checked by {who} on {on}"
+
+
+@dataclass
+class Shown:
+    """One Allowance row beside what the contracts give for its day."""
+    row: object
+    state: str
+    working: object = None      # (annual line, bank holiday line) when the row's figures are the contracts'
+    rule: object = None         # the Period the contracts give, when the row is typed and differs from it
+    orphan: bool = False        # a typed dated row on a day the contracts do not change
+
+    @property
+    def dated(self):
+        return self.row.from_day != self.row.leave_year
+
+    @property
+    def takes_days(self):
+        return profiles.takes_days(self.row)
+
+    @property
+    def differs(self):
+        return self.rule is not None or self.orphan
+
+
+def _shown(row, result):
+    out = Shown(row, state(row))
+    if not result.ok:
+        return out
+    period = next((p for p in result.periods if p.from_day == row.from_day), None)
+    if period is not None and (row.annual_hours, row.bank_holiday_hours) == (period.annual, period.bank_holiday):
+        out.working = period.working
+    elif row.source == Source.TYPED:
+        out.rule, out.orphan = period, period is None and out.dated
+    return out
+
+
+def shown(person, year_list, data=None):
+    """The person's rows for these leave years, oldest first, each with its
+    state, its working and what the contracts give instead (the profile)."""
+    data = data or load([person])
+    return [_shown(row, worked(person, year, data)) for year in year_list for row in data.rows.get((person.pk, year), [])]
+
+
+@dataclass
+class Item:
+    """One line of a review list."""
+    person: object
+    year: object
+    text: str
+    can_act: bool = False       # the viewer manages this person (nobody acts on their own)
+    shown: object = None        # the row, where the line is about one
+
+
+@dataclass
+class Review:
+    to_check: list
+    differ: list
+    bank_holidays: list         # leave years refresh covers with no bank holiday on the list
+    contracts: list
+
+
+FINISHED = "the contracts now give different figures for this year, which has ended; put it right with an adjustment"
+
+
+def review(user, team=None, today=None):
+    """The four lists of spec section 8, for the people the user manages
+    (current people and starters), optionally one team's. Built on demand
+    from the rows and the copied contracts; nothing is stored."""
+    today = today or timezone.localdate()
+    people = current_and_starting(access.managed_people(user), today)
+    if team is not None:
+        people = people.filter(team=team)
+    people = list(people.select_related("team").order_by("name"))
+    data = load(people)
+    listing_contracts = held.any_copied()       # the last two lists stay empty until Practice HR has sent a contract
+    out, empty = Review([], [], [], []), set()
+    for person in people:
+        can_act = access.can_manage(user, person)
+        look = ""
+        for year in covered(person, today):
+            result = worked(person, year, data)
+            rows = data.rows.get((person.pk, year), [])
+            if data.holidays_in(year) == 0:
+                empty.add(year)
+            for one in (_shown(row, result) for row in rows):
+                if one.row.needs_checking:
+                    out.to_check.append(Item(person, year, one.state, can_act, one))
+                elif one.differs:
+                    text = "the contracts do not change on this day" if one.orphan else "typed figures that are not the contract's"
+                    out.differ.append(Item(person, year, text, can_act, one))
+            if not result.ok and rows:
+                have = {r.from_day for r in rows}
+                what = "sessions" if person.is_gp else "hours"
+                out.to_check += [Item(person, year, f"{what} changed on {day:%-d %B}; add the hours change", can_act)
+                                 for day in result.changes if day not in have]
+            if not look and result.reason == BAD_TERMS:
+                look = BAD_TERMS
+            if not look and result.gaps:
+                look = f"no contract from {result.gaps[0]:%-d %B %Y}"
+        previous = years.previous_year(years.year_of(person, today))
+        if years.year_end(previous) >= LAUNCH:
+            result, rows = worked(person, previous, data), data.rows.get((person.pk, previous), [])
+            out.to_check += [Item(person, previous, state(row), can_act, Shown(row, state(row))) for row in rows if row.needs_checking]
+            if result.ok and rows and ({(r.from_day, r.annual_hours, r.bank_holiday_hours) for r in rows}
+                                       != {(p.from_day, p.annual, p.bank_holiday) for p in result.periods}):
+                out.differ.append(Item(person, previous, FINISHED, can_act))
+        if listing_contracts:
+            mine = data.contracts.get(person.pk, [])
+            if not mine:
+                look = NO_CONTRACT
+            elif not held.in_force(mine, max(today, person.start_date)):
+                look = "no contract in force today" if person.start_date <= today else "no contract in force on the start date"
+            if look:
+                out.contracts.append(Item(person, None, look))
+    out.bank_holidays = sorted(empty) if listing_contracts else []
+    return out
