@@ -64,7 +64,7 @@ These rules apply to **everyone**: all staff groups and all GPs (partners, salar
 **LEAVE-18** — A leave booking that includes a bank holiday takes the bank holiday from the bank holiday allowance and the other days from annual leave.
 *Tests:* LV-12.
 
-**LEAVE-19** — **Extra one-off bank holidays** have no automatic handling; managers adjust allowances mid-year when one happens.
+**LEAVE-19** — **Extra one-off bank holidays** have no automatic handling; managers adjust allowances mid-year when one happens. Where allowances are worked out from the contract, an added bank holiday is counted at the next read (amended November 2026: see D-36).
 *Tests:* LV-14.
 
 ## Balances and carry-over
@@ -154,7 +154,7 @@ These rules apply to **everyone**: all staff groups and all GPs (partners, salar
 |---|---|
 | Unit per contract type: sessions for GPs | Hours for everyone; session = 4 h 10 min |
 | Entitlement = weeks × weekly hours; service steps | Full-year hours typed in by manager; no service steps (amended November 2026: see LEAVE-01 and D-34) |
-| Accrues day by day | Weeks on contract ÷ 52, part week = whole week, round to 0.5 h |
+| Accrues day by day | Weeks on contract ÷ 52, part week = whole week, round to 0.5 h (whole sessions for a GP: D-39) |
 | Booking costs the dated weekly pattern | Costs scheduled rota hours that day |
 | Bank holiday: three options | Separate pro-rata allowance (matches one option) |
 | Carry-over maximum and optional expiry; TOIL can expire | No maximum, no deadline; manager decides at year end for leave and TOIL |
@@ -163,10 +163,10 @@ These rules apply to **everyone**: all staff groups and all GPs (partners, salar
 
 ## Not needed, on purpose
 
-- Service-related increases.
+- Service-related increases. (amended November 2026: see D-34)
 - Buying and selling leave.
 - Carry-over limits and deadlines.
-- Automatic handling of extra bank holidays.
+- Automatic handling of extra bank holidays. (amended November 2026: see D-36)
 - Rules for irregular-hours, bank or term-time workers.
 - A monthly pro-rata rule (considered and rejected) and FindMyShift's daily rule.
 - Sick allowance and Bradford Factor.

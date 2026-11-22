@@ -50,7 +50,7 @@
 
 ## Relationship with the existing systems
 
-- **Practice HR** stays the sign-in for all apps. The new system is the **master** for weekly hours, days per week and leave. Practice HR's own leave design (built, not live) is **not** used.
+- **Practice HR** stays the sign-in for all apps. The new system is the **master** for weekly hours, days per week and leave. (amended November 2026: Practice HR is the master for contracts, weekly hours or sessions and leave terms; the new system for days per week, allowances, leave and balances. See PAT-07.) Practice HR's own leave design (built, not live) is **not** used.
 - **GP rota app** stays. GP rotas are also built in the new grid. The two stay in sync both ways; clashes are flagged to managers.
 
 ## Glossary (the practice's own terms)

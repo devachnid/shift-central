@@ -63,8 +63,10 @@ requirements' table.
 | Activity log | No | Entries about their team's people (rota and leave changes included), and all department, template, bank holiday, blackout, leave type and leave setting entries | Everything |
 | Time off list, year planner, requesting own leave | Yes (colleagues' leave by type only, and only for the people the rota shows them) | Yes | Yes |
 | Another person's leave description, pay and cost | No | Their team's people | Everyone |
-| Book, edit, approve, decline or cancel leave; Adjust; Add hours change | No | Their team's people | Everyone but themselves |
-| Bank holidays, Blackouts, Leave types, Leave settings | No | Yes | Yes |
+| Staff › Allowances: confirm and change allowance figures | No | Their team's people | Everyone but themselves |
+| Book, edit, approve, decline or cancel leave; Adjust; Add hours change (where the year is typed) | No | Their team's people | Everyone but themselves |
+| Bank holidays, Blackouts, Leave types | No | Yes | Yes |
+| Leave settings | No | Yes, except the *Allowances worked out from a contract* choice | Yes, including that choice, which only an all-teams manager changes |
 | Leave report | Their own row | Their team's people and themselves | Everyone |
 | Log in logs | No | No | Yes |
 

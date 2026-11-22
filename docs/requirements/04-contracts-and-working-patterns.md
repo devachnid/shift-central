@@ -29,4 +29,4 @@
 - Backdated hours changes.
 - Different session lengths for different GPs or session types.
 - Staff working for more than one employer.
-- Automatic syncing of contract details with Practice HR.
+- Automatic syncing of contract details with Practice HR. (amended November 2026: contracts are read from Practice HR; see PAT-06 and PAT-07)

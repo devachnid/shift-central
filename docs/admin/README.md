@@ -14,11 +14,11 @@ This is the *reference* for what each setting means once you are in there.
 | [Departments](departments.md) | The list of departments, colours, order, archiving instead of deleting |
 | [Access](access.md) | The three roles, where each is set, what each can see and do (leave included), the Permissions link and its own-leave tick, sessions and signing out, the two logs |
 | [The rota](rota.md) | The grid, typing a shift and what the parser reads, the right-click menu, copying weeks, templates, overtime, notify staff, options and filters, time off on the grid, the hours report, who's in today, the phone view, GP sessions |
-| [Leave](leave.md) | Allowances and hours changes, what a day costs, requesting and booking, approving, cancelling and editing, adjustments, bank holidays, blackouts, leave types, the statement and how to read it, the year planner and the leave report, the emails and the reminder, GPs, and what is not built yet (repeating time off, the approval variants, imports) |
+| [Leave](leave.md) | Allowances and hours changes, allowances worked out from the contract and the Allowances page, what a day costs, requesting and booking, approving, cancelling and editing, adjustments, bank holidays, blackouts, leave types, the statement and how to read it, the year planner and the leave report, the emails and the reminder, GPs, and what is not built yet (repeating time off, the approval variants, imports) |
 | [Absence and payroll](absence.md) | Recording sickness and the join-on warning, instances and triggers, converting holiday to sickness, the past schedule section for 2026, the sickness and leave summaries (PDF or Excel), the leaver, return and year-end flags, the payroll report (each column, Mark as sent, corrections), the emails and the daily command |
 | [Engagement](engagement.md) | Open shifts (posting, claiming, deciding, who is told), messages and the Inbox, the notice board, uploads (the shared area and a person's documents), the Outbox, the Dashboard, Shifts and Staff by hour reports, putting the app on a phone and turning notifications on, and what the server needs for them |
-| [The Practice HR and GP feeds](sync.md) | Practice HR: what the fifteen-minute sync changes and never changes, the Health card's figures (people and leave) and what to do about each, Sync now, running it by hand. The GP rota app: sessions read every fifteen minutes, the unmatched list; and GP leave served to the rota app, with its token |
-| [Setting up](setup.md) | The go-live order, then backups and restore |
+| [The Practice HR and GP feeds](sync.md) | Practice HR: what the fifteen-minute sync changes and never changes (contracts and weekly hours included), the Health card's figures (people, allowances and leave) and what to do about each, Sync now, running it by hand and the dry run. The GP rota app: sessions read every fifteen minutes, the unmatched list; and GP leave served to the rota app, with its token |
+| [Setting up](setup.md) | The go-live order, the notes for upgrading a box and the allowances first run, then backups and restore |
 
 ## The mental model
 
@@ -26,9 +26,11 @@ This is the *reference* for what each setting means once you are in there.
 Names, emails, teams, start and finish dates and whether someone is a GP arrive
 from Practice HR every fifteen minutes and cannot be edited here. Job title,
 colour, days per week and notes are typed here and are never touched by the
-feed. Weekly hours and the leave allowances are typed here too until the
-person's contract is in Practice HR; from then the hours come from the contract
-and the allowances are worked out from it, for a manager to check. A mistake in
+feed. Weekly hours and the leave allowances are typed here for anyone they are
+not worked out for: someone with no contract in Practice HR, a contract with no
+leave terms (a GP trainee's, say), or bank staff on 0 hours. For everyone else the
+hours come from the contract and the allowances are worked out from it, for a
+manager to check. A mistake in
 what Practice HR owns is put right in Practice HR; a mistake in the rest, on
 the profile.
 

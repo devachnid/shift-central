@@ -54,7 +54,7 @@ All notifications go by **email and phone push notification** (NOTIF-01).
 | NOTIF-08 | Year end | Managers | Start of new leave year: everyone with leave or TOIL left |
 | NOTIF-09 | Leave booked on a placeholder, and again when recalculated | Managers | At booking and when the rota is set |
 | NOTIF-10 | GP rota clash between the apps | Managers | When detected |
-| NOTIF-11 | Hours change leaves a negative balance | Managers | When the change is entered |
+| NOTIF-11 | Hours change leaves a negative balance | Managers | When the change is entered (amended November 2026: sent for an hours change added here; a change that arrives from Practice HR shows on the Health card instead) |
 | NOTIF-12 | Sickness entry joins on to an existing one | The manager entering it | On screen, at entry |
 
 ## Swaps and open shifts

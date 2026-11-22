@@ -16,8 +16,10 @@ app adds what HR does not hold (see [People](people.md)). That way a leaving dat
 entered once, in one place, and a wrong leave figure cannot come from the two systems
 disagreeing about it.
 
-**The sync can add and overwrite, and nothing else.** It never deletes a person,
-never touches a field typed here, and never writes anything back to Practice HR.
+**The sync can add and overwrite, and nothing else.** It never deletes a person and
+never writes anything back to Practice HR. Of the fields typed here it touches only
+two: weekly hours, for someone with a contract for fixed hours, and the allowances it
+works out. A figure a manager typed is never overwritten.
 
 ## What one sync does
 
@@ -34,7 +36,8 @@ One request goes to `PRACTICE_HR_URL` + `/api/v1/people` with the bearer token
   none. **A starter appears without a team** until HR holds their position (a
   January starter has none in December); they are on the Staff list's *Starting*
   view for an all-teams manager, who can set up their hours and allowances
-  meanwhile. Their team arrives with the first sync after their position starts.
+  meanwhile if those are typed here. For someone with a contract in Practice HR the
+  hours are read-only, and the allowances are checked on Staff › Allowances. Their team arrives with the first sync after their position starts.
 - A person **in the database but missing from the feed is not deleted**. Their
   *last seen* time simply stops advancing, and the Health card lists them once a
   good run has left them out and they have been missing for over a day.
@@ -116,7 +119,9 @@ either the current leave year or the next**. A GP is never counted, as they have
 no hours here.
 
 - *What to do:* open each name and fill in Pay & time off: the hours, the days and
-  at least one of the two leave years' allowances. A person drops off the list once
+  at least one of the two leave years' allowances. For someone with a contract in
+  Practice HR the hours are read-only and the allowances are checked on Staff ›
+  Allowances, so only the days per week are typed. A person drops off the list once
   all three are there; a person's Pay & time off tab shows a dash for any year not
   entered, so check the other year there.
 - Wrong: ignoring it. A person with no hours is costed at nothing on a day with no rota,
@@ -177,8 +182,8 @@ their booking.
 
 **Negative leave balances** lists the first five people whose annual leave remaining (bank holidays
 included) is below zero in their current or next leave year, each a link to their statement. A year with
-no allowance entered is *Needs hours and allowances*, not a deficit. GPs are never listed here, whatever
-their balance.
+no allowance entered is *Needs hours and allowances*, not a deficit. A GP below zero is listed like
+anyone else.
 
 - *What to do:* it is allowed (a manager can book past the balance, and an hours change can
   leave one negative), so decide whether to correct it with an adjustment, in which case the line
@@ -204,7 +209,8 @@ only the viewer's team), then returns to the Staff page with one message: "*N* p
 read from Practice HR." or "Practice HR could not be read: *message*."
 
 Use it after adding a starter or correcting a date in Practice HR so as not to wait
-fifteen minutes. It is safe to press twice; a second run that finds nothing new changes
+fifteen minutes. It is also the way to see a contract just entered in Practice HR
+without waiting fifteen minutes. It is safe to press twice; a second run that finds nothing new changes
 nothing.
 
 ## Running it by hand

@@ -1,6 +1,6 @@
 # 12 — Decisions and open questions
 
-All decisions were made by the practice manager during the interview on **29 October 2026**, except D-34 to D-39, from her written answers of **November 2026** to "Hours and leave allowances: questions for the practice manager". Those six replace D-10 and D-12 where they differ.
+All decisions were made by the practice manager during the interview on **29 October 2026**, except D-34 to D-39, from her written answers of **November 2026** to "Hours and leave allowances: questions for the practice manager". Those six replace D-10, D-12 and, for GPs, D-14 where they differ.
 
 ## Decisions
 
@@ -19,7 +19,7 @@ All decisions were made by the practice manager during the interview on **29 Oct
 | D-11 | Leave in **hours** for everyone; GP session = 4 h 10 min | One unit for all | LEAVE-02 |
 | D-12 | Allowances typed in by managers as full-year hours (annual + separate bank holiday) (amended November 2026: see LEAVE-01 and D-34) | Entitlements vary by contract | LEAVE-01 |
 | D-13 | A day costs **scheduled rota hours**, excluding overtime; average day only as placeholder | Reflects individual working patterns | LEAVE-05, 06 |
-| D-14 | Starter/leaver: **weeks ÷ 52, part week = whole week, round once to 0.5 h**. Monthly rule and FindMyShift's daily rule rejected | Practice's chosen formula | LEAVE-10 |
+| D-14 | Starter/leaver: **weeks ÷ 52, part week = whole week, round once to 0.5 h** (for a GP, whole sessions: D-39). Monthly rule and FindMyShift's daily rule rejected | Practice's chosen formula | LEAVE-10 |
 | D-15 | Hours change: part weeks whole on both sides (53 weeks counted) | Consistent with starter rule | LEAVE-12 |
 | D-16 | Half day = exactly half the scheduled hours, no rounding | Simple and fair | LEAVE-08 |
 | D-17 | Bank holiday allowance pro-rated like annual leave; deficit/credit into annual leave | Matches practice's existing method (Staff E email) | LEAVE-11, 17 |
@@ -50,7 +50,7 @@ All decisions were made by the practice manager during the interview on **29 Oct
 
 | # | Question | Who can answer | Blocks |
 |---|---|---|---|
-| Q-01 | Is rounding to the nearest 0.5 h acceptable when it rounds **down** (e.g. 165.58 → 165.5)? | Practice's HR / legal adviser | LEAVE-10, 11, 12 |
+| Q-01 | Is rounding to the nearest 0.5 h acceptable when it rounds **down** (e.g. 165.58 → 165.5)? (for a GP, whole sessions: D-39) | Practice's HR / legal adviser | LEAVE-10, 11, 12 |
 | Q-02 | Statutory carry-over rights after sickness or family leave — does manager discretion meet them? | HR / legal adviser | LEAVE-21, 22 |
 | Q-03 | Sickness during annual leave, and leave during long absence — do the rules meet the law? | HR / legal adviser | LEAVE-28, 29 |
 | Q-04 | What is the fallback if the system isn't ready for set-up by early December 2026? | Practice manager and developer | MIG-02 |
@@ -62,6 +62,7 @@ All decisions were made by the practice manager during the interview on **29 Oct
 | Q-10 | Confirm the GP rota app stops reading time off from FindMyShift and uses the new system | Developer | ROTA-GP-05 |
 | Q-11 | Should a sickness *reason* be recorded at all, and if so who sees it? (Not discussed) | Practice manager | ACC-10 |
 | Q-12 | The rota relies heavily on colour; no accessibility needs are known today | Practice manager (if needs arise) | FMS items 7, 10 |
+| Q-13 | A GP's bank holiday figure that is not a whole number of sessions (11.25): nearest session, or always up? | Practice manager | LEAVE-11, D-36 |
 
 ## Action
 

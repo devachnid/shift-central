@@ -72,7 +72,7 @@ a manager needs, all worked out for them:
 - Example: 225 h a year for someone who starts on 1 July. The year has 184 days left, so
   27 weeks, and 27/52 of 225 h is 116.83 h, shown as 117 h.
 - The annual leave allowance and the bank holiday allowance are each worked out this way.
-- A year with no allowance typed has none, and the statement says "not set". The person
+- A year with no allowance entered has none, and the statement says "not set". The person
   (unless a GP) is also on the Health card's *Needs hours and allowances* list.
 
 **A change of hours part-way through a year**, for a person whose allowances are typed, is
@@ -485,11 +485,16 @@ adjustments belong to the person rather than to a year.
 
 The list for a year, with the days seeded for England and Wales for 2026 and 2027. **The
 practice adds a day by hand, such as a one-off, with the form below the list** (day and name),
-and **Delete** takes one off. Nothing is automatic: a year that is not listed has none,
-so add 2028's before leave is requested for it.
+and **Delete** takes one off. Nothing is added automatically: a year that is not listed
+has none. Add next year's before 1 January, because next year's bank holiday allowance is
+worked out from this list from that day; until then it is 0 and the Health card says *Bank
+holidays not entered*.
 
-Two things depend on the list: a Holiday day that falls on a listed day draws on the bank
-holiday allowance, and working-day counting skips them (the reminder).
+Three things depend on the list: a Holiday day that falls on a listed day draws on the bank
+holiday allowance, working-day counting skips them (the reminder), and the
+[worked-out bank holiday allowance](#allowances-worked-out-from-the-contract) counts them.
+Adding or deleting a day changes that figure at the next read, and it goes back to "not yet
+checked".
 
 **Booking one for everyone.** Each row has **Add for everyone**, which lists the people you
 manage:
@@ -560,7 +565,7 @@ and TOIL. **How it is worked out** under it lists every line, in order:
 
 | Line | What it is |
 |---|---|
-| Annual leave allowance and Bank holiday allowance, one line per allowance row | The dates, "27 weeks of 52 at 225.00 h", and the share. If the figure was rounded or capped, a further line says "rounded to the half hour" or "…and capped at the full-year figure". "not set" when none. |
+| Annual leave allowance and Bank holiday allowance, one line per allowance row | The dates, "27 weeks of 52 at 225.00 h", and the share. If the figure was rounded or capped, a further line says "rounded to the half hour" ("rounded to the whole session" for a GP) or "…and capped at the full-year figure". "not set" when none. |
 | An adjustment | Its reason and account, with the hours. The person sees the reason. |
 | A booking day | "Mon 8 Mar: Holiday (annual, rota)", its cost taken off. The account is annual or bank holiday, and the source after the comma says where the figure came from: rota, average day, half day, times, set by a manager or no shift. |
 | *Requested: …* | A waiting request and its cost. **Not taken off** the remaining figure, but off *available*. |
@@ -619,12 +624,17 @@ send never stops a booking.
 | A request or a cancellation request is made | Every manager who can manage the person, once each, never the person | "[Name] has requested time off" or "… has asked to cancel time off" |
 | A request is approved or declined; a cancellation is approved or refused | The person | "Your time off has been approved", "…declined", "…cancelled" or "…kept" |
 | A booking with average-day (placeholder) days is made; or a manager sets the shift behind a placeholder day (even at the same figure), or a rota write changes an approved whole day's cost | The managers | "Leave cost to check for [Name]" |
-| An hours change leaves annual leave below zero | The managers | "[Name]'s leave balance is negative" |
+| An hours change added with **Add hours change** leaves annual leave below zero | The managers | "[Name]'s leave balance is negative" |
 | A request (or a cancellation request) is still waiting after the number of working days set below | The managers, once per request | "Time off request still waiting" |
 
 The managers emailed are those who can manage the person, have an active login, have started
 and have not left; never the person. Subjects name the person and say what happened, never the reason or the note. A
 decision email to the person carries the manager's note. Links in every email are full addresses.
+
+The negative-balance email is sent for an hours change added here with **Add hours change**.
+A change that arrives from Practice HR sends no email. It shows on the Health card's *Negative
+leave balances* line, and its new allowance waits on Staff › Allowances under *Allowances to
+check*.
 
 **The reminder** is `deploy/manage leave_reminders`, started by
 `shift-central-leave-reminders.timer` at 08:20 each weekday (a few minutes' random delay, and it

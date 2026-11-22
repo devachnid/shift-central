@@ -1,7 +1,7 @@
 # AMG Shift Central and Practice HR: allowances worked out from contracts — design
 
 **Date:** 2026-11-18
-**Status:** approved in conversation, section by section; written spec awaiting review
+**Status:** approved in conversation, section by section; built (both parts) and reviewed, with what was decided while it was built recorded at the end (section 15)
 **Repositories:** `devachnid/practice-hr` (part A) and `devachnid/shift-central` (part B). This file is the one copy of the design; each repository gets its own plan.
 **Requirements:** `docs/requirements/` as amended. This spec changes LEAVE-01, LEAVE-10 to 12 (for GPs only), PAT-06 and PAT-07 (section 12) on the practice manager's written answers of November 2026 to "Hours and leave allowances: questions for the practice manager". It builds on the Foundation and leave specs (`2026-10-29-foundation-design.md`, `2026-10-31-leave-design.md`) and on Practice HR's foundation spec, whose constraints, access rules, audit and conventions it reuses unchanged unless this spec says so.
 
