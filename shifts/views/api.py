@@ -28,7 +28,13 @@ def api_login_required(view):
 
 def json_view(view):
     """Parse the body into request.json and turn the services' refusals into
-    status codes. A JSON body that is not an object is a 400 too."""
+    status codes. A JSON body that is not an object is a 400 too.
+
+    A ValueError or PermissionDenied here carries a sentence a service or
+    this module wrote for the person to read, and that sentence is the
+    answer. Nothing below parses a request with a bare int(), so Python's
+    own wording, which quotes what was sent, is never one of them. A
+    TypeError or KeyError is nobody's sentence: it is answered plainly."""
     @wraps(view)
     def wrapped(request, *args, **kwargs):
         if request.method == "POST":
@@ -42,9 +48,28 @@ def json_view(view):
             return view(request, *args, **kwargs)
         except PermissionDenied as e:
             return JsonResponse({"error": str(e) or "you can't do that"}, status=403)
-        except (ValueError, TypeError, KeyError) as e:
+        except ValueError as e:
             return JsonResponse({"error": str(e) or "bad request"}, status=400)
+        except (TypeError, KeyError):
+            return JsonResponse({"error": "bad request"}, status=400)
     return wrapped
+
+
+def _whole(value, name):
+    """A whole number sent as JSON, else a refusal in the app's words."""
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise ValueError(f"{name} must be a whole number")
+    try:
+        return int(value)
+    except ValueError:
+        raise ValueError(f"{name} must be a whole number") from None
+
+
+def _row_order(request):
+    order = request.json.get("row_order", [])
+    if not isinstance(order, list) or not all(window.is_pk(p) for p in order):
+        raise ValueError("row_order must be a list of people")
+    return [int(p) for p in order]
 
 
 def _day(value):
@@ -120,6 +145,8 @@ def _cells(request):
         raise ValueError("no cells")
     if len(cells) > entries.MAX_CELLS:
         raise ValueError(entries.TOO_MANY)
+    if not all(isinstance(c, list) and len(c) == 2 and window.is_pk(c[0]) for c in cells):
+        raise ValueError("cells must be pairs of a person and a day")
     return [(int(p), _day(d)) for p, d in cells]
 
 
@@ -128,8 +155,8 @@ def _cells(request):
 @json_view
 def move(request):
     j = request.json
-    return _changed(request, entries.move(request.user, _cells(request), int(j.get("days", 0)), int(j.get("rows", 0)),
-                                          bool(j.get("copy")), [int(p) for p in j.get("row_order", [])]))
+    return _changed(request, entries.move(request.user, _cells(request), _whole(j.get("days", 0), "days"),
+                                          _whole(j.get("rows", 0), "rows"), bool(j.get("copy")), _row_order(request)))
 
 
 @api_login_required
@@ -142,8 +169,10 @@ def paste(request):
     anchor = j.get("anchor")
     if not isinstance(anchor, list) or len(anchor) != 2:
         raise ValueError("no anchor")
+    if not window.is_pk(anchor[0]):
+        raise ValueError("the anchor must be a person and a day")
     return _changed(request, entries.paste(request.user, (int(anchor[0]), _day(anchor[1])), j.get("block"),
-                                           j.get("mode", "replace"), [int(p) for p in j.get("row_order", [])]))
+                                           j.get("mode", "replace"), _row_order(request)))
 
 
 @api_login_required

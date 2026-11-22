@@ -217,7 +217,9 @@ def test_subscribing_says_whether_the_device_is_new(push_on):
 def test_a_refused_address_is_logged_by_its_host_alone(push_on, caplog):
     bad = {"endpoint": "https://push.example.net/secret/token", "keys": {"p256dh": "a", "auth": "b"}}
     assert post_json(client_for(make_person()), "/push/subscribe/", bad).status_code == 400
-    assert "push.example.net" in caplog.text and "secret" not in caplog.text
+    refused = [r for r in caplog.records if r.name == "messaging.push" and "refused" in r.getMessage()]
+    assert [r.args[-1] for r in refused] == ["push.example.net"]              # the host, alone and whole
+    assert "secret" not in caplog.text and "token" not in caplog.text
 
 
 def test_a_refused_address_with_odd_characters_logs_nothing_odd(push_on, caplog):
@@ -229,3 +231,22 @@ def test_a_refused_address_with_odd_characters_logs_nothing_odd(push_on, caplog)
 def test_the_log_out_forms_say_to_clear_this_phone_first(push_on):
     body = client_for(make_person()).get("/rota/").content.decode()
     assert 'data-logout data-unsubscribe-url="/push/unsubscribe/"' in body
+
+
+def test_problem_names_what_is_wrong_with_a_subscription_without_raising():
+    endpoint, keys = GOOD["endpoint"], GOOD["keys"]
+    assert push.problem(endpoint, keys["p256dh"], keys["auth"]) == ""
+    assert push.problem("https://push.example.net/x", keys["p256dh"], keys["auth"]) == "That is not a push address."
+    assert push.problem(None, keys["p256dh"], keys["auth"]) == "That is not a push address."
+    assert push.problem(endpoint, "", keys["auth"]) == "That is not a valid push key."
+    assert push.problem(endpoint, keys["p256dh"], {"a": 1}) == "That is not a valid push key."
+    with pytest.raises(ValueError, match="not a push address"):
+        push.register(make_person(), "https://push.example.net/x", keys["p256dh"], keys["auth"])
+
+
+def test_a_refused_subscription_is_answered_with_the_services_sentence(push_on):
+    c = client_for(make_person())
+    r = post_json(c, "/push/subscribe/", {"endpoint": "https://push.example.net/x", "keys": GOOD["keys"]})
+    assert r.status_code == 400 and r.json() == {"error": "That is not a push address."}
+    r = post_json(c, "/push/subscribe/", {"endpoint": GOOD["endpoint"], "keys": {"p256dh": "<b>", "auth": "b"}})
+    assert r.status_code == 400 and r.json() == {"error": "That is not a valid push key."}
