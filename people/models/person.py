@@ -44,6 +44,9 @@ class Person(models.Model):
     display_on_rota = models.BooleanField(default=True)
     show_to_other_staff = models.BooleanField(default=True)
     can_see_other_staff = models.BooleanField(default=True)
+    # Weekly hours are typed, except while the person's hours contracts in
+    # Practice HR add up to more than 0: then the sync sets them (allowance
+    # spec, 5.4).
     weekly_hours = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     days_per_week = models.PositiveSmallIntegerField(null=True, blank=True)
     # Leave (spec 3). leave_year_start is MM-DD; own_leave_without_approval

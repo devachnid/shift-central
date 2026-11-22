@@ -1,5 +1,7 @@
-"""Read people from Practice HR. Run by shift-central-hr-sync.timer every
-fifteen minutes, and by the Staff page's Sync now button."""
+"""Read people and their contracts from Practice HR, and work allowances out
+from them. Run by shift-central-hr-sync.timer every fifteen minutes, and by
+the Staff page's Sync now button. With --dry-run it counts what a run would
+change and keeps nothing."""
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -8,7 +10,7 @@ from people.services import hr_sync
 
 
 class Command(BaseCommand):
-    help = "Read people from Practice HR into Shift Central"
+    help = "Read people and their contracts from Practice HR into Shift Central and work allowances out (--dry-run changes nothing)"
 
     def add_arguments(self, parser):
         parser.add_argument("--dry-run", action="store_true",
