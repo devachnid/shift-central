@@ -57,6 +57,23 @@ def clean_appearance(raw):
     return out
 
 
+BREAK = "the break must be 15, 30, 45 or 60 minutes"
+
+
+def _is_id(value):
+    """A request value that names a row: ASCII digits and nothing else."""
+    text = str(value)
+    return not isinstance(value, bool) and text.isascii() and text.isdigit()
+
+
+def _break(value):
+    """A break length from request input. Anything else is refused in the
+    app's words: a bare int() would answer with Python's, quoting what was sent."""
+    if not _is_id(value) or int(value) not in Entry.BREAKS:
+        raise ValueError(BREAK)
+    return int(value)
+
+
 def _hm(value, name):
     try:
         return time.fromisoformat(value) if isinstance(value, str) else value
@@ -79,9 +96,7 @@ def _clean_item(raw, departments):
     if not isinstance(start, time) or not isinstance(finish, time) or finish <= start:
         raise ValueError("a shift needs a start and a later finish")
     item.update(start=start, finish=finish)
-    item["break_minutes"] = int(raw.get("break_minutes") or 0)
-    if item["break_minutes"] not in Entry.BREAKS:
-        raise ValueError("the break must be 15, 30, 45 or 60 minutes")
+    item["break_minutes"] = _break(raw.get("break_minutes") or 0)
     dept = raw.get("department")
     if dept not in (None, ""):
         dept = departments.get(int(dept)) if str(dept).isascii() and str(dept).isdigit() else None
@@ -227,11 +242,11 @@ def patch(user, entry, **fields):
         fields["appearance"] = clean_appearance(fields["appearance"] or {})
     if "department" in fields:
         dept = fields["department"]
-        fields["department"] = None if dept in (None, "") else Department.objects.filter(pk=dept).first()
+        fields["department"] = None if dept in (None, "") or not _is_id(dept) else Department.objects.filter(pk=dept).first()
         if dept not in (None, "") and fields["department"] is None:
             raise ValueError("unknown department")
-    if "break_minutes" in fields and int(fields["break_minutes"]) not in Entry.BREAKS:
-        raise ValueError("the break must be 15, 30, 45 or 60 minutes")
+    if "break_minutes" in fields:
+        fields["break_minutes"] = _break(fields["break_minutes"])
     if "overtime" in fields and (fields["overtime"] or "") not in Entry.Overtime.values:
         raise ValueError("overtime must be paid or TOIL")
     if entry.kind != Entry.Kind.SHIFT and set(fields) & {"department", "break_minutes", "overtime", "wfh"}:

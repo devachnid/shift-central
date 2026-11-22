@@ -305,3 +305,62 @@ def test_a_paste_reports_the_days_off_it_skipped_apart_from_the_rows(world):
     assert Entry.objects.filter(person=nina, day=MON).exists()
     body = _post(world["c_lead"], "/rota/api/clear/", {"cells": [[nina.pk, "2027-03-01"]]}).json()
     assert body["skipped"] == 0 and body["skipped_days"] == 0
+
+
+# --- a refusal is in the app's own words: Python's error text, and what was typed, never reach the response ---
+
+@pytest.mark.parametrize("url,body,says", [
+    ("/rota/api/move/", {"cells": [1], "days": 1}, "cells must be pairs of a person and a day"),
+    ("/rota/api/move/", {"cells": [["<b>x</b>", "2027-03-01"]], "days": 1}, "cells must be pairs of a person and a day"),
+    ("/rota/api/clear/", {"cells": [[{}, "2027-03-01"]]}, "cells must be pairs of a person and a day"),
+    ("/rota/api/move/", {"cells": [[1, "2027-03-01"]], "days": {}}, "days must be a whole number"),
+    ("/rota/api/move/", {"cells": [[1, "2027-03-01"]], "days": 1, "rows": "<b>"}, "rows must be a whole number"),
+    ("/rota/api/move/", {"cells": [[1, "2027-03-01"]], "days": 1, "row_order": ["<b>"]}, "row_order must be a list of people"),
+    ("/rota/api/move/", {"cells": [[1, "2027-03-01"]], "days": 1, "row_order": 7}, "row_order must be a list of people"),
+    ("/rota/api/paste/", {"anchor": [{}, "2027-03-01"], "block": []}, "the anchor must be a person and a day"),
+    ("/rota/api/paste/", {"anchor": [1, "2027-03-01"], "block": [], "row_order": ["x"]}, "row_order must be a list of people"),
+])
+def test_a_badly_shaped_request_is_refused_in_the_apps_own_words(world, url, body, says):
+    r = _post(world["c_lead"], url, body)
+    assert r.status_code == 400 and r.json() == {"error": says}
+
+
+def test_an_error_nobody_wrote_a_sentence_for_is_a_plain_bad_request(world, monkeypatch):
+    """A TypeError or KeyError is never one of the services' refusals: its text is Python's, so it is not shown."""
+    from shifts.services import entries
+
+    def broken(*args, **kwargs):
+        raise TypeError("unsupported operand type(s) for +: 'int' and 'str'")
+    monkeypatch.setattr(entries, "clear", broken)
+    r = _post(world["c_lead"], "/rota/api/clear/", {"cells": [[world["nina"].pk, "2027-03-01"]]})
+    assert r.status_code == 400 and r.json() == {"error": "bad request"}
+
+    def missing(*args, **kwargs):
+        raise KeyError("secret_field")
+    monkeypatch.setattr(entries, "clear", missing)
+    r = _post(world["c_lead"], "/rota/api/clear/", {"cells": [[world["nina"].pk, "2027-03-01"]]})
+    assert r.status_code == 400 and r.json() == {"error": "bad request"}
+
+
+def test_a_break_or_department_that_is_not_a_number_is_refused_in_the_apps_own_words(world):
+    c, nina = world["c_lead"], world["nina"]
+    item = {"kind": "shift", "start": "08:00", "finish": "16:00"}
+    r = _post(c, "/rota/api/cell/items/", {"person": nina.pk, "day": "2027-03-01", "items": [{**item, "break_minutes": "<b>"}]})
+    assert r.status_code == 400 and r.json() == {"error": "the break must be 15, 30, 45 or 60 minutes"}
+    r = _post(c, "/rota/api/cell/items/", {"person": nina.pk, "day": "2027-03-01", "items": [{**item, "break_minutes": {"a": 1}}]})
+    assert r.status_code == 400 and r.json() == {"error": "the break must be 15, 30, 45 or 60 minutes"}
+    assert not Entry.objects.exists()
+    r = _post(c, "/rota/api/cell/items/", {"person": nina.pk, "day": "2027-03-01", "items": [{**item, "break_minutes": "30"}]})
+    assert r.status_code == 200
+    e = Entry.objects.get()
+    assert e.break_minutes == 30
+    for body, says in (({"break_minutes": "<b>"}, "the break must be 15, 30, 45 or 60 minutes"),
+                       ({"break_minutes": None}, "the break must be 15, 30, 45 or 60 minutes"),
+                       ({"break_minutes": 20}, "the break must be 15, 30, 45 or 60 minutes"),
+                       ({"department": "<b>"}, "unknown department"),
+                       ({"department": {"a": 1}}, "unknown department")):
+        r = _post(c, f"/rota/api/entries/{e.pk}/", body)
+        assert r.status_code == 400 and r.json() == {"error": says}, body
+    assert _post(c, f"/rota/api/entries/{e.pk}/", {"break_minutes": "15"}).status_code == 200
+    e.refresh_from_db()
+    assert e.break_minutes == 15

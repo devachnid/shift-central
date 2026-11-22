@@ -173,3 +173,19 @@ def test_a_sixty_person_month_is_a_handful_of_queries(boss, django_assert_max_nu
     with django_assert_max_num_queries(40):
         body = c.get("/reports/payroll/?month=2027-01").content.decode()
     assert "P59" in body and "Corrections to months already sent" in body
+
+
+def test_a_refused_month_is_answered_with_a_sentence_of_the_apps(boss):
+    c = _client(boss)
+    r = c.get("/reports/payroll/?month=2029-01")
+    assert r.status_code == 400 and r.content.decode() == "Choose a month from January 2026 to a year ahead"
+    r = c.post("/reports/payroll/sent/?month=<b>junk</b>")
+    assert r.status_code == 400 and r.content.decode() == "Say which month, as YYYY-MM"
+    r = c.post("/reports/payroll/sent/?month=2029-01")
+    assert r.status_code == 400 and r.content.decode() == "Choose a month from January 2026 to a year ahead"
+
+
+def test_the_two_refusals_are_the_reports_own_sentences():
+    from payroll.services import report
+    assert report.strict_problem("junk") == report.NOT_A_MONTH and report.strict_problem("2027-13") == report.NOT_A_MONTH
+    assert report.strict_problem("2029-01") == report.OUT_OF_RANGE and report.strict_problem("2027-01") == ""

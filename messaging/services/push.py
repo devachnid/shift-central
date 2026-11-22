@@ -61,14 +61,24 @@ def register(person, endpoint, p256dh, auth, user_agent=""):
     """Add (or take over) the device behind this subscription; returns the
     device and whether it is new here. ValueError with a sentence when the
     subscription is not one a push service made."""
-    if not (isinstance(endpoint, str) and len(endpoint) <= 1000 and endpoint_allowed(endpoint)):
-        raise ValueError("That is not a push address.")
-    for value, limit in ((p256dh, 200), (auth, 100)):
-        if not (isinstance(value, str) and 0 < len(value) <= limit and _B64URL.match(value)):
-            raise ValueError("That is not a valid push key.")
+    refused = problem(endpoint, p256dh, auth)
+    if refused:
+        raise ValueError(refused)
     return PushDevice.objects.update_or_create(
         endpoint=endpoint,
         defaults={"person": person, "p256dh": p256dh, "auth": auth, "label": label_for(user_agent), "failures": 0})
+
+
+def problem(endpoint, p256dh, auth):
+    """Why this is not a subscription a push service made, as a sentence to
+    show, or "" when it is one. The view answers with this, so no exception's
+    own text ever reaches a response."""
+    if not (isinstance(endpoint, str) and len(endpoint) <= 1000 and endpoint_allowed(endpoint)):
+        return "That is not a push address."
+    for value, limit in ((p256dh, 200), (auth, 100)):
+        if not (isinstance(value, str) and 0 < len(value) <= limit and _B64URL.match(value)):
+            return "That is not a valid push key."
+    return ""
 
 
 def unregister(person, endpoint):

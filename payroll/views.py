@@ -16,8 +16,8 @@ from people.services import access, filters
 def _month(request):
     try:
         return report.month_of(request.GET.get("month", ""))
-    except ValueError as e:
-        return HttpResponseBadRequest(str(e))
+    except ValueError:      # month_of refuses one thing only: a month outside the report's range
+        return HttpResponseBadRequest(report.OUT_OF_RANGE)
 
 
 def _teams(rows):
@@ -67,10 +67,10 @@ def payroll(request):
 @access.all_teams_required
 def mark_sent(request):
     # Never a fallback here: marking "this month" sent because the parameter was unreadable is a wrong record.
-    try:
-        month = report.month_strict(request.GET.get("month", ""))
-    except ValueError as e:
-        return HttpResponseBadRequest(str(e))
+    problem = report.strict_problem(request.GET.get("month", ""))
+    if problem:
+        return HttpResponseBadRequest(problem)
+    month = report.month_strict(request.GET.get("month", ""))
     if request.method == "POST":
         runs.mark_sent(request.user, month)
         return JsonResponse({"refresh": True})

@@ -52,13 +52,13 @@ def subscribe(request):
         return JsonResponse({"error": NO_PERSON}, status=400)
     data = _body(request)
     keys = data.get("keys") if isinstance(data.get("keys"), dict) else {}
-    try:
-        device, created = push.register(person, data.get("endpoint"), keys.get("p256dh"), keys.get("auth"),
-                                        request.META.get("HTTP_USER_AGENT", ""))
-    except ValueError as e:
-        log.info("push subscribe refused for user %s: %s (host %s)", request.user.pk, e,
+    refused = push.problem(data.get("endpoint"), keys.get("p256dh"), keys.get("auth"))
+    if refused:
+        log.info("push subscribe refused for user %s: %s (host %s)", request.user.pk, refused,
                  push.endpoint_host(data.get("endpoint")))
-        return JsonResponse({"error": str(e)}, status=400)
+        return JsonResponse({"error": refused}, status=400)
+    device, created = push.register(person, data.get("endpoint"), keys.get("p256dh"), keys.get("auth"),
+                                    request.META.get("HTTP_USER_AGENT", ""))
     return JsonResponse({"ok": True, "id": device.pk, "created": created})
 
 

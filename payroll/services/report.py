@@ -56,9 +56,17 @@ class Row:
         return out
 
 
+NOT_A_MONTH = "Say which month, as YYYY-MM"
+OUT_OF_RANGE = "Choose a month from January 2026 to a year ahead"
+
+
+def _out_of_range(first, today):
+    return first < EARLIEST or first > date(today.year + 1, today.month, 1)
+
+
 def _in_range(first, today):
-    if first < EARLIEST or first > date(today.year + 1, today.month, 1):
-        raise ValueError("Choose a month from January 2026 to a year ahead")
+    if _out_of_range(first, today):
+        raise ValueError(OUT_OF_RANGE)
     return first
 
 
@@ -78,13 +86,22 @@ def month_strict(text):
     """Exactly "YYYY-MM" with a real month, in the same range as month_of;
     anything else raises ValueError, never a fallback (marking a month sent
     is a record)."""
+    problem = strict_problem(text)
+    if problem:
+        raise ValueError(problem)
+    return date(int(text[:4]), int(text[5:]), 1)
+
+
+def strict_problem(text):
+    """Why month_strict refuses `text`, as a sentence to show, or "" when it
+    would not. A view answers with this, never with an exception's own text."""
     if not re.fullmatch(r"\d{4}-\d{2}", text or ""):
-        raise ValueError("Say which month, as YYYY-MM")
+        return NOT_A_MONTH
     try:
         first = date(int(text[:4]), int(text[5:]), 1)
     except ValueError:
-        raise ValueError("Say which month, as YYYY-MM") from None
-    return _in_range(first, timezone.localdate())
+        return NOT_A_MONTH
+    return OUT_OF_RANGE if _out_of_range(first, timezone.localdate()) else ""
 
 
 def month_end(month):
