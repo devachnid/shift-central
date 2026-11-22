@@ -10,6 +10,12 @@
     <span class="field-help">Monday to Friday, bank holidays left out. The managers are reminded once per request.</span>
     {% for e in form.reminder_working_days.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
   </div>
+  <div class="field{% if form.allowances_need_checking.errors %} has-error{% endif %}">
+    <label for="id_allowances_need_checking">{{ form.allowances_need_checking.label }}</label>
+    {% if is_all_teams %}{{ form.allowances_need_checking }}{% else %}<p id="id_allowances_need_checking">{% if need_checking %}Wait for a manager to check them{% else %}Count as checked straight away{% endif %}</p>{% endif %}
+    <span class="field-help">An allowance worked out from a contract in Practice HR, or copied from last year's, counts as soon as it is made. While this is set to wait, each one stays on Staff › Allowances until a manager has checked it. An allowance from a date part-way through a year always waits for a manager. Typed figures that differ from the contract are listed either way.{% if not is_all_teams %} An all-teams manager changes this.{% endif %}</span>
+    {% for e in form.allowances_need_checking.errors %}<p class="field-error">{{ e }}</p>{% endfor %}
+  </div>
   <button class="btn btn-dark">Save</button>
 </form>
 {% endblock %}

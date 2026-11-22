@@ -6,9 +6,12 @@ Run it last: after hr_sync (and gp_sync, if the GP rota is up) has read the
 shared fictional cast from Practice HR. It creates no people. It finds the
 cast by the addresses the Practice HR and rota seeds generate, for base
 `tom@example.org` Morgan Ellis is `tom+morgan.ellis@example.org`, and then
-fills in what a manager would: display settings, hours, days per week and
-two years of leave allowances, the nursing and pharmacy team grants, a few
-weeks of rota and about nine leave bookings. Everything goes through the
+fills in what a manager would: display settings, days per week, weekly hours
+where the sync has set none, two years of leave allowances (typed, and only for
+a year that has none), the nursing and pharmacy team grants, a few weeks of
+rota and about nine leave bookings. Practice HR's demo seed sends contracts,
+so on a box that reads it the sync sets weekly hours from them; their types
+carry no leave terms, so the allowances here are typed. Everything goes through the
 service layer, as the acting manager is the inactive "seed-demo" login, so
 every change is in the Activity log. It is one transaction: it all happens or
 none of it does.

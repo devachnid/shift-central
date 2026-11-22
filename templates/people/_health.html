@@ -1,3 +1,4 @@
+{% load leave_extras %}
 <section class="health" aria-label="Health">
   <h2>Health</h2>
   <div class="health-item{% if not health.last_run or not health.last_run.ok %} is-bad{% endif %}">
@@ -24,6 +25,16 @@
   {% endif %}
   <div class="health-item{% if health.needs_setup %} is-warning{% endif %}">Needs hours and allowances<strong>{{ health.needs_setup.count }}</strong>
     {% for p in health.needs_setup|slice:":5" %}<a href="{% url 'profile' p.pk %}" data-dialog>{{ p.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+  {% with a=health.allowances %}
+  <div class="health-item{% if a.to_check %} is-warning{% endif %}">Allowances to check<strong>{{ a.to_check|length }}</strong>
+    {% if a.to_check %}<a href="{% url 'allowances' %}#to-check">Check</a>{% endif %}</div>
+  <div class="health-item{% if a.differ %} is-warning{% endif %}">Allowances that differ from the contract<strong>{{ a.differ|length }}</strong>
+    {% if a.differ %}<a href="{% url 'allowances' %}#differ">Look</a>{% endif %}</div>
+  <div class="health-item{% if a.bank_holidays %} is-warning{% endif %}">Bank holidays not entered<strong>{{ a.bank_holidays|length }}</strong>
+    {% if a.bank_holidays %}<a href="{% url 'allowances' %}#bank-holidays">{% for y in a.bank_holidays %}{{ y|year_label }}{% if not forloop.last %}, {% endif %}{% endfor %}</a>{% endif %}</div>
+  <div class="health-item{% if a.contracts %} is-warning{% endif %}">Contracts to look at in Practice HR<strong>{{ a.contracts|length }}</strong>
+    {% if a.contracts %}<a href="{% url 'allowances' %}#contracts">Look</a>{% endif %}</div>
+  {% endwith %}
   <div class="health-item{% if health.waiting %} is-warning{% endif %}">Requests waiting<strong>{{ health.waiting }}</strong>
     {% if health.waiting %}the oldest for {{ health.waiting_oldest_days }} day{{ health.waiting_oldest_days|pluralize }} · <a href="{% url 'time-off-approve' %}">Decide</a>{% endif %}</div>
   <div class="health-item{% if health.placeholder_count %} is-warning{% endif %}">Leave costs to check<strong>{{ health.placeholder_count }}</strong>

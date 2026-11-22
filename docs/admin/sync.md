@@ -10,13 +10,16 @@ other direction, GP leave served to the rota app, is
 
 **Shift Central does not hold people of its own; it keeps a copy of Practice HR's,
 refreshed every fifteen minutes.** HR is the master for who works at the practice,
-their name, email, team, start and finish dates and whether they are a GP. This
+their name, email, team, start and finish dates, whether they are a GP and, once
+contracts are entered there, their contracted hours or sessions and annual leave terms. This
 app adds what HR does not hold (see [People](people.md)). That way a leaving date is
 entered once, in one place, and a wrong leave figure cannot come from the two systems
 disagreeing about it.
 
-**The sync can add and overwrite, and nothing else.** It never deletes a person,
-never touches a field typed here, and never writes anything back to Practice HR.
+**The sync can add and overwrite, and nothing else.** It never deletes a person and
+never writes anything back to Practice HR. Of the fields typed here it touches only
+two: weekly hours, for someone with a contract for fixed hours, and the allowances it
+works out. A figure a manager typed is never overwritten.
 
 ## What one sync does
 
@@ -33,7 +36,8 @@ One request goes to `PRACTICE_HR_URL` + `/api/v1/people` with the bearer token
   none. **A starter appears without a team** until HR holds their position (a
   January starter has none in December); they are on the Staff list's *Starting*
   view for an all-teams manager, who can set up their hours and allowances
-  meanwhile. Their team arrives with the first sync after their position starts.
+  meanwhile if those are typed here. For someone with a contract in Practice HR the
+  hours are read-only, and the allowances are checked on Staff › Allowances. Their team arrives with the first sync after their position starts.
 - A person **in the database but missing from the feed is not deleted**. Their
   *last seen* time simply stops advancing, and the Health card lists them once a
   good run has left them out and they have been missing for over a day.
@@ -41,14 +45,32 @@ One request goes to `PRACTICE_HR_URL` + `/api/v1/people` with the bearer token
   [Activity log](access.md#the-two-logs) with the actor `practice-hr` and the reason
   "from Practice HR", so you can see when a finish date arrived. A run that changes
   nothing writes nothing.
+- **Each record's contracts are copied**: dates, weekly hours or sessions, the type's
+  full-time week and the annual leave terms in force. The copy replaces what was held for
+  that person. A feed that does not carry contracts (an older Practice HR) leaves the copy
+  alone. The copy is not in the Activity log: Practice HR records who changed a contract,
+  and every allowance figure that results is recorded here.
+- **A person with a contract for fixed hours in force has their weekly hours set from it**:
+  the hours of the contracts in force today, or on the start date for a starter, when they
+  add up to more than 0. GPs have none. Bank staff on a contract for 0 hours, and someone
+  between contracts, keep the hours typed here. It is recorded like any other change "from
+  Practice HR". Days per week are still typed here.
 - The run is recorded: when it started and finished, whether it worked, how many
   people the feed held, and, if it failed, a message.
 
-**Never fetched:** date of birth, gender, phone numbers, address, NI number, pay,
-patterns, contracts and absences. HR holds them; this app does not need them.
+After a good read, and outside that transaction, the sync **works the allowances out** for
+everyone whose contract carries leave terms
+([Leave](leave.md#allowances-worked-out-from-the-contract)), then copies any hours change that
+has fallen due. Either step failing leaves the people read as they were and adds a few words
+to the run's message.
 
-New people arrive with the defaults: no hours, no allowances, navy name colour,
-display order 100, and the three display switches ticked.
+**Never fetched:** date of birth, gender, phone numbers, address, NI number, pay,
+patterns and absences. HR holds them; this app does not need them.
+
+New people arrive with the defaults: navy name colour, display order 100, and the three
+display switches ticked. A starter whose contract is in Practice HR arrives with their
+weekly hours and both allowances from it; anyone else arrives with no hours and no
+allowances, for a manager to type.
 
 ## When the sync fails
 
@@ -66,7 +88,8 @@ a person's details.
 | `Practice HR unreachable` | A network failure, a wrong hostname, or Practice HR down. Open Practice HR's address in a browser; its tunnel hostname and its service must both be up. |
 | `PRACTICE_HR_URL is not https; the token was not sent` | The URL says `http://`. The token goes only over `https`, so use the public tunnel hostname, not `http://127.0.0.1:8322`. |
 | `Practice HR returned a non-JSON body for people` or `... has no 'people' list` | The address answers, but it is not the feed: a login page, a Cloudflare challenge, or the wrong site. |
-| `record N in the feed: missing or bad <field>` | The Nth person in Practice HR's feed lacks something this app requires, most often a **start date** (an employee with no employment start). Fix the record in Practice HR; until then **no one** is updated. It names the place and the field, never the value. |
+| `record N in the feed: missing or bad <field>` | The Nth person in Practice HR's feed lacks something this app requires, most often a **start date** (an employee with no employment start). Fix the record in Practice HR; until then **no one** is updated. It names the place and the field, never the value. `missing or bad contracts` is a contract of that person with a date, an amount or a leave step that cannot be read. |
+| `allowances failed; see the journal` (after a good read) | The people were read, but working the allowances out failed, for everyone or for one person, who is skipped. The figures already held stand. `journalctl -u shift-central-hr-sync` names the person by number, never by name. The next run tries again. |
 | `unexpected error; see the journal` | Something not foreseen. `journalctl -u shift-central-hr-sync` (or `-u shift-central` for Sync now) has the traceback. |
 
 The timer keeps trying every fifteen minutes, so a fault fixed in Practice HR clears
@@ -77,7 +100,7 @@ itself on the next run; the card goes back to green and shows the new count.
 Managers see it at the top of the Staff page. It is built from the people the
 viewer manages, so a team manager's card is about their team. Its boxes are described
 below: Practice HR, Needs hours and allowances, Not in Practice HR's feed, Leaving in the next
-30 days and the leave boxes (Requests waiting, Leave costs to check, Negative leave
+30 days, the four allowance boxes and the leave boxes (Requests waiting, Leave costs to check, Negative leave
 balances, Year-end decisions waiting and, when due, Payroll not yet sent). The GP rota's two are
 [under the GP sessions](#the-health-lines).
 
@@ -96,7 +119,9 @@ either the current leave year or the next**. A GP is never counted, as they have
 no hours here.
 
 - *What to do:* open each name and fill in Pay & time off: the hours, the days and
-  at least one of the two leave years' allowances. A person drops off the list once
+  at least one of the two leave years' allowances. For someone with a contract in
+  Practice HR the hours are read-only and the allowances are checked on Staff ›
+  Allowances, so only the days per week are typed. A person drops off the list once
   all three are there; a person's Pay & time off tab shows a dash for any year not
   entered, so check the other year there.
 - Wrong: ignoring it. A person with no hours is costed at nothing on a day with no rota,
@@ -126,6 +151,15 @@ that date, and the number of bookings that run past it.
   allowance is cut at that date automatically. A date that looks wrong is wrong in Practice HR; fix it
   there. See [Leavers](absence.md#leavers).
 
+**Allowances to check**, **Allowances that differ from the contract**, **Bank holidays not
+entered** and **Contracts to look at in Practice HR** are counts, each with a link to
+Staff › Allowances, where the lists themselves are. All four read 0, and link nowhere, until
+Practice HR sends its first contract.
+
+- *What to do:* open the page and work down it; what each list holds and what its buttons do
+  is in [Leave](leave.md#allowances-worked-out-from-the-contract). None of them blocks
+  anything: a figure waiting to be checked already counts.
+
 **Requests waiting** is the number of leave requests and cancellation requests waiting for a
 decision from the people the viewer manages, the viewer's own not counted (another manager
 decides those), with the age of the oldest and a **Decide** link to
@@ -148,8 +182,8 @@ their booking.
 
 **Negative leave balances** lists the first five people whose annual leave remaining (bank holidays
 included) is below zero in their current or next leave year, each a link to their statement. A year with
-no allowance entered is *Needs hours and allowances*, not a deficit. GPs are never listed here, whatever
-their balance.
+no allowance entered is *Needs hours and allowances*, not a deficit. A GP below zero is listed like
+anyone else.
 
 - *What to do:* it is allowed (a manager can book past the balance, and an hours change can
   leave one negative), so decide whether to correct it with an adjustment, in which case the line
@@ -175,7 +209,8 @@ only the viewer's team), then returns to the Staff page with one message: "*N* p
 read from Practice HR." or "Practice HR could not be read: *message*."
 
 Use it after adding a starter or correcting a date in Practice HR so as not to wait
-fifteen minutes. It is safe to press twice; a second run that finds nothing new changes
+fifteen minutes. It is also the way to see a contract just entered in Practice HR
+without waiting fifteen minutes. It is safe to press twice; a second run that finds nothing new changes
 nothing.
 
 ## Running it by hand
@@ -193,6 +228,17 @@ screen instead of in a journal.
 `shift-central-hr-sync.service` is the unit the timer starts. It fails (shown in
 `systemctl status shift-central-hr-sync`) when a run fails, which is the second
 place to look beside the Health card.
+
+### A dry run
+
+    deploy/manage hr_sync --dry-run
+
+reads the feed and does everything a run would do to people, contracts, weekly hours and
+allowances, then undoes all of it: no leaver flag, no email or push, no run on the Health
+card, nothing left behind. It prints counts only, never a name or a figure: people in the
+feed, people whose weekly hours would be set from a contract, allowance rows that would be
+created, changed, taken over from typed and removed, and whether working out the allowances
+would fail for anyone. A feed error stops it with the same message as a run.
 
 ## GP sessions from the rota app
 

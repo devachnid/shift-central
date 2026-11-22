@@ -392,3 +392,18 @@ def test_a_team_manager_reports_on_their_own_team_only(sam, lead):
     assert "Sam Patel" in body and "Olly Patel" not in body and "Nursing" not in body
     csv = c.get("/reports/leave/?from=2027-01-01&to=2027-12-31&download=1").content.decode()
     assert "Sam Patel" in csv and olly.name not in csv and "Nursing" not in csv
+
+
+def test_a_gp_whose_allowance_is_below_what_is_booked_is_a_negative_balance(lead, monkeypatch):
+    from tests.factories import make_gp_session
+    monkeypatch.setattr(timezone, "localdate", lambda: date(2027, 2, 1))
+    doc = make_person(first_name="Riley", team=lead.team, is_gp=True, start_date=date(2020, 1, 6))
+    fine = make_person(first_name="Fine", team=lead.team, is_gp=True, start_date=date(2020, 1, 6))
+    make_allowance(doc, Y27, 10, 0)                                     # less than the four sessions booked
+    make_allowance(fine, Y27, Decimal("266.6667"), Decimal("66.6667"))
+    for person in (doc, fine):
+        for d in (MON, TUE):
+            make_gp_session(person, d, "AM")
+            make_gp_session(person, d, "PM")
+        bookings.book(lead.user, person, make_type("Holiday"), MON, TUE, "whole")
+    assert [p.pk for p in health.figures(lead.user)["negative"]] == [doc.pk]

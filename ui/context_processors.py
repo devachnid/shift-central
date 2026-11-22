@@ -20,7 +20,8 @@ def _items(request, role, badges):
     items = [{"key": "rota", "label": "Rota", "icon": "calendar", "url": "/rota/",
               "active": path.startswith("/rota/"), "children": rota_children},
              {"key": "staff", "label": "Staff", "icon": "people", "url": "/staff/",
-              "active": path.startswith("/staff/"), "children": []}]
+              "active": path.startswith("/staff/"),
+              "children": [{"label": "Allowances", "url": "/staff/allowances/"}] if role != "staff" else []}]
     if role != "staff":
         items.append({"key": "departments", "label": "Departments", "icon": "tag",
                       "url": "/departments/", "active": path.startswith("/departments/"),

@@ -50,7 +50,7 @@
 
 ## Relationship with the existing systems
 
-- **Practice HR** stays the sign-in for all apps. The new system is the **master** for weekly hours, days per week and leave. Practice HR's own leave design (built, not live) is **not** used.
+- **Practice HR** stays the sign-in for all apps. The new system is the **master** for weekly hours, days per week and leave. (amended November 2026: Practice HR is the master for contracts, weekly hours or sessions and leave terms; the new system for days per week, allowances, leave and balances. See PAT-07.) Practice HR's own leave design (built, not live) is **not** used.
 - **GP rota app** stays. GP rotas are also built in the new grid. The two stay in sync both ways; clashes are flagged to managers.
 
 ## Glossary (the practice's own terms)
@@ -64,8 +64,8 @@
 | **Shift** | Clock times on a day, with an optional unpaid break and department tag |
 | **Session** | A GP half-day (AM or PM). Counts as **4 h 10 min** for leave |
 | **Scheduled hours** | A shift's length minus unpaid breaks, excluding overtime shifts |
-| **Annual leave allowance** | Full-year hours, typed in by a manager |
-| **Bank holiday allowance** | Separate full-year hours for bank holidays, typed in by a manager; any deficit or credit moves into annual leave |
+| **Annual leave allowance** | Full-year hours, typed in by a manager (amended November 2026: see LEAVE-01 and D-34) |
+| **Bank holiday allowance** | Separate full-year hours for bank holidays, typed in by a manager; any deficit or credit moves into annual leave (amended November 2026: see LEAVE-01 and D-34) |
 | **TOIL** | Time off in lieu — hours from shifts marked "overtime – TOIL", kept in a separate balance |
 | **Instance of absence** | One sickness entry (start date to end date) |
 | **Trigger 1 / 2 / 3+** | 3 / 4 / 5 or more instances of absence in a rolling 6 months |

@@ -37,7 +37,7 @@ Today, payroll figures are tracked by hand across several spreadsheets and the b
 
 ## Integrations
 
-**INT-01** — **Practice HR**: sign-in only (one account). No exchange of contract, pattern or leave data.
+**INT-01** — **Practice HR**: sign-in only (one account). No exchange of contract, pattern or leave data. (amended: the staff feed, with each person's contracts and leave terms, is read from Practice HR; no leave data goes back. See PAT-07.)
 
 **INT-02** — **GP rota app**: two-way sync of GP rotas and leave; clashes flagged (ROTA-GP-03, 04).
 

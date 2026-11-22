@@ -1,6 +1,6 @@
 # 10 — Migration and go-live
 
-**MIG-01** — **Nothing is imported** from FindMyShift or Breathe. Managers set up staff, departments, colours, allowances and rotas by hand.
+**MIG-01** — **Nothing is imported** from FindMyShift or Breathe. Managers set up staff, departments, colours, allowances and rotas by hand. (amended November 2026: staff, contracts and leave terms come from Practice HR, and allowances are worked out from them and checked by a manager, or typed where a contract has no terms. See LEAVE-01.)
 
 **MIG-02** — Key dates:
 

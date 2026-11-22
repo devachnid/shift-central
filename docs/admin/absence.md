@@ -237,7 +237,7 @@ allowance), the managers decide what carries into the new year (LEAVE-21, 22, 24
 
 **When the flag opens.** On the first run of the [daily command](#the-daily-command) after a person's
 leave year starts (1 January for nearly everyone) and for up to 31 days after, so a missed run still
-catches it. It opens a row for the year that has just ended when that year has an **allowance typed**. A year with
+catches it. It opens a row for the year that has just ended when that year has an **allowance**, typed or worked out. A year with
 no allowance opens nothing, and **nor does a leave year that ended before the system started (1 January 2027)**,
 even if a 2026 allowance was typed for someone: the 2026 carry-over stays a **manual adjustment** typed in January 2027,
 with the reason "carried over from FindMyShift 2026", and is never carried a second time. **The first year end the system

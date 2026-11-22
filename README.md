@@ -20,7 +20,9 @@ Health card), the rota grid release, leave, absence and payroll, and engagement:
   apart, downloadable).
 - **The GP feed**: GPs' sessions are read from the GP rota app every fifteen
   minutes, matched by work email, and drawn as read-only tiles.
-- **Leave**, in hours, for everyone (GPs included): allowances pro-rated by the weeks a
+- **Leave**, in hours, for everyone (GPs included): allowances worked out from each
+  person's contract and leave terms in Practice HR and checked by a manager (typed where a
+  contract has no terms), pro-rated by the weeks a
   person is employed, with dated changes of hours; what a day costs read from the rota
   (an average day where the week has no rota); requests, approvals, cancellations and
   manager bookings, whole days, half days or by the hour, for all fifteen leave types;
@@ -61,6 +63,8 @@ the absence and payroll release's, with its deviations, in
 [docs/superpowers/specs/2026-10-31-absence-payroll-design.md](docs/superpowers/specs/2026-10-31-absence-payroll-design.md);
 the engagement release's, with its deviations, in
 [docs/superpowers/specs/2026-11-01-engagement-design.md](docs/superpowers/specs/2026-11-01-engagement-design.md);
+allowances worked out from contracts, with what was decided while it was built, in
+[docs/superpowers/specs/2026-11-18-allowance-rules-design.md](docs/superpowers/specs/2026-11-18-allowance-rules-design.md);
 later specs and the plans go in `docs/superpowers/specs/` and
 `docs/superpowers/plans/`, as in the rota and HR repositories.
 
@@ -76,7 +80,7 @@ the requirements README.
     pytest
     cd frontend && npm test
 
-The browser tests (the grid, and booking and cancelling leave from its menu, driven in Chromium) are skipped unless asked for:
+The browser tests (the grid, booking and cancelling leave from its menu, and confirming and changing an allowance on the Allowances page, driven in Chromium) are skipped unless asked for:
 `pip install -r requirements-dev.txt` (Playwright and its pytest plugin, kept
 out of `requirements.txt` so the VPS never installs them), then
 `python -m playwright install chromium`, then `E2E=1 python -m pytest -q tests/e2e`.
@@ -141,14 +145,17 @@ server, the rest in the app. The details are in Deploy below and in
 4. **Create the superuser**: `deploy/manage createsuperuser`. It is the
    break-glass account, signed in at `/admin/` with a password.
 5. **Read the people in**: `deploy/manage hr_sync` (then the timer does it every
-   fifteen minutes).
+   fifteen minutes). `deploy/manage hr_sync --dry-run` first shows what the first
+   read would write, and changes nothing.
 6. **Tick *Admin of shift-central* in Practice HR** for the practice manager and
    the three assistant managers: Login accounts › Apps.
 7. **Each of them signs in** to Shift Central through the practice account.
 8. **Grant the lead nurse Nursing and the head pharmacist Pharmacy** from the
    Permissions link under their profiles.
-9. **Fill in hours, days per week and leave allowances** for everyone, working
-   down the Health card's *Needs hours and allowances* list.
+9. **Fill in days per week for everyone, and hours and allowances for anyone not
+   worked out from a contract**, working down the Health card's *Needs hours and
+   allowances* list. Then check the worked-out figures on Staff › Allowances, and
+   add 2028's bank holidays before 1 January 2027.
 10. **Set the departments' colours** on the Departments page.
 
 ## Deploy (VPS + Cloudflare tunnel)
@@ -411,6 +418,9 @@ One command does it all, as root:
 
     /srv/shift-central/deploy/update
 
+(Not for the allowances release on its own: see
+[Upgrading to the allowances release](#upgrading-to-the-allowances-release).)
+
 It runs these steps in order and **stops at the first that fails**, so a stale
 manifest or a bad setting never reaches the running app:
 
@@ -465,6 +475,15 @@ beside the database, and the next nightly backup archives them. Phones that alre
 the app open pick up the new service worker the next time they visit; nobody has to
 reinstall anything. Nothing else changes for staff until a manager posts an open shift,
 sends a message or a notice, or someone turns notifications on.
+
+### Upgrading to the allowances release
+
+Do not run `deploy/update` on its own for this release. Follow the first run in
+[docs/admin/setup.md](docs/admin/setup.md#upgrading-a-box-that-runs-an-earlier-release):
+stop the HR sync timer, take a backup, deploy, run `deploy/manage hr_sync --dry-run`,
+then the real run, then start the timer again. From the first read, weekly hours are set
+from each contract and allowances are worked out, so Practice HR must hold real contracts
+first.
 
 ### Check the deployment is not in debug mode
 
@@ -599,9 +618,10 @@ before you have looked at it. Keep the `cp -p` of the database you are
 replacing until you are sure. `deploy/manage migrate` brings an older copy up
 to the current code, and the next `hr_sync` (within fifteen minutes) brings
 the people it holds up to date from Practice HR, so a restore never needs HR
-restored with it. What a restore loses is what was typed here after the copy:
-hours, allowances, notes, departments, manager grants, leave requested or booked, and
-the audit entries for them.
+restored with it. Hours and allowances worked out from a contract come back at the next read of
+Practice HR. What a restore loses is what was typed here after the copy, and which
+figures a manager had confirmed: hours, allowances, notes, departments, manager
+grants, leave requested or booked, and the audit entries for them.
 
 From the PBS (the box is gone): install the same units on a fresh VPS, restore
 the snapshot as in step 5 above using the key you kept off the box, copy the

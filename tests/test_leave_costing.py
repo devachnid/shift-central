@@ -209,3 +209,22 @@ def test_missing_allowance_is_said_not_guessed():
     sam = make_person()
     s = balances.statement(sam, Y27)
     assert s.missing and s.annual_allowance == 0 and s.annual_remaining == 0
+
+
+def test_a_placeholder_on_a_row_with_hours_but_no_days_uses_the_persons_days():
+    sam = make_person(weekly_hours=Decimal("30"), days_per_week=4)
+    make_allowance(sam, Y27, 138, 48)
+    make_allowance(sam, Y27, Decimal("172.5"), 60, from_day=date(2027, 7, 1), weekly_hours=Decimal("37.5"))
+    assert costing.placeholder_seconds(sam, date(2027, 8, 11)) == (33750, True)        # 37.5 h over the person's 4 days
+
+
+def test_a_four_place_figure_reads_as_hours_and_minutes_on_the_statement():
+    doc = make_person(is_gp=True, start_date=date(2020, 1, 6))
+    make_allowance(doc, Y27, Decimal("266.6667"), Decimal("66.6667"))
+    texts = [t for k, t, _ in balances.statement(doc, Y27).lines if k == "allowance"]
+    assert texts[0].endswith(" weeks of 52 at 266 h 40 min") and "6667" not in " ".join(texts)
+    assert any(t.startswith("Bank holiday allowance") and t.endswith(" at 66 h 40 min") for t in texts)
+    sam = make_person(start_date=date(2020, 1, 6))
+    make_allowance(sam, Y27, Decimal("172.5"), 60)
+    texts = [t for k, t, _ in balances.statement(sam, Y27).lines if k == "allowance"]
+    assert texts[0].endswith(" weeks of 52 at 172.50 h")

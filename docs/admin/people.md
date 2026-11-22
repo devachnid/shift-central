@@ -1,7 +1,9 @@
 # People
 
 **Where:** sidebar › Staff (`/staff/`), then a name for the profile pop-up. Teams
-are in the Django admin (`/admin/people/team/`, superuser only).
+are in the Django admin (`/admin/people/team/`, superuser only). Managers also have
+Staff › Allowances (`/staff/allowances/`); see
+[Leave](leave.md#allowances-worked-out-from-the-contract).
 
 ## The mental model
 
@@ -10,12 +12,16 @@ time HR's feed includes them and never deleted by it. Two kinds of field hang
 off the row: those **from Practice HR**, overwritten by every sync and read-only
 here, and those **typed here**, on the profile, which the sync never touches.
 The profile tells you which is which: the General tab is the first kind, the
-others the second.
+others the second, with one exception: on Pay & time off, weekly hours say "from
+Practice HR" when they come from the contract, and the allowances may be worked
+out from it.
 
 **People are added and removed in Practice HR, not here.** *Add staff +* on the
-Staff list says so and links to HR. A starter appears here within fifteen
-minutes of being entered there, with no hours and no allowances, and is listed
-on the [Health card](sync.md#the-health-card) until a manager fills the profile in.
+Staff list says so and links to HR. A starter whose
+contract is in Practice HR arrives, within fifteen minutes of being entered there,
+with their weekly hours and both allowances from it. Anyone else arrives with none,
+and is listed on the [Health card](sync.md#the-health-card) until a manager fills
+the profile in.
 
 ## Teams
 
@@ -49,6 +55,7 @@ is wrong, change it in Practice HR and it arrives within fifteen minutes (or pre
 | **Start date** | HR's employment start. Required: a record in the feed with no start date makes the whole sync fail (see [sync](sync.md#when-the-sync-fails)). Someone whose start date is in the future is *Starting*, not *Current*. |
 | **Finish date** | HR's employment end; blank while employed. After it passes, the person leaves the *Current* list and appears under *Left*. They stay on record. The Health card lists leavers in the next 30 days. |
 | **GP** | True when HR's contract unit for the person is *sessions*. A GP has no weekly hours or days per week here (their sessions come from the GP rota app, [read-only on the rota](rota.md#gps)). If a GP shows as an ordinary member of staff, or the reverse, the fault is the contract in HR. |
+| **Contracts** | Every contract of the person's employment in HR: its dates, weekly hours or sessions, and annual leave terms. Not shown as a field; they are what **Weekly hours** below and the [worked-out allowances](leave.md#allowances-worked-out-from-the-contract) come from. A person with none in force is listed on Staff › Allowances under *Contracts to look at in Practice HR*. |
 
 ## Typed here: the Display tab
 
@@ -69,10 +76,10 @@ Editable by the managers of the person's team. A person reads their own.
 
 | Field | What it does, and what goes wrong |
 |---|---|
-| **Weekly hours** | Contracted hours a week, to two decimal places, 0 to 999.99. Not shown for a GP, who shows "Sessions, from the GP rota". Leave blank and the person stays on the Health card's *Needs hours and allowances* list. |
+| **Weekly hours** | **While the person has a contract with fixed hours in force in Practice HR this is read-only and says "from Practice HR"**: it is the hours of their contracts in force today (on the start date, for a starter), set at each sync, and is changed by entering a new contract there. For everyone else it is typed, as before: someone with no contract in Practice HR yet, bank staff whose contract is for 0 hours, and someone between contracts. Typed, it is contracted hours a week, to two decimal places, 0 to 999.99. Not shown for a GP, who shows "Sessions, from the GP rota". Leave blank and the person stays on the Health card's *Needs hours and allowances* list. |
 | **Days per week** | Whole number, 1 to 7. With weekly hours it gives the **average day** (weekly hours divided by days, to two places), shown beneath the field. This is the day length leave is costed in for a week whose rota has not been written yet, so a wrong figure here becomes a wrong leave cost (the Health card lists those days as *Leave costs to check*). |
 | **Leave year starts (MM-DD)** | The month and day the person's leave year begins, `01-01` for nearly everyone. It can only be changed **before any allowance or booking exists** for the person, because those are filed under the years it makes; after that the form refuses and says so. Someone whose year starts on 1 April shows their allowances as "from 1 Apr 2027". |
-| **Annual leave allowance (hours)** and **Bank holiday allowance (hours)** | The full-year figures in hours, to two places, for **each of two leave years: the current one and the next**. They are what the person's leave is worked out from: the system pro-rates them by the weeks the person is employed in the year (starters, leavers; [Leave](leave.md#allowances-and-hours-changes) explains the rules), and a change of hours part-way through the year is added with **Add hours change…** under the statement, not here. With neither year entered, the person stays on the Health card's *Needs hours and allowances* list. |
+| **Annual leave allowance (hours)** and **Bank holiday allowance (hours)** | The full-year figures in hours, to two places, for **each of two leave years: the current one and the next**. Where the person's contract in Practice HR carries leave terms the figures are worked out for you and the boxes show them (to two places); typing a different figure, with a reason, makes it a typed figure, which is kept. They are what the person's leave is worked out from: the system pro-rates them by the weeks the person is employed in the year (starters, leavers; [Leave](leave.md#allowances-and-hours-changes) explains the rules), and a change of hours part-way through the year is entered as a new contract in Practice HR where the year is worked out; where it is typed, it is added with **Add hours change…** under the statement, not here. With neither year entered, the person stays on the Health card's *Needs hours and allowances* list. |
 | **Reason for the change** | Up to 300 characters. **Required to change an allowance that is already set**, and recorded with the change. Not needed the first time a year's allowances are entered, or when only hours and days change. |
 
 Things that surprise people:
@@ -81,12 +88,20 @@ Things that surprise people:
 - You cannot clear an allowance by blanking it: empty boxes mean "no change". To correct a figure, type the right one and give a reason.
 - The tab saves as a whole. If the allowance change is refused (no reason), the hours and days typed with it are **not** saved either.
 - The two years roll over on the first day of the person's leave year (1 January for most): from then, the tab shows the new current year and the one after; the earlier year's figures are still on record but no longer on the tab.
-- A GP's allowances are entered here the same way, even though their hours are not.
+- A GP whose contract has no leave terms (a GP trainee) has their allowances entered here the same way, even though their hours are not. A partner's or salaried GP's are worked out from their contract.
 
-**Below the form is the person's leave statement**, which the person sees too: the pro-rated allowances, adjustments, each
+**Under the form, managers see "Where the allowances come from"**: one line for each allowance
+of the two leave years, the year's first and any from a later date, with its state ("worked
+out, not yet checked", "worked out, checked by … on …", "typed" or "copied from last year, not
+yet checked"), the working, and the buttons **Confirm**, **Use the worked-out figure** and
+**Change…**. The boxes in the form are the year's first allowance; a later one is changed from
+this list, and its **Change…** also takes the days per week from that date, at any time. The person does not see this list. See
+[Leave](leave.md#allowances-worked-out-from-the-contract).
+
+**Below that is the person's leave statement**, which the person sees too: the pro-rated allowances, adjustments, each
 booking's days with their costs, the bank holiday balance, what is remaining and what is available, and TOIL, with a
-**Leave year** box to switch between the previous, current and next leave years. Managers also get **Adjust…** and
-**Add hours change…** there. How to read it is in [Leave](leave.md#the-statement-and-how-to-read-it).
+**Leave year** box to switch between the previous, current and next leave years. Managers also get **Adjust…**, and
+**Add hours change…** where the year is typed (otherwise the statement says "Hours changes come from Practice HR."). How to read it is in [Leave](leave.md#the-statement-and-how-to-read-it).
 Two lines come from the absence and payroll release. For anyone with a finish date the statement
 shows a leaver's line, "Leaves on 14 Oct 2026: 18 h 30 min of annual leave remaining" (or "… over"),
 the figure at the leaving date ([Leavers](absence.md#leavers)). And a sickness line, "Sickness: 4 instances in the
@@ -114,7 +129,7 @@ managers only; see [Access](access.md#the-permissions-link)) and **History**
 |---|---|---|---|
 | General: name, email, team, start and finish dates | Reads | Reads | Cannot open the profile |
 | Display | Reads | Edits | Cannot open |
-| Pay & time off | Reads their own hours, allowances and statement | Edits the form; Adjust and Add hours change | Cannot open |
+| Pay & time off | Reads their own hours, allowances and statement | Edits the form; confirms and changes allowance figures; Adjust, and Add hours change where the year is typed | Cannot open |
 | Notes | Tab not shown | Edits | Cannot open |
 
 A manager does not manage themselves, so a manager opens their own profile
@@ -168,7 +183,8 @@ Above the table, managers see the Health card; see [the sync](sync.md).
 You cannot, and are not meant to. A leaver is finished in Practice HR and stays
 here under *Left*. The only deletion is the superuser's, in the admin
 (`/admin/people/person/`), for a person who has gone from HR's feed for good: it
-deletes their allowances and manager grants with them, and their history entries
-stay. If that person is still in HR's feed, the next sync recreates them as a
-brand-new person with none of the typed fields, so do it only for someone really
-removed from Practice HR.
+deletes their allowances, their copied contracts and manager grants with them, and
+their history entries stay. If that person is still in HR's feed, the next sync
+recreates them as a brand-new person with none of the typed fields, though with
+weekly hours and worked-out allowances from Practice HR where their contract is
+there, so do it only for someone really removed from Practice HR.
